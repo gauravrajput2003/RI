@@ -1,0 +1,2 @@
+import {randomUUID}from 'node:crypto';import {ConnectionBuffer}from './connection-buffer.js';import {newConnectionContext,type ConnectionContext}from './connection-context.js';
+export class ConnectionManager {create(remoteAddress:string|null){return{context:newConnectionContext(randomUUID(),remoteAddress),buffer:new ConnectionBuffer()}} touch(connection:{context:ConnectionContext},now=new Date()){connection.context.lastReceivedAt=now}}

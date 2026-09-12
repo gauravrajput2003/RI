@@ -1,0 +1,1 @@
+const crc16=(data:Buffer)=>{let crc=0xffff;for(const b of data){crc^=b;for(let i=0;i<8;i++)crc=(crc&1)?(crc>>>1)^0x8408:crc>>>1}return (crc^0xffff)&0xffff}; export const ack=(type:number,serial:number)=>{const body=Buffer.from([0x05,type,serial>>8,serial&255]);const crc=crc16(body);return Buffer.from([0x78,0x78,...body,crc>>8,crc&255,0x0d,0x0a])};

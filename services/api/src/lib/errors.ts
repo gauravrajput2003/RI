@@ -1,0 +1,3 @@
+import type {NextFunction,Request,Response}from 'express';import {ZodError}from 'zod';import {logger}from './logger.js';
+export class AppError extends Error{constructor(public status:number,public code:string,message:string){super(message)}}
+export const errorHandler=(error:unknown,req:Request,res:Response,_next:NextFunction)=>{void _next;const appError=error instanceof AppError?error:error instanceof ZodError?new AppError(400,'VALIDATION_ERROR','Invalid request'):new AppError(500,'INTERNAL_ERROR','Internal server error');if(appError.status>=500)logger.error({err:error,path:req.path},'request failed');res.status(appError.status).json({success:false,error:{code:appError.code,message:appError.message}})};

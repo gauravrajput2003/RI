@@ -1,0 +1,2 @@
+export interface ConnectionContext {connectionId:string;remoteAddress:string|null;framingFamily:string|null;protocol:string|null;deviceId:string|null;identityType:string|null;identityValue:string|null;connectedAt:Date;lastReceivedAt:Date}
+export const newConnectionContext=(connectionId:string,remoteAddress:string|null):ConnectionContext=>({connectionId,remoteAddress,framingFamily:null,protocol:null,deviceId:null,identityType:null,identityValue:null,connectedAt:new Date(),lastReceivedAt:new Date()});

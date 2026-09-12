@@ -1,0 +1,1 @@
+{"name":"@fleet/protocol-types","version":"0.1.0","private":true,"type":"module","exports":"./src/index.ts","dependencies":{"@fleet/shared-types":"workspace:*"},"scripts":{"typecheck":"tsc --noEmit","lint":"eslint src","test":"vitest run"},"devDependencies":{"@types/node":"^22.10.5"}}

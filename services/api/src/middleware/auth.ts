@@ -1,0 +1,4 @@
+import type {NextFunction,Request,Response} from 'express'; import jwt from 'jsonwebtoken'; import {env} from '../config/env.js'; import {AppError} from '../lib/errors.js'; import type {Role} from '@fleet/shared-types';
+export interface AuthRequest extends Request { user?:{id:string;role:Role} }
+export const authenticate=(req:AuthRequest,_res:Response,next:NextFunction)=>{try{const token=req.header('authorization')?.replace(/^Bearer\s+/i,'');if(!token)throw new Error();req.user=jwt.verify(token,env.JWT_SECRET) as {id:string;role:Role};next()}catch{next(new AppError(401,'UNAUTHORIZED','Authentication required'))}};
+export const authorize=(...roles:Role[])=>(req:AuthRequest,_res:Response,next:NextFunction)=>!req.user||!roles.includes(req.user.role)?next(new AppError(403,'FORBIDDEN','Insufficient permission')):next();

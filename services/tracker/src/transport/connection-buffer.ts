@@ -1,0 +1,2 @@
+/** Bounded opaque connection buffer used before an adapter is identified. It never discards bytes based on a protocol header. */
+export class ConnectionBuffer { private data=Buffer.alloc(0); constructor(private readonly maxBytes=16_384){} append(chunk:Buffer):Buffer{this.data=Buffer.concat([this.data,chunk]);if(this.data.length>this.maxBytes)this.data=this.data.subarray(this.data.length-this.maxBytes);return this.data} clear():void{this.data=Buffer.alloc(0)} }

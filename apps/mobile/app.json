@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Fleet Tracker",
+    "slug": "fleet-tracker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "fleettracker",
+    "userInterfaceStyle": "automatic",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.fleettracker"
+    },
+    "android": {
+      "package": "com.example.fleettracker",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,2 @@
+import { query } from '../db/pool.js';import type { VehicleAuthorizer } from './authorization.js';
+export const vehicleAuthorizer:VehicleAuthorizer={async canAccessVehicle(userId,vehicleId){return Boolean((await query('SELECT 1 FROM vehicles WHERE id=$1 AND owner_id=$2 AND active=true',[vehicleId,userId])).rowCount)},async authorizedVehicleIds(userId){return (await query<{id:string}>('SELECT id FROM vehicles WHERE owner_id=$1 AND active=true',[userId])).rows.map(row=>row.id)}};
