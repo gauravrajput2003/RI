@@ -6,7 +6,7 @@ import { createDemoAdapter } from '../../features/demo/adapter';
 export const api = createApiClient(
   config.apiUrl,
   useAuthStore,
-  config.demoMode ? createDemoAdapter() : createDemoAdapter({ fallbackToReal: true })
+  config.demoMode ? createDemoAdapter() : undefined
 );
 export const apiError = (error: unknown) => axios.isAxiosError(error)
   ? error.response?.status === 401 ? 'Sign-in failed or your session expired.'

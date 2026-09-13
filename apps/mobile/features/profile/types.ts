@@ -9,10 +9,10 @@ export interface VehicleCardDetail {
   id: string;
   vehicle_number: string;
   timestamp: string;
-  speed: number;
-  overspeed: number;
-  mileage: number;
-  odometer: number;
+  speed: number | null;
+  overspeed: number | null;
+  mileage: number | null;
+  odometer: number | null;
   alias: string;
   remark: string;
   subscriptionStart: string;

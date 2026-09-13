@@ -16,12 +16,12 @@ import { createSnapshotCache } from './cache/snapshot';
 import { createSocketLifecycle, type SocketPort } from './socket/lifecycle';
 import { bindSessionLifecycle } from './session/lifecycle';
 import { startDemoRuntime } from '../features/demo/runtime';
-import { demoLocations, demoTokens, demoVehicles } from '../features/demo/data';
 
 export function startRuntime(queryClient: QueryClient) {
   if (config.demoMode) return startDemoRuntime(queryClient);
   const cache = createSnapshotCache(snapshotStorage);
   let disposed = false;
+  let appActive = AppState.currentState === 'active';
   let savedPages: unknown;
   let savedLive: unknown;
   const receive = (payload: unknown) => {
@@ -29,14 +29,6 @@ export function startRuntime(queryClient: QueryClient) {
     if (location?.vehicle_id) useLiveVehicleStore.getState().upsert(location.vehicle_id, location);
   };
   const realtime = createSocketLifecycle(token => {
-    if (token === demoTokens.accessToken) {
-      return {
-        connect: () => {},
-        disconnect: () => {},
-        on: () => {},
-        removeAllListeners: () => {},
-      } as unknown as SocketPort;
-    }
     return io(config.socketUrl, {
       auth: { token }, autoConnect: false, transports: ['websocket'], reconnection: true,
       reconnectionDelay: 1000, reconnectionDelayMax: 10000, randomizationFactor: 0.3,
@@ -62,17 +54,6 @@ export function startRuntime(queryClient: QueryClient) {
     },
     remove: session => cache.remove(session),
     load: async session => {
-      if (useAuthStore.getState().tokens?.accessToken === demoTokens.accessToken) {
-        queryClient.setQueryData(
-          vehicleKeys.list,
-          { pages: [{ success: true, data: demoVehicles }], pageParams: [undefined] },
-          { updatedAt: 0 }
-        );
-        for (const [id, location] of Object.entries(demoLocations())) useLiveVehicleStore.getState().upsert(id, location);
-        savedPages = queryClient.getQueryData(vehicleKeys.list);
-        savedLive = useLiveVehicleStore.getState().byVehicleId;
-        return;
-      }
       const snapshot = await cache.load(session);
       if (disposed || useAuthStore.getState().sessionKey !== session || !snapshot) return;
       queryClient.setQueryData(vehicleKeys.list, {
@@ -104,11 +85,19 @@ export function startRuntime(queryClient: QueryClient) {
       .then(() => { if (useAuthStore.getState().sessionKey === session) useRuntimeStore.setState({ cacheError: false }); })
       .catch(() => { if (useAuthStore.getState().sessionKey === session) { savedPages = undefined; savedLive = undefined; useRuntimeStore.setState({ cacheError: true }); } });
   };
+  const refreshActivity = () => {
+    if (appActive && useRuntimeStore.getState().online === true && useAuthStore.getState().sessionKey) {
+      // One shared fleet refresh also observes heartbeats that have no GPS event.
+      void queryClient.invalidateQueries({ queryKey: vehicleKeys.list, refetchType: 'active' });
+    }
+  };
   const app = AppState.addEventListener('change', state => {
     const active = state === 'active';
+    appActive = active;
     focusManager.setFocused(active); realtime.setActive(active);
     if (!active) save();
+    else refreshActivity();
   });
-  const interval = setInterval(save, 30000);
+  const interval = setInterval(() => { refreshActivity(); save(); }, 30000);
   return () => { save(); disposed = true; clearInterval(interval); stopNetwork(); app.remove(); stopSession(); };
 }

@@ -1,4 +1,5 @@
 import type { Location, Vehicle } from '../../types/models';
+import { stateForVehicle } from '../vehicles/status';
 export type FleetFilter = 'All' | 'Overspeed' | 'Running' | 'Idle' | 'Stopped' | 'Inactive';
 export const fleetFilters: { label: FleetFilter; color: string }[] = [
   { label: 'All', color: '#ef080c' }, { label: 'Overspeed', color: '#ff8300' },
@@ -11,12 +12,12 @@ export const demoCardExtras: Record<string, CardExtras> = {
   'demo-car': { distance: '15.76', fuel: '0.32', maxSpeed: '67', since: '1 hour 32 min', lastSync: '12-09-2026\n20:25:39', address: 'Rohtak Jhajjar Rd, Sector-23, Rohtak, Haryana 124021, India', visual: 'bike' },
   'demo-truck': { distance: '8.42', fuel: '0.18', maxSpeed: '42', since: '24 min', lastSync: '12-09-2026\n20:24:18', address: 'Model Town, Rohtak, Haryana 124001, India', visual: 'bike' },
 };
-export function matchesFilter(point: Location | undefined, filter: FleetFilter) {
+export function matchesFilter(point: Location | undefined, filter: FleetFilter, state = point?.state) {
   if (filter === 'All') return true;
-  if (filter === 'Overspeed') return point?.metadata?.overspeed === true;
-  return point?.state === ({ Running: 'MOVING', Idle: 'IDLE', Stopped: 'STOPPED', Inactive: 'OFFLINE' } as const)[filter];
+  if (filter === 'Overspeed') return state !== 'OFFLINE' && point?.metadata?.overspeed === true;
+  return state === ({ Running: 'MOVING', Idle: 'IDLE', Stopped: 'STOPPED', Inactive: 'OFFLINE' } as const)[filter];
 }
 export function visibleVehicles(vehicles: Vehicle[], live: Record<string, Location>, filter: FleetFilter, search: string) {
   const term = search.trim().toLowerCase();
-  return vehicles.filter(vehicle => matchesFilter(live[vehicle.id], filter) && (!term || (vehicle.vehicle_number + ' ' + (vehicle.alias ?? '')).toLowerCase().includes(term)));
+  return vehicles.filter(vehicle => matchesFilter(live[vehicle.id], filter, stateForVehicle(vehicle, live[vehicle.id])) && (!term || (vehicle.vehicle_number + ' ' + (vehicle.alias ?? '')).toLowerCase().includes(term)));
 }

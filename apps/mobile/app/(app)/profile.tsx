@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { logout } from '../../services/api/auth';
 import { demoUserProfile } from '../../features/demo/data';
-import { NoticeSheet, Sheet } from '../../components/fleet/Sheet';
+import { NoticeSheet } from '../../components/fleet/Sheet';
+import { config } from '../../constants/config';
 
 export default function Profile() {
   const [error, setError] = useState(false);
   const [modalType, setModalType] = useState<string | null>(null);
 
-  // Flexible data model: uses demoUserProfile currently, will receive backend user data in the future
-  const user = demoUserProfile;
+  // The current backend has no profile endpoint; do not infer identity from demo data.
+  const user = config.demoMode ? demoUserProfile : null;
 
   const signOut = async () => {
     try {
@@ -23,28 +24,23 @@ export default function Profile() {
     router.replace('/(auth)/login');
   };
 
-  const handleLogoutAll = async () => {
-    setModalType(null);
-    await signOut();
-  };
-
   return (
     <View style={styles.page}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {/* Red Header Card */}
         <View style={styles.headerCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user.avatarLetter}</Text>
+            <Text style={styles.avatarText}>{user?.avatarLetter ?? '—'}</Text>
           </View>
           <View style={styles.headerInfo}>
-            <Text style={styles.userName}>{user.name}</Text>
+            <Text style={styles.userName}>{user?.name ?? 'Profile unavailable'}</Text>
             <View style={styles.contactRow}>
               <Feather name="mail" size={14} color="#fff" style={styles.contactIcon} />
-              <Text style={styles.contactText}>{user.email}</Text>
+              <Text style={styles.contactText}>{user?.email ?? 'Email unavailable'}</Text>
             </View>
             <View style={styles.contactRow}>
               <Feather name="phone" size={14} color="#fff" style={styles.contactIcon} />
-              <Text style={styles.contactText}>{user.phone}</Text>
+              <Text style={styles.contactText}>{user?.phone ?? 'Phone unavailable'}</Text>
             </View>
           </View>
         </View>
@@ -181,28 +177,16 @@ export default function Profile() {
       />
 
       <NoticeSheet
-        message={modalType === 'privacy' ? 'Privacy Policy: Your location telemetry and account details are securely encrypted and never shared with third parties.' : null}
+        message={modalType === 'privacy' ? 'Privacy policy unavailable.' : null}
         onClose={() => setModalType(null)}
       />
 
       <NoticeSheet
-        message={modalType === 'changePassword' ? 'Change Password: You can change your password here. An email confirmation has been sent to ' + user.email : null}
+        message={modalType === 'changePassword' ? 'Password changes are unavailable. No email has been sent.' : null}
         onClose={() => setModalType(null)}
       />
 
-      <Sheet visible={modalType === 'logoutAll'} onClose={() => setModalType(null)} title="Logout All Devices">
-        <Text style={styles.dialogText}>
-          Are you sure you want to sign out from all active sessions and mobile devices?
-        </Text>
-        <View style={styles.dialogActions}>
-          <Pressable accessibilityRole="button" onPress={() => setModalType(null)} style={styles.cancelBtn}>
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={handleLogoutAll} style={styles.confirmBtn}>
-            <Text style={styles.confirmBtnText}>Logout All</Text>
-          </Pressable>
-        </View>
-      </Sheet>
+      <NoticeSheet message={modalType === 'logoutAll' ? 'Signing out all devices is unavailable. Logout signs out only this session.' : null} onClose={() => setModalType(null)} />
     </View>
   );
 }

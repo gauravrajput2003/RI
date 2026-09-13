@@ -2,6 +2,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSettingsStore } from '../../store/settingsStore';
+import indianFlag from '../../assets/indianflag.png';
 
 export default function SettingsScreen() {
   const settings = useSettingsStore();
@@ -46,7 +47,7 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.languageRow}>
               <Image
-                source={require('../../assets/indianflag.png')}
+                source={indianFlag}
                 style={styles.flagImage}
                 resizeMode="contain"
               />

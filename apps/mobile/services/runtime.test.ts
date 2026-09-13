@@ -26,6 +26,22 @@ vi.mock('socket.io-client', () => ({ io: () => {
 let stop: (() => void) | undefined;
 afterEach(async () => { stop?.(); stop = undefined; await useAuthStore.getState().setTokens(null); native.disk.clear(); native.sockets.length = 0; vi.clearAllMocks(); vi.useRealTimers(); });
 describe('actual runtime with mocked device/network/transport boundaries', () => {
+  it('refreshes only the authorized fleet on one shared cadence and pauses network reads in background', async () => {
+    vi.useFakeTimers({toFake:['Date','setInterval','clearInterval']});
+    const createTimer=vi.spyOn(globalThis,'setInterval');
+    await useAuthStore.getState().setTokens(tokenA);
+    const queries=new QueryClient();const invalidate=vi.spyOn(queries,'invalidateQueries');
+    stop=startRuntime(queries);await tick();
+    native.network!({isConnected:true,isInternetReachable:true});
+    queries.setQueryData(['vehicles','list'],{pages:[{success:true,data:Array.from({length:200},(_,i)=>({id:String(i),vehicle_number:String(i),active:true}))}],pageParams:[undefined]});
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(createTimer).toHaveBeenCalledOnce();
+    expect(invalidate).toHaveBeenCalledOnce();
+    expect(invalidate).toHaveBeenCalledWith({queryKey:['vehicles','list'],refetchType:'active'});
+    native.app!('background');await vi.advanceTimersByTimeAsync(30000);
+    expect(invalidate).toHaveBeenCalledOnce();
+    stop();stop=undefined;createTimer.mockRestore();queries.clear();
+  });
   it('hydrates useful offline data, resumes one socket and refetches only active latest-state queries', async () => {
     await useAuthStore.getState().setTokens(tokenA);
     const session = useAuthStore.getState().sessionKey!;

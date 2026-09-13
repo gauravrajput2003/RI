@@ -29,6 +29,7 @@ let authorizer: typeof import('../realtime/vehicle-authorizer.js').vehicleAuthor
 let vehicleRepository: typeof import('../modules/vehicles/repository.js');
 const password = 'authorization-fixture-password';
 let passwordHash: string;
+let deviceActivity: typeof import('../modules/vehicles/activity.js').deviceActivity;
 const token = (id: string, role = 'USER') => jwt.sign({ id, role }, secret, { expiresIn: '5m' });
 const get = (user: string, path: string) => request(app).get('/api/v1' + path).set('Authorization', `Bearer ${token(user)}`);
 const historyQuery = '?from=2026-01-01&to=2027-01-01';
@@ -38,6 +39,7 @@ beforeAll(async () => {
   process.env.JWT_SECRET = secret;
   process.env.JWT_REFRESH_SECRET = secret + '-refresh';
   process.env.INTERNAL_TRACKER_SECRET = secret + '-internal';
+  process.env.OFFLINE_TIMEOUT_SECONDS = '90';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
   for (const name of ['001_initial.sql', '002_current_device_state.sql']) {
@@ -54,6 +56,7 @@ beforeAll(async () => {
   const { errorHandler } = await import('../lib/errors.js');
   authorizer = (await import('../realtime/vehicle-authorizer.js')).vehicleAuthorizer;
   vehicleRepository = await import('../modules/vehicles/repository.js');
+  deviceActivity = (await import('../modules/vehicles/activity.js')).deviceActivity;
   app = express(); app.use(express.json()); app.use('/api/v1', api); app.use(errorHandler);
 }, 30000);
 afterAll(async () => { await state.db?.close(); });
@@ -76,6 +79,43 @@ beforeEach(async () => {
 });
 
 describe('resource authorization with both customers persisted', () => {
+  it.each(['MOVING','STOPPED','IDLE','ONLINE'] as const)('preserves recent %s activity using configured timeout', state => {
+    const now=new Date('2026-08-01T00:00:00Z');
+    expect(deviceActivity(now,state,true,now)).toEqual({state,status_checked_at:now.toISOString(),offline_at:'2026-08-01T00:01:30.000Z'});
+  });
+  it.each([[89999,'MOVING'],[90000,'MOVING'],[90001,'OFFLINE']] as const)('handles configured timeout boundary at %i ms', (age,state) => {
+    const now=new Date('2026-08-01T00:00:00Z');
+    expect(deviceActivity(new Date(+now-age),'MOVING',true,now).state).toBe(state);
+  });
+  it('treats missing activity or disabled devices as offline without inventing a timestamp', () => {
+    const now=new Date('2026-08-01T00:00:00Z');
+    expect(deviceActivity(null,'MOVING',true,now)).toMatchObject({state:'OFFLINE',offline_at:null});
+    expect(deviceActivity(now,'MOVING',false,now)).toMatchObject({state:'OFFLINE',offline_at:null});
+  });
+  it('derives vehicle/device/latest offline responses without rewriting current state or history', async () => {
+    vi.useFakeTimers({toFake:['Date']});
+    const now=new Date('2026-08-01T00:00:00Z');vi.setSystemTime(now);
+    try {
+      await state.db!.query('UPDATE devices SET last_seen_at=$1 WHERE id=$2',[now,da]);
+      await state.db!.query("UPDATE device_status SET state='MOVING' WHERE device_id=$1",[da]);
+      const before=(await state.db!.query('SELECT * FROM locations WHERE device_id=$1',[da])).rows;
+      const check=async(expected:string)=>{
+        for(const path of ['/vehicles','/devices',`/vehicles/${va}`,`/vehicles/${va}/latest-location`]) {
+          const response=await get(a,path).expect(200);
+          const data=Array.isArray(response.body.data)?response.body.data[0]:response.body.data;
+          expect(data).toMatchObject({state:expected,last_seen_at:now.toISOString(),offline_at:'2026-08-01T00:01:30.000Z'});
+        }
+      };
+      await check('MOVING');vi.setSystemTime(+now+90001);await check('OFFLINE');
+      expect((await get(b,'/vehicles')).body.data[0].state).toBe('OFFLINE');
+      expect((await state.db!.query('SELECT state FROM device_status WHERE device_id=$1',[da])).rows[0]).toEqual({state:'MOVING'});
+      expect((await state.db!.query('SELECT * FROM locations WHERE device_id=$1',[da])).rows).toEqual(before);
+      // A fresh heartbeat (last-seen only) restores availability without inserting history.
+      await state.db!.query('UPDATE devices SET last_seen_at=$1 WHERE id=$2',[new Date(),da]);
+      expect((await get(a,`/vehicles/${va}/latest-location`)).body.data.state).toBe('MOVING');
+      expect((await state.db!.query('SELECT * FROM locations WHERE device_id=$1',[da])).rows).toEqual(before);
+    } finally { vi.useRealTimers(); }
+  });
   it.each([
     ['a',a,va,vb,da,ea,ga,sa], ['b',b,vb,va,db,eb,gb,sb],
   ])('enforces account scope with a real login token for %s', async (label,user,own,foreign,device,event,group,subscription) => {

@@ -3,7 +3,8 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { VehicleVisual } from '../../components/fleet/VehicleVisual';
-import { demoVehicleDetails } from '../../features/demo/data';
+import { vehicleDetails } from '../../features/profile/vehicle-details';
+import { Loading, ErrorState } from '../../components/StateViews';
 import { useVehicles } from '../../features/vehicles/queries';
 import { config } from '../../constants/config';
 import type { VehicleCardDetail } from '../../features/profile/types';
@@ -14,30 +15,7 @@ export default function VehiclesScreen() {
 
   const query = useVehicles();
 
-  // Flexible adapter: if demo mode or no API data, use the rich demoVehicleDetails matching the UI screenshot.
-  // When real API data is available in the future, maps API vehicles to the card view model.
-  const vehicles: VehicleCardDetail[] = useMemo(() => {
-    if (config.demoMode || !query.data?.data || query.data.data.length === 0) {
-      return demoVehicleDetails;
-    }
-    return query.data.data.map((v, index) => {
-      const fallback = demoVehicleDetails[index % demoVehicleDetails.length];
-      return {
-        id: v.id,
-        vehicle_number: v.vehicle_number,
-        timestamp: fallback.timestamp,
-        speed: v.latestLocation?.speed ?? fallback.speed,
-        overspeed: fallback.overspeed,
-        mileage: fallback.mileage,
-        odometer: v.odometer ?? fallback.odometer,
-        alias: v.alias ?? fallback.alias,
-        remark: fallback.remark,
-        subscriptionStart: fallback.subscriptionStart,
-        subscriptionDue: fallback.subscriptionDue,
-        visual: (v.vehicle_type?.toLowerCase().includes('scooter') ? 'scooter' : v.vehicle_type?.toLowerCase().includes('car') ? 'car' : 'bike') as 'scooter' | 'car' | 'bike',
-      };
-    });
-  }, [query.data]);
+  const vehicles = useMemo(() => vehicleDetails(query.data?.data, config.demoMode), [query.data]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -63,22 +41,22 @@ export default function VehiclesScreen() {
         <View style={styles.row}>
           <View style={styles.col}>
             <Text style={styles.label}>Speed</Text>
-            <Text style={styles.value}>{item.speed}</Text>
+            <Text style={styles.value}>{item.speed ?? '—'}</Text>
           </View>
           <View style={[styles.col, styles.rightAlign]}>
             <Text style={styles.label}>Overspeed</Text>
-            <Text style={styles.value}>{item.overspeed}</Text>
+            <Text style={styles.value}>{item.overspeed ?? '—'}</Text>
           </View>
         </View>
 
         <View style={styles.row}>
           <View style={styles.col}>
             <Text style={styles.label}>Mileage</Text>
-            <Text style={styles.value}>{item.mileage}</Text>
+            <Text style={styles.value}>{item.mileage ?? '—'}</Text>
           </View>
           <View style={[styles.col, styles.rightAlign]}>
             <Text style={styles.label}>Odometer</Text>
-            <Text style={styles.value}>{item.odometer}</Text>
+            <Text style={styles.value}>{item.odometer ?? '—'}</Text>
           </View>
         </View>
 
@@ -144,13 +122,13 @@ export default function VehiclesScreen() {
         </View>
       ) : null}
 
-      <FlatList
+      {!config.demoMode && query.isLoading && !query.data ? <Loading /> : !config.demoMode && query.isError && !query.data ? <ErrorState message="Unable to load vehicles" retry={() => query.refetch()} /> : <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderCard}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<Text style={styles.empty}>No vehicles match your search.</Text>}
-      />
+        ListEmptyComponent={<Text style={styles.empty}>{search.trim() ? 'No vehicles match your search.' : 'No vehicles available.'}</Text>}
+      />}
     </View>
   );
 }

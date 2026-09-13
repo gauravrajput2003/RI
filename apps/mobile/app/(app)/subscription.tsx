@@ -3,17 +3,27 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { demoSubscriptions } from '../../features/demo/data';
 import type { SubscriptionRecord } from '../../features/profile/types';
+import { useQuery } from '@tanstack/react-query';
+import { config } from '../../constants/config';
+import { getSubscriptions } from '../../services/api/subscriptions';
+import { Loading, ErrorState } from '../../components/StateViews';
 
 export default function SubscriptionScreen() {
-  const subscriptions: SubscriptionRecord[] = demoSubscriptions;
+  const query = useQuery({ queryKey: ['subscriptions'], queryFn: ({ signal }) => getSubscriptions(signal), enabled: !config.demoMode, retry: 1 });
+  // Real subscriptions belong to the account; the API provides no vehicle link.
+  const subscriptions: (SubscriptionRecord & { status?: string })[] = config.demoMode ? demoSubscriptions : (query.data ?? []).map((item, index) => ({
+    id: item.id, badgeIndex: index + 1, vehicle_number: item.plan, status: item.status,
+    subscriptionStart: item.starts_at ? new Date(item.starts_at).toLocaleDateString() : 'Unavailable',
+    subscriptionDue: item.ends_at ? new Date(item.ends_at).toLocaleDateString() : 'Unavailable',
+  }));
 
-  const renderItem = ({ item }: { item: SubscriptionRecord }) => (
+  const renderItem = ({ item }: { item: SubscriptionRecord & { status?: string } }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{item.badgeIndex}</Text>
         </View>
-        <Text style={styles.vehicleNumber}>{item.vehicle_number}</Text>
+        <View><Text style={styles.vehicleNumber}>{item.vehicle_number}</Text>{item.status ? <Text>{item.status}</Text> : null}</View>
       </View>
       <View style={styles.divider} />
       <View style={styles.cardBody}>
@@ -44,12 +54,13 @@ export default function SubscriptionScreen() {
         <Text style={styles.headerTitle}>Subscription</Text>
       </View>
 
-      <FlatList
+      {!config.demoMode && query.isLoading ? <Loading message="Loading subscriptions…" /> : !config.demoMode && query.isError ? <ErrorState message="Subscriptions unavailable" retry={() => query.refetch()} /> : <FlatList
         data={subscriptions}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
-      />
+        ListEmptyComponent={<Text>No subscriptions available.</Text>}
+      />}
     </View>
   );
 }

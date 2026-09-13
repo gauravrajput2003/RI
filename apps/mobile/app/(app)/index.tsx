@@ -11,6 +11,7 @@ import { useLatestLocation, useVehicles } from '../../features/vehicles/queries'
 import { useLiveVehicleStore } from '../../store/liveVehicleStore';
 import { useVehicleStore } from '../../store/vehicleStore';
 import { config } from '../../constants/config';
+import { stateForVehicle } from '../../features/vehicles/status';
 import { Loading, ErrorState } from '../../components/StateViews';
 import type { Vehicle } from '../../types/models';
 const DashboardRow = memo(function DashboardRow({ vehicle, select }: { vehicle: Vehicle; select(vehicle: Vehicle): void }) {
@@ -24,7 +25,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<FleetFilter>('All'); const [search, setSearch] = useState(''); const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Vehicle | null>(null); const [message, setMessage] = useState<string | null>(null);
   const ids = useLiveVehicleStore(useShallow(state => visibleVehicles(vehicles, state.byVehicleId, filter, search).map(vehicle => vehicle.id)));
-  const counts = useLiveVehicleStore(useShallow(state => fleetFilters.map(item => vehicles.filter(vehicle => matchesFilter(state.byVehicleId[vehicle.id], item.label)).length)));
+  const counts = useLiveVehicleStore(useShallow(state => fleetFilters.map(item => vehicles.filter(vehicle => matchesFilter(state.byVehicleId[vehicle.id], item.label, stateForVehicle(vehicle, state.byVehicleId[vehicle.id]))).length)));
   const byId = useMemo(() => new Map(vehicles.map(vehicle => [vehicle.id, vehicle])), [vehicles]);
   const rows = useMemo(() => ids.map(id => byId.get(id)!).filter(Boolean), [ids, byId]);
   const select = useCallback((vehicle: Vehicle) => setSelected(vehicle), []);

@@ -4,13 +4,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Location, Vehicle } from '../../types/models';
 import type { CardExtras } from '../../features/dashboard/model';
 import { MetricIcon, type MetricIconKind } from './MetricIcon';
+import { stateForVehicle } from '../../features/vehicles/status';
+import { statusLabel } from '../../utils/format';
 function Metric({ label, value, icon }: { label: string; value: string; icon: MetricIconKind }) {
   return <View style={styles.metric}><View style={styles.metricIcon}><MetricIcon kind={icon} /></View><View style={styles.metricText}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View></View>;
 }
 export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }: { vehicle: Vehicle; live?: Location; extra?: CardExtras; onPress(): void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={'Open actions for ' + vehicle.vehicle_number} onPress={onPress} style={styles.card}>
     <View style={styles.top}>
-      <View style={styles.identity}><Text style={styles.bike}>{extra?.visual === 'scooter' ? '🛵' : '🏍️'}</Text><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text></View>
+      <View style={styles.identity}><Text style={styles.bike}>{extra?.visual === 'scooter' ? '🛵' : '🏍️'}</Text><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text><Text style={styles.alias}>{statusLabel(stateForVehicle(vehicle, live))}</Text></View>
       <View style={styles.metrics}>
         <Metric label="KM" value={extra?.distance ?? '—'} icon="distance" />
         <Metric label="Fuel" value={extra?.fuel ?? '—'} icon="fuel" />

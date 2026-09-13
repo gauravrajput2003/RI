@@ -1,8 +1,10 @@
 import { query } from '../../db/pool.js';
+import { activityQuery } from '../vehicles/activity.js';
 
 // Ownership is derived only from persisted relationships, never request filters.
-export const listDevices = (owner: string, limit: number) => query(`
-  SELECT d.* FROM devices d
+export const listDevices = (owner: string, limit: number) => activityQuery(`
+  SELECT d.*,ds.state AS activity_state,d.active AS activity_active FROM devices d
+  LEFT JOIN device_status ds ON ds.device_id=d.id
   WHERE EXISTS (
     SELECT 1 FROM vehicle_device_assignments a JOIN vehicles v ON v.id=a.vehicle_id
     WHERE a.device_id=d.id AND a.unassigned_at IS NULL AND v.owner_id=$1
