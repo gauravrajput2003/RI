@@ -24,14 +24,14 @@ describe('explicit development-only demo', () => {
     const vehicles = await api.get('/vehicles');
     expect(vehicles.data.data).toHaveLength(3);
     const latest = await api.get('/vehicles/demo-van/latest-location');
-    expect(latest.data.data.state).toBe('MOVING');
+    expect(latest.data.data.state).toBe('STOPPED');
     await expect(api.get('/not-implemented')).rejects.toThrow();
     await actions.logout();
     expect(auth.getState().tokens).toBeNull();
   });
-  it('changes the simulated moving vehicle without inventing movement for parked vehicles', () => {
+  it('keeps the three preview bikes stationary without inventing live movement', () => {
     const first = demoLocations(100000); const next = demoLocations(103000);
-    expect(first['demo-van'].latitude).not.toBe(next['demo-van'].latitude);
+    expect(first['demo-van'].latitude).toBe(next['demo-van'].latitude);
     expect(first['demo-car'].latitude).toBe(next['demo-car'].latitude);
     expect(first['demo-car'].speed).toBe(0);
   });

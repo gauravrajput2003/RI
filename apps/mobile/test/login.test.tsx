@@ -1,0 +1,88 @@
+import React from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import Login from '../app/(auth)/login';
+import { DemoNotice } from '../components/DemoNotice';
+const boundary = vi.hoisted(() => ({ login: vi.fn(), replace: vi.fn(), focus: vi.fn(), demoMode: true, segment: '(auth)' }));
+vi.mock('react-native', () => ({ View: 'View', Text: 'Text', Image: 'Image', TextInput: 'TextInput', Pressable: 'Pressable', Modal: 'Modal', ScrollView: 'ScrollView', KeyboardAvoidingView: 'KeyboardAvoidingView', Keyboard: { dismiss: vi.fn() }, Platform: { OS: 'android' }, StyleSheet: { create: (value: unknown) => value, absoluteFill: {}, hairlineWidth: 1 } }));
+vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView', useSafeAreaInsets: () => ({ top: 24, bottom: 24 }) }));
+vi.mock('expo-status-bar', () => ({ StatusBar: 'StatusBar' }));
+vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Icon' }));
+vi.mock('expo-router', () => ({ router: { replace: boundary.replace }, useSegments: () => [boundary.segment] }));
+vi.mock('../services/api/auth', () => ({ login: boundary.login }));
+vi.mock('../services/api/client', () => ({ apiError: () => 'Sign-in failed.' }));
+vi.mock('../constants/config', () => ({ config: boundary }));
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+let tree: ReactTestRenderer;
+const type = (name: string) => name as React.ElementType;
+const button = (label: string) => tree.root.findAllByType(type('Pressable')).find(node => node.props.accessibilityLabel === label)!;
+const password = () => tree.root.findAllByType(type('TextInput'))[1];
+const modal = () => tree.root.findByType(type('Modal'));
+const open = async () => act(async () => button('Choose your preferred language').props.onPress());
+beforeEach(() => { boundary.login.mockReset(); boundary.replace.mockReset(); boundary.focus.mockReset(); boundary.demoMode = true; boundary.segment = '(auth)'; });
+async function render() { await act(async () => { tree = create(<Login />, { createNodeMock: element => element.type === type('TextInput') ? { focus: boundary.focus } : null }); }); }
+
+describe('login screen interactions', () => {
+  it('toggles password without replacing the input or clearing its value, and refocuses it', async () => {
+    await render(); const input = password();
+    expect(input.props.secureTextEntry).toBe(true);
+    await act(async () => input.props.onChangeText('123456'));
+    await act(async () => button('Show password').props.onPress());
+    expect(password()).toBe(input); expect(input.props.value).toBe('123456'); expect(input.props.secureTextEntry).toBe(false); expect(boundary.focus).toHaveBeenCalledOnce();
+    await act(async () => button('Hide password').props.onPress());
+    expect(input.props.secureTextEntry).toBe(true); expect(input.props.value).toBe('123456');
+    await act(async () => tree.unmount());
+  });
+  it('applies Hindi and Tamil locally and closes; cancel, backdrop and Android Back preserve selection', async () => {
+    await render(); await open();
+    expect(modal().props.visible).toBe(true);
+    expect(button('English, English').props.accessibilityState.checked).toBe(true);
+    await act(async () => button('हिंदी, Hindi').props.onPress());
+    expect(modal().props.visible).toBe(false);
+    expect(tree.root.findAllByType(type('TextInput'))[0].props.placeholder).toBe('उपयोगकर्ता नाम दर्ज करें');
+    await act(async () => button('अपनी पसंदीदा भाषा चुनें').props.onPress());
+    await act(async () => button('தமிழ், Tamil').props.onPress());
+    expect(modal().props.visible).toBe(false);
+    expect(tree.root.findAllByType(type('TextInput'))[0].props.placeholder).toBe('பயனர்பெயரை உள்ளிடவும்');
+    await act(async () => button('உங்கள் விருப்ப மொழியைத் தேர்ந்தெடுக்கவும்').props.onPress());
+    await act(async () => modal().props.onRequestClose());
+    expect(modal().props.visible).toBe(false); expect(button('தமிழ், Tamil').props.accessibilityState.checked).toBe(true);
+    await act(async () => button('உங்கள் விருப்ப மொழியைத் தேர்ந்தெடுக்கவும்').props.onPress());
+    await act(async () => button('ரத்து செய்').props.onPress());
+    expect(modal().props.visible).toBe(false); expect(button('தமிழ், Tamil').props.accessibilityState.checked).toBe(true);
+    await act(async () => button('உங்கள் விருப்ப மொழியைத் தேர்ந்தெடுக்கவும்').props.onPress());
+    const cancel = tree.root.findAllByType(type('Pressable')).find(node => node.findAllByType(type('Text')).some(text => text.props.children === 'ரத்து செய்'))!;
+    await act(async () => cancel.props.onPress());
+    expect(modal().props.visible).toBe(false); expect(button('தமிழ், Tamil').props.accessibilityState.checked).toBe(true);
+    await act(async () => tree.unmount());
+  });
+  it('preserves the trimmed email contract, prevents duplicate submissions, and handles failures and retry', async () => {
+    await render();
+    expect(button('LOGIN').props.disabled).toBe(true);
+    expect(typeof button('LOGIN').props.style).not.toBe('function');
+    expect(button('LOGIN').props.style[0]).toMatchObject({ backgroundColor: '#f00808', minHeight: 46, width: '100%', flexShrink: 0 });
+    await act(async () => password().props.onSubmitEditing()); expect(boundary.login).not.toHaveBeenCalled();
+    const inputs = tree.root.findAllByType(type('TextInput'));
+    await act(async () => { inputs[0].props.onChangeText('  gaurav@gmail.com  '); inputs[1].props.onChangeText('123456'); });
+    expect(button('LOGIN').props.disabled).toBe(false);
+    let reject!: (reason: Error) => void;
+    boundary.login.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    await act(async () => { button('LOGIN').props.onPress(); button('LOGIN').props.onPress(); });
+    expect(boundary.login).toHaveBeenCalledOnce();
+    expect(boundary.login).toHaveBeenCalledWith('gaurav@gmail.com', '123456');
+    expect(JSON.stringify(tree.toJSON())).toContain('Signing in…');
+    await act(async () => reject(new Error('failed')));
+    expect(JSON.stringify(tree.toJSON())).toContain('Sign-in failed.'); expect(boundary.replace).not.toHaveBeenCalled();
+    boundary.login.mockResolvedValueOnce(undefined);
+    await act(async () => button('LOGIN').props.onPress());
+    expect(boundary.replace).toHaveBeenCalledWith('/(app)');
+    await act(async () => tree.unmount());
+  });
+  it('shows the small indicator only in demo mode and hides the shared banner only on login', async () => {
+    await render(); expect(JSON.stringify(tree.toJSON())).toContain('Demo mode');
+    boundary.demoMode = false; await act(async () => tree.update(<Login />)); expect(JSON.stringify(tree.toJSON())).not.toContain('Demo mode');
+    boundary.demoMode = true; await act(async () => tree.update(<DemoNotice />)); expect(tree.toJSON()).toBeNull();
+    boundary.segment = '(app)'; await act(async () => tree.update(<DemoNotice />)); expect(JSON.stringify(tree.toJSON())).toContain('DEMO —');
+    await act(async () => tree.unmount());
+  });
+});

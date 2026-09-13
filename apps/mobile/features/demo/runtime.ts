@@ -30,8 +30,5 @@ export function startDemoRuntime(queries: QueryClient) {
   focusManager.setFocused(active);
   const unsubscribe = useAuthStore.subscribe(reconcile); reconcile();
   const app = AppState.addEventListener('change', state => { active = state === 'active'; focusManager.setFocused(active); });
-  const timer = setInterval(() => {
-    if (session && active) useLiveVehicleStore.getState().upsert('demo-van', demoLocations()['demo-van']);
-  }, 3000);
-  return () => { clearInterval(timer); app.remove(); unsubscribe(); clear(); };
+  return () => { app.remove(); unsubscribe(); clear(); };
 }
