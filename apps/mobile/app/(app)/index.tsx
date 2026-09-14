@@ -6,6 +6,7 @@ import { FleetHeader } from '../../components/fleet/Header';
 import { BikeCard } from '../../components/fleet/BikeCard';
 import { BikeActions, type BikeAction } from '../../components/fleet/BikeActions';
 import { NoticeSheet } from '../../components/fleet/Sheet';
+import { ShareSheet } from '../../components/fleet/ShareSheet';
 import { demoCardExtras, fleetFilters, matchesFilter, visibleVehicles, type FleetFilter } from '../../features/dashboard/model';
 import { useLatestLocation, useVehicles } from '../../features/vehicles/queries';
 import { useLiveVehicleStore } from '../../store/liveVehicleStore';
@@ -24,6 +25,7 @@ export default function Dashboard() {
   const query = useVehicles(); const vehicles = useMemo(() => query.data?.data ?? [], [query.data]);
   const [filter, setFilter] = useState<FleetFilter>('All'); const [search, setSearch] = useState(''); const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Vehicle | null>(null); const [message, setMessage] = useState<string | null>(null);
+  const [shareVehicle, setShareVehicle] = useState<string | null>(null);
   const ids = useLiveVehicleStore(useShallow(state => visibleVehicles(vehicles, state.byVehicleId, filter, search).map(vehicle => vehicle.id)));
   const counts = useLiveVehicleStore(useShallow(state => fleetFilters.map(item => vehicles.filter(vehicle => matchesFilter(state.byVehicleId[vehicle.id], item.label, stateForVehicle(vehicle, state.byVehicleId[vehicle.id]))).length)));
   const byId = useMemo(() => new Map(vehicles.map(vehicle => [vehicle.id, vehicle])), [vehicles]);
@@ -34,6 +36,8 @@ export default function Dashboard() {
     if (!selected) return;
     const vehicle = selected; setSelected(null);
     if (name === 'Live Map') { useVehicleStore.getState().setSelected(vehicle.id); router.push('/(app)/map'); }
+    else if (name === 'Play Back') { router.push({ pathname: '/(app)/playback' as never, params: { vehicleId: vehicle.id, vehicleNumber: vehicle.vehicle_number } }); }
+    else if (name === 'Share') { setShareVehicle(vehicle.vehicle_number); }
     else if (name === 'Report') router.push({ pathname: '/(app)/reports', params: { vehicleNumber: vehicle.vehicle_number, vehicleId: vehicle.id } });
     else setMessage((config.demoMode ? 'Demo preview: ' : '') + name + ' for ' + vehicle.vehicle_number + ' is not connected yet. No command was sent and no data was shared.');
   };
@@ -45,6 +49,7 @@ export default function Dashboard() {
         ListEmptyComponent={<Text style={styles.empty}>No vehicles match this filter.</Text>}
         ListFooterComponent={query.hasNextPage ? <Pressable accessibilityRole="button" disabled={query.isFetchingNextPage} onPress={() => { void query.fetchNextPage(); }} style={styles.more}><Text>Load more vehicles</Text></Pressable> : null} />}
     <BikeActions vehicle={selected?.vehicle_number ?? null} onClose={() => setSelected(null)} onAction={action} />
+    <ShareSheet vehicleNumber={shareVehicle} onClose={() => setShareVehicle(null)} />
     <NoticeSheet message={message} onClose={() => setMessage(null)} />
   </View>;
 }

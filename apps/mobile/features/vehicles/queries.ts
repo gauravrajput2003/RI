@@ -1,8 +1,13 @@
 import { useEffect, useMemo } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { getLatestLocation, getVehicles } from '../../services/api/vehicles';
+import { getHistory, getLatestLocation, getVehicles } from '../../services/api/vehicles';
 import { useLiveVehicleStore } from '../../store/liveVehicleStore';
-export const vehicleKeys = { all: ['vehicles'] as const, list: ['vehicles','list'] as const, latest: (id: string) => ['vehicles','latest',id] as const };
+export const vehicleKeys = {
+  all: ['vehicles'] as const,
+  list: ['vehicles','list'] as const,
+  latest: (id: string) => ['vehicles','latest',id] as const,
+  history: (id: string, from?: string, to?: string) => ['vehicles','history',id,from,to] as const,
+};
 export function useVehicles() {
   const query = useInfiniteQuery({
     queryKey: vehicleKeys.list, initialPageParam: undefined as string | undefined,
@@ -25,3 +30,17 @@ export function useLatestLocation(vehicleId: string) {
   useEffect(() => { if (query.data) useLiveVehicleStore.getState().upsert(vehicleId, query.data); }, [vehicleId, query.data]);
   return query;
 }
+export function useHistory(vehicleId: string, from: Date | null, to: Date | null, enabled = false) {
+  const fromIso = from?.toISOString();
+  const toIso = to?.toISOString();
+  return useQuery({
+    queryKey: vehicleKeys.history(vehicleId, fromIso, toIso),
+    queryFn: ({ signal }) => getHistory(vehicleId, fromIso!, toIso!, 500, signal),
+    enabled: Boolean(enabled && vehicleId && fromIso && toIso),
+    staleTime: 60_000,
+    retry: 1,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+  });
+}
+

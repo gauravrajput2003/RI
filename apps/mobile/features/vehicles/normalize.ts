@@ -33,3 +33,9 @@ export const vehicleSchema = z.object({
 export function normalizeVehicles(input: unknown): Vehicle[] {
   return z.array(vehicleSchema).parse(input);
 }
+export function normalizeHistory(input: unknown): Location[] {
+  if (!Array.isArray(input)) return [];
+  return input.map(normalizeLocation).filter((loc): loc is Location => loc !== null);
+}
+
+

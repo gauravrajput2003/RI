@@ -43,6 +43,7 @@ export default function AppLayout() {
       <Tabs.Screen name="subscription" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="map" options={{ href: null }} />
+      <Tabs.Screen name="playback" options={{ href: null }} />
       <Tabs.Screen name="vehicle/[vehicleId]" options={{ href: null }} />
     </Tabs>
   </SafeAreaView>;
