@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useHistory } from '../vehicles/queries';
+import { hasPosition } from '../map/viewport';
 import {
   calculateRouteStats,
   formatDate,
@@ -22,6 +23,7 @@ import {
 } from './route';
 
 export default function PlaybackView() {
+  const map = useRef<MapView>(null);
   const router = useRouter();
   const params = useLocalSearchParams<{ vehicleId?: string; vehicleNumber?: string }>();
   const vehicleId = params.vehicleId ?? '';
@@ -103,10 +105,22 @@ export default function PlaybackView() {
   const polylineCoords = useMemo(
     () =>
       points
-        .filter(p => typeof p.latitude === 'number' && typeof p.longitude === 'number')
+        .filter(hasPosition)
         .map(p => ({ latitude: p.latitude as number, longitude: p.longitude as number })),
     [points]
   );
+
+  const fitRoute = useCallback(() => {
+    if (polylineCoords.length === 1) {
+      map.current?.animateToRegion({ ...polylineCoords[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 250);
+    } else if (polylineCoords.length > 1) {
+      map.current?.fitToCoordinates(polylineCoords, {
+        edgePadding: { top: 40, right: 40, bottom: 60, left: 40 },
+        animated: false,
+      });
+    }
+  }, [polylineCoords]);
+  useEffect(() => { fitRoute(); }, [fitRoute]);
 
   const startPoint = polylineCoords[0];
   const endPoint = polylineCoords.length > 1 ? polylineCoords[polylineCoords.length - 1] : undefined;
@@ -174,7 +188,7 @@ export default function PlaybackView() {
             <Text style={styles.loadingText}>Loading route playback...</Text>
           </View>
         ) : (
-          <MapView style={styles.map} initialRegion={initialRegion}>
+          <MapView ref={map} style={styles.map} initialRegion={initialRegion} onMapReady={fitRoute}>
             {polylineCoords.length > 1 ? (
               <Polyline coordinates={polylineCoords} strokeColor="#000000" strokeWidth={3.5} />
             ) : null}
@@ -203,6 +217,7 @@ export default function PlaybackView() {
                 key={`halt-${halt.haltIndex}`}
                 coordinate={{ latitude: halt.latitude, longitude: halt.longitude }}
                 title={`Halt ${halt.haltIndex} (${formatDuration(halt.durationSeconds)})`}
+                pinColor="#dc2626"
               >
                 <View style={styles.haltBadge}>
                   <Text style={styles.haltText}>{halt.haltIndex}</Text>

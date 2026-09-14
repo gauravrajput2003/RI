@@ -42,7 +42,14 @@ describe('rendered mobile integration (native UI boundaries only mocked)', () =>
     let tree!: ReactTestRenderer;
     await act(async () => { tree = create(<LiveMap />); });
     const map = tree.root.findByType('MapView' as React.ElementType);
+    expect(tree.root.findAllByType('Marker' as React.ElementType)[0].props.pinColor).toBe('#ef4444');
     await act(async () => tree.root.findAllByType('Marker' as React.ElementType)[0].props.onPress());
+    expect(tree.root.findAllByType('Marker' as React.ElementType)[0].props.pinColor).toBe('#0f766e');
+    await act(async () => useVehicleStore.getState().setSelected('b'));
+    expect(tree.root.findAllByType('Marker' as React.ElementType).find(marker => marker.props.title === 'A')?.props.pinColor).toBe('#ef4444');
+    await act(async () => useVehicleStore.getState().setSelected('a'));
+    boundary.animate.mockClear();
+    await act(async () => useLiveVehicleStore.getState().upsert('a', point(1, 2, 1)));
     expect(useVehicleStore.getState().selectedVehicleId).toBe('a'); expect(boundary.animate).toHaveBeenCalledOnce();
     await act(async () => map.props.onRegionChangeComplete({ latitude: 1, longitude: 2, latitudeDelta: .1, longitudeDelta: .1 }));
     expect(useVehicleStore.getState().followSelected).toBe(true);

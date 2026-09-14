@@ -12,7 +12,8 @@ const VehicleMarker = memo(function VehicleMarker({ id, title, selected }: { id:
   const point = useLiveVehicleStore(state => state.byVehicleId[id]);
   const select = useCallback(() => useVehicleStore.getState().setSelected(id), [id]);
   if (!hasPosition(point)) return null;
-  return <Marker coordinate={{ latitude: point.latitude, longitude: point.longitude }} rotation={point.course ?? 0} title={title} onPress={select} pinColor={selected ? '#0f766e' : undefined} tracksViewChanges={false} />;
+  // Android's Fabric marker manager cannot convert a null pinColor.
+  return <Marker coordinate={{ latitude: point.latitude, longitude: point.longitude }} rotation={point.course ?? 0} title={title} onPress={select} pinColor={selected ? '#0f766e' : '#ef4444'} tracksViewChanges={false} />;
 });
 export default function LiveMap() {
   const map = useRef<MapView>(null);
