@@ -7,12 +7,12 @@ import { createDemoAdapter } from './adapter';
 import { demoCredentials, demoLocations } from './data';
 import { resolveDemoMode } from './mode';
 
-describe('explicit development-only demo', () => {
-  it('requires opt-in and refuses production activation', () => {
+describe('explicit demo mode', () => {
+  it('requires opt-in and permits internal preview builds', () => {
     expect(resolveDemoMode(undefined, true)).toBe(false);
     expect(resolveDemoMode('false', true)).toBe(false);
     expect(resolveDemoMode('true', true)).toBe(true);
-    expect(() => resolveDemoMode('true', false)).toThrow('development-only');
+    expect(resolveDemoMode('true', false)).toBe(true);
   });
   it('accepts requested demo credentials, serves sample data locally and logs out', async () => {
     const auth = createAuthStore(createMemoryStorage());

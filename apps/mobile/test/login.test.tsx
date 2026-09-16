@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Login from '../app/(auth)/login';
 import { DemoNotice } from '../components/DemoNotice';
-const boundary = vi.hoisted(() => ({ login: vi.fn(), replace: vi.fn(), focus: vi.fn(), demoMode: true, segment: '(auth)' }));
+const boundary = vi.hoisted(() => ({ login: vi.fn(), replace: vi.fn(), focus: vi.fn(), demoMode: true, showDemoNotice: true, segment: '(auth)' }));
 vi.mock('react-native', () => ({ View: 'View', Text: 'Text', Image: 'Image', TextInput: 'TextInput', Pressable: 'Pressable', Modal: 'Modal', ScrollView: 'ScrollView', KeyboardAvoidingView: 'KeyboardAvoidingView', Keyboard: { dismiss: vi.fn() }, Platform: { OS: 'android' }, StyleSheet: { create: (value: unknown) => value, absoluteFill: {}, hairlineWidth: 1 } }));
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView', useSafeAreaInsets: () => ({ top: 24, bottom: 24 }) }));
 vi.mock('expo-status-bar', () => ({ StatusBar: 'StatusBar' }));

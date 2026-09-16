@@ -45,7 +45,7 @@ export default function SubscriptionScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(app)')}
           hitSlop={10}
           style={styles.backButton}
         >

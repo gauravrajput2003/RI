@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Fleet Tracker",
-    "slug": "fleet-tracker",
+    "slug": "ri-gps-tracker",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "fleettracker",
@@ -22,6 +22,13 @@
     },
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5ac0ec99-50ce-4d78-b243-c7272a664fd4"
+      }
+    },
+    "owner": "gpstrackerss-team"
   }
 }

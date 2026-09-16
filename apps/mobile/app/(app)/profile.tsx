@@ -53,8 +53,8 @@ export default function Profile() {
             style={styles.quickAction}
             onPress={() => router.push('/(app)/vehicles')}
           >
-            <View style={[styles.actionIconBadge, { backgroundColor: '#fee2e2' }]}>
-              <MaterialCommunityIcons name="car" size={28} color="#dc2626" />
+            <View style={styles.actionIconBadge}>
+              <MaterialCommunityIcons name="car" size={28} color="#ef4444" />
             </View>
             <Text style={styles.quickActionLabel}>Vehicle</Text>
           </Pressable>
@@ -65,8 +65,8 @@ export default function Profile() {
             style={styles.quickAction}
             onPress={() => router.push('/(app)/subscription')}
           >
-            <View style={[styles.actionIconBadge, { backgroundColor: '#e0f2fe' }]}>
-              <MaterialCommunityIcons name="calendar-month" size={28} color="#0284c7" />
+            <View style={styles.actionIconBadge}>
+              <MaterialCommunityIcons name="calendar-clock" size={28} color="#2563eb" />
             </View>
             <Text style={styles.quickActionLabel}>Subscription</Text>
           </Pressable>
@@ -77,8 +77,8 @@ export default function Profile() {
             style={styles.quickAction}
             onPress={() => router.push('/(app)/settings')}
           >
-            <View style={[styles.actionIconBadge, { backgroundColor: '#fef3c7' }]}>
-              <MaterialCommunityIcons name="cog" size={28} color="#d97706" />
+            <View style={styles.actionIconBadge}>
+              <MaterialCommunityIcons name="cog" size={30} color="#d4a017" />
             </View>
             <Text style={styles.quickActionLabel}>Settings</Text>
           </Pressable>
@@ -90,10 +90,10 @@ export default function Profile() {
           <Pressable
             accessibilityRole="button"
             style={styles.menuItem}
-            onPress={() => router.push('/(app)')}
+            onPress={() => router.replace('/(app)')}
           >
-            <View style={[styles.menuIconBadge, { backgroundColor: '#e0e7ff' }]}>
-              <MaterialCommunityIcons name="view-dashboard" size={22} color="#4f46e5" />
+            <View style={styles.menuIconBadge}>
+              <MaterialCommunityIcons name="monitor-dashboard" size={27} color="#818cf8" />
             </View>
             <Text style={styles.menuText}>Dashboard</Text>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
@@ -105,8 +105,8 @@ export default function Profile() {
             style={styles.menuItem}
             onPress={() => setModalType('playback')}
           >
-            <View style={[styles.menuIconBadge, { backgroundColor: '#dcfce7' }]}>
-              <MaterialCommunityIcons name="map-marker-path" size={22} color="#16a34a" />
+            <View style={styles.menuIconBadge}>
+              <MaterialCommunityIcons name="map-marker-path" size={28} color="#65a30d" />
             </View>
             <Text style={styles.menuText}>Playback</Text>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
@@ -118,8 +118,8 @@ export default function Profile() {
             style={styles.menuItem}
             onPress={() => setModalType('privacy')}
           >
-            <View style={[styles.menuIconBadge, { backgroundColor: '#fef9c3' }]}>
-              <MaterialCommunityIcons name="shield-check" size={22} color="#ca8a04" />
+            <View style={styles.menuIconBadge}>
+              <MaterialCommunityIcons name="shield-check" size={28} color="#fbbf24" />
             </View>
             <Text style={styles.menuText}>Privacy Policy</Text>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
@@ -131,8 +131,9 @@ export default function Profile() {
             style={styles.menuItem}
             onPress={() => setModalType('changePassword')}
           >
-            <View style={[styles.menuIconBadge, { backgroundColor: '#e0f2fe' }]}>
-              <MaterialCommunityIcons name="lock-reset" size={22} color="#0284c7" />
+            <View style={styles.menuIconBadge}>
+              <MaterialCommunityIcons name="lock" size={27} color="#38bdf8" />
+              <MaterialCommunityIcons name="key" size={16} color="#f59e0b" style={styles.passwordKey} />
             </View>
             <Text style={styles.menuText}>Change Password</Text>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
@@ -144,8 +145,8 @@ export default function Profile() {
             style={[styles.menuItem, styles.lastMenuItem]}
             onPress={() => setModalType('logoutAll')}
           >
-            <View style={[styles.menuIconBadge, { backgroundColor: '#fee2e2' }]}>
-              <MaterialCommunityIcons name="account-arrow-right" size={22} color="#dc2626" />
+            <View style={styles.menuIconBadge}>
+              <MaterialCommunityIcons name="cellphone-arrow-down" size={28} color="#f59e0b" />
             </View>
             <Text style={styles.menuText}>Logout All Devices</Text>
             <Feather name="chevron-right" size={20} color="#9ca3af" />
@@ -197,21 +198,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
   },
   content: {
-    paddingBottom: 28,
+    paddingBottom: 8,
+    flexGrow: 1,
   },
   headerCard: {
     backgroundColor: '#ee0509',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 24,
-    gap: 16,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 14,
   },
   avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -222,7 +224,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   avatarText: {
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: '800',
     color: '#ee0509',
   },
@@ -231,7 +233,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   userName: {
-    fontSize: 21,
+    fontSize: 20,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: 0.5,
@@ -253,11 +255,11 @@ const styles = StyleSheet.create({
   quickActionsCard: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 18,
+    marginTop: 10,
+    borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 16,
+    paddingVertical: 8,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -266,13 +268,12 @@ const styles = StyleSheet.create({
   },
   quickAction: {
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
     flex: 1,
   },
   actionIconBadge: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 38,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -284,10 +285,10 @@ const styles = StyleSheet.create({
   menuCard: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    marginTop: 9,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 3,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -297,20 +298,24 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-    gap: 14,
+    gap: 10,
   },
   lastMenuItem: {
     borderBottomWidth: 0,
   },
   menuIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 34,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  passwordKey: {
+    position: 'absolute',
+    right: -1,
+    bottom: 1,
   },
   menuText: {
     flex: 1,
@@ -321,9 +326,10 @@ const styles = StyleSheet.create({
   logoutButton: {
     backgroundColor: '#ee0509',
     marginHorizontal: 16,
-    marginTop: 20,
-    borderRadius: 16,
-    paddingVertical: 15,
+    marginTop: 9,
+    marginBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 13,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -338,7 +344,7 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.5,
   },

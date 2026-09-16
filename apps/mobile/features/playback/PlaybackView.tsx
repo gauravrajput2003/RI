@@ -78,7 +78,7 @@ export default function PlaybackView() {
 
   const onCancelForm = () => {
     if (!confirmedRange) {
-      router.back();
+      router.replace('/(app)');
     } else {
       setFormOpen(false);
     }
@@ -138,7 +138,7 @@ export default function PlaybackView() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(app)')}
           style={styles.backButton}
         >
           <Feather name="arrow-left" size={24} color="#111" />

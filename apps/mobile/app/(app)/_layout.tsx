@@ -1,4 +1,6 @@
-import { Redirect, Tabs } from 'expo-router';
+import { useEffect } from 'react';
+import { BackHandler, Platform } from 'react-native';
+import { Redirect, Tabs, router, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useRuntimeStore } from '../../store/runtimeStore';
@@ -7,9 +9,19 @@ import { ConnectionBanner } from '../../components/ConnectionBanner';
 import { FleetBottomTabs } from '../../components/fleet/BottomTabs';
 import { config } from '../../constants/config';
 export default function AppLayout() {
+  const pathname = usePathname();
   const hydrated = useAuthStore(state => state.hydrated);
   const session = useAuthStore(state => state.sessionKey);
   const ready = useRuntimeStore(state => state.readySession);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (pathname === '/' || pathname === '/index') return false;
+      router.replace('/(app)');
+      return true;
+    });
+    return () => subscription.remove();
+  }, [pathname]);
   if (!hydrated) return <Loading />;
   if (!session) return <Redirect href="/(auth)/login" />;
   if (ready !== session) return <Loading />;
@@ -36,8 +48,8 @@ export default function AppLayout() {
         );
       }}
     >
-      <Tabs.Screen name="reports" options={{ title: 'Report' }} />
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="reports" options={{ title: 'Report' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       <Tabs.Screen name="vehicles" options={{ href: null }} />
       <Tabs.Screen name="subscription" options={{ href: null }} />

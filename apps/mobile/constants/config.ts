@@ -8,12 +8,13 @@ const defaultHost = typeof window !== 'undefined' ? 'http://localhost:3000' : 'h
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
 
-if (process.env.NODE_ENV === 'production' && (!apiUrl?.startsWith('https://') || !socketUrl?.startsWith('https://'))) {
+if (!demoMode && process.env.NODE_ENV === 'production' && (!apiUrl?.startsWith('https://') || !socketUrl?.startsWith('https://'))) {
   throw new Error('Production requires HTTPS EXPO_PUBLIC_API_URL and EXPO_PUBLIC_SOCKET_URL');
 }
 
 export const config = {
   demoMode,
+  showDemoNotice: process.env.EXPO_PUBLIC_SHOW_DEMO_NOTICE === 'true',
   apiUrl: apiUrl ?? `${defaultHost}/api/v1`,
   socketUrl: socketUrl ?? defaultHost,
 };
