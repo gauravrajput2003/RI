@@ -10,6 +10,7 @@ import { config } from '../../constants/config';
 import { languages, translations, support, type Language } from '../../features/auth/login-copy';
 
 import logo from '../../assets/loginlogo.png';
+import loginBackground from '../../assets/login-background.png';
 import flag from '../../assets/indianflag.png';
 
 export default function Login() {
@@ -36,12 +37,9 @@ export default function Login() {
     finally { submitting.current = false; setBusy(false); }
   };
   return <SafeAreaView style={styles.page}>
-    <StatusBar style="dark" />
-    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
-      <Image source={logo} resizeMode="contain" style={[styles.watermark, styles.watermarkTop]} />
-      <Image source={logo} resizeMode="contain" style={[styles.watermark, styles.watermarkMiddle]} />
-      <Image source={logo} resizeMode="contain" style={[styles.watermark, styles.watermarkBottom]} />
-    </View>
+    <StatusBar style="light" />
+    <Image source={loginBackground} resizeMode="cover" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill} />
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill,styles.backgroundShade]} />
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={styles.topBar}>
@@ -102,14 +100,12 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#fff' }, flex: { flex: 1 },
-  watermark: { position: 'absolute', width: 560, height: 430, opacity: 0.035, transform: [{ rotate: '25deg' }] },
-  watermarkTop: { top: -260, left: -100 }, watermarkMiddle: { top: 130, right: -160 }, watermarkBottom: { bottom: -200, left: -120 },
+  page: { flex: 1, backgroundColor: '#020506' }, flex: { flex: 1 }, backgroundShade: { backgroundColor: 'rgba(0,0,0,0.26)' },
   scroll: { flexGrow: 1, paddingBottom: 10 }, topBar: { alignItems: 'flex-end', paddingTop: 38, paddingRight: 6 },
   languageButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ddd', borderRadius: 4, paddingHorizontal: 12, minHeight: 38 },
   smallFlag: { width: 22, height: 16 }, languageButtonText: { fontSize: 14, fontWeight: '700', color: '#111' },
-  content: { width: '100%', maxWidth: 440, alignSelf: 'center', paddingHorizontal: 26 },
-  logo: { width: 132, height: 110, alignSelf: 'center', marginTop: 32, marginBottom: 40 },
+  content: { width: '92%', maxWidth: 440, alignSelf: 'center', paddingHorizontal: 26, paddingTop: 22, paddingBottom: 18, marginTop: 16, marginBottom: 20, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.95)', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 18, elevation: 8 },
+  logo: { width: 132, height: 110, alignSelf: 'center', marginTop: 4, marginBottom: 30 },
   label: { fontSize: 20, fontWeight: '700', color: '#555' },
   input: { minHeight: 48, borderBottomWidth: 1, borderBottomColor: '#262626', paddingHorizontal: 4, paddingVertical: 10, fontSize: 20, color: '#292929' },
   passwordLabel: { marginTop: 28 }, passwordRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#262626' },

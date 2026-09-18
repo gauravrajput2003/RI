@@ -1,0 +1,12 @@
+import '@testing-library/jest-dom/vitest';
+import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {MemoryRouter} from 'react-router-dom';
+import {expect,it,vi} from 'vitest';
+import {PlaybackPage} from './PlaybackPage';
+const mocks=vi.hoisted(()=>({get:vi.fn()}));
+mocks.get.mockImplementation(async()=>({data:{data:[]}}));
+vi.mock('../services/api/client',()=>({api:{get:mocks.get},errorMessage:()=> 'error'}));
+vi.mock('../features/map/MapSurface',()=>({PlaybackMap:()=> <div data-testid="playback-map"/>}));
+it('validates playback filters before requesting a route',async()=>{render(<MemoryRouter><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PlaybackPage/></QueryClientProvider></MemoryRouter>);fireEvent.click(screen.getByRole('button',{name:'Search route'}));expect(await screen.findByText('Select a vehicle.')).toBeInTheDocument();expect(mocks.get.mock.calls.some(call=>call[0]==='/playback')).toBe(false)});
+it('loads an exact report playback deep link',async()=>{mocks.get.mockClear();render(<MemoryRouter initialEntries={['/dashboard/playback?vehicleId=11111111-1111-4111-8111-111111111111&start=2026-09-17T00%3A00%3A00.000Z&end=2026-09-18T00%3A00%3A00.000Z']}><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PlaybackPage/></QueryClientProvider></MemoryRouter>);await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/playback'&&call[1]?.params.vehicleId==='11111111-1111-4111-8111-111111111111')).toBe(true))});

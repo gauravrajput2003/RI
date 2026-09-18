@@ -9,6 +9,7 @@
 "dev:api": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\pnpm.ps1 --filter @fleet/api dev",
 "dev:tracker": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\pnpm.ps1 --filter @fleet/tracker dev",
 "dev:mobile": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\pnpm.ps1 --filter @fleet/mobile start",
+"dev:web": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\pnpm.ps1 --filter @fleet/web dev",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",

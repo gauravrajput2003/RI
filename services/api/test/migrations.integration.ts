@@ -86,7 +86,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   const resolved = fileURLToPath(new URL(relative!,runner));
   expect(await realpath(resolved)).toBe(await realpath(fileURLToPath(new URL('../../../database/migrations',import.meta.url))));
   const names=(await readdir(resolved)).filter(name=>name.endsWith('.sql')).sort();
-  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql']);
+  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql']);
   console.info('MIGRATION TARGET',JSON.stringify({database,runner:fileURLToPath(runner),directory:resolved,names}));
   const migrate = async (cwd:string) => {
     const output=await exec(process.execPath,['--import','tsx',fileURLToPath(runner)],{
@@ -112,7 +112,8 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     table==='vehicle_groups'?'PRIMARY KEY (vehicle_id, group_id)':table==='device_status'?'PRIMARY KEY (device_id)':
     table==='schema_migrations'?'PRIMARY KEY (name)':'PRIMARY KEY (id)');
   const expectedForeign:Record<string,string[]> = {
-    groups:['FOREIGN KEY (owner_id) REFERENCES users(id)'],vehicles:['FOREIGN KEY (owner_id) REFERENCES users(id)'],
+    users:['FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT'],
+    groups:['FOREIGN KEY (owner_id) REFERENCES users(id)'],devices:['FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT'],vehicles:['FOREIGN KEY (owner_id) REFERENCES users(id)'],
     vehicle_device_assignments:['FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)','FOREIGN KEY (device_id) REFERENCES devices(id)'],
     vehicle_groups:['FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE','FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE'],
     device_status:['FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE'],
@@ -129,10 +130,10 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     definition:'CHECK (((unassigned_at IS NULL) OR (unassigned_at > assigned_at)))'}));
 
   const notNull:Record<string,string[]> = {
-    users:['id','email','password_hash','role','active','created_at','updated_at'],
+    users:['id','email','password_hash','role','active','coins','inactive_timeout_seconds','created_at','updated_at'],
     groups:['id','name','owner_id','created_at','updated_at'],
-    devices:['id','imei','protocol','active','created_at','updated_at','identity_type','identity_value'],
-    vehicles:['id','vehicle_number','active','owner_id','created_at','updated_at'],
+    devices:['id','imei','protocol','active','created_at','updated_at','identity_type','identity_value','capabilities'],
+    vehicles:['id','vehicle_number','active','owner_id','created_at','updated_at','coins','auto_renewal','door_configured','relay_configured','buzzer_configured','ignition_wiring','ac_power_plus','parking_alarm_on_ignition'],
     vehicle_device_assignments:['id','vehicle_id','device_id','assigned_at'],vehicle_groups:['vehicle_id','group_id'],
     device_status:['device_id','state','updated_at'],
     locations:['id','device_id','server_received_at','gps_valid','protocol','metadata','created_at'],
@@ -153,6 +154,12 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     events_vehicle_time_idx:'ON public.events USING btree (vehicle_id, occurred_at DESC)',
     refresh_tokens_user_idx:'ON public.refresh_tokens USING btree (user_id) WHERE (revoked_at IS NULL)',
     devices_identity_unique:'UNIQUE INDEX devices_identity_unique ON public.devices USING btree (identity_type, identity_value)',
+    users_owner_id_idx:'ON public.users USING btree (owner_id)',
+    users_owner_active_idx:'ON public.users USING btree (owner_id, active)',
+    users_role_active_idx:'ON public.users USING btree (role, active)',
+    devices_owner_active_idx:'ON public.devices USING btree (owner_id, active)',
+    vehicles_owner_updated_idx:'ON public.vehicles USING btree (owner_id, updated_at DESC)',
+    users_owner_username_unique:'UNIQUE INDEX users_owner_username_unique ON public.users USING btree (COALESCE(owner_id, \'00000000-0000-0000-0000-000000000000\'::uuid), lower(username)) WHERE (username IS NOT NULL)',
   };
   for(const [name,definition] of Object.entries(indexes)) expect(first.indexes.find(row=>row.indexname===name)?.indexdef.replaceAll('"','')).toContain(definition.replaceAll('"',''));
   expect((await verification.query(`SELECT i.indexrelid FROM pg_index i JOIN pg_class t ON t.oid=i.indrelid
@@ -162,7 +169,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     {f_table_name:'locations',f_geography_column:'position',type:'Point',srid:4326,coord_dimension:2},
   ]);
   const enums=(await verification.query(`SELECT t.typname,e.enumlabel FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid ORDER BY t.typname,e.enumsortorder`)).rows;
-  expect(enums.filter(row=>row.typname==='user_role').map(row=>row.enumlabel)).toEqual(['SUPER_ADMIN','ADMIN','USER']);
+  expect(enums.filter(row=>row.typname==='user_role').map(row=>row.enumlabel)).toEqual(['SUPER_ADMIN','ADMIN','USER','CLIENT']);
   expect(enums.filter(row=>row.typname==='device_connection_state').map(row=>row.enumlabel)).toEqual(['ONLINE','OFFLINE','MOVING','IDLE','STOPPED']);
 
   // Different cwd on the second execution also exercises source-relative Windows paths.

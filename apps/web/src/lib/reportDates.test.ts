@@ -1,0 +1,3 @@
+import {describe,expect,it} from 'vitest';
+import {presetRange,selectedDay} from './reportDates';
+describe('report date ranges',()=>{it('creates half-open today and yesterday boundaries',()=>{const now=new Date(2026,8,17,15);const today=presetRange('today',now),yesterday=presetRange('yesterday',now);expect(new Date(today.end).getTime()-new Date(today.start).getTime()).toBe(86400000);expect(yesterday.end).toBe(today.start)});it('creates a single local calendar day',()=>{const range=selectedDay('2026-09-17');expect(new Date(range.end).getTime()).toBeGreaterThan(new Date(range.start).getTime())});});

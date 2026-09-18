@@ -1,0 +1,4 @@
+export const dateTime=(value?:string|null)=>value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'Unavailable';
+export const speed=(value?:number|null)=>value==null?'Unavailable':`${Math.round(value)} km/h`;
+export const coordinates=(lat?:number|null,lng?:number|null)=>lat==null||lng==null?'Unavailable':`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+export function distanceKm(a:{latitude:number|null;longitude:number|null},b:{latitude:number|null;longitude:number|null}){if(a.latitude==null||a.longitude==null||b.latitude==null||b.longitude==null)return 0;const r=6371,toRad=(v:number)=>v*Math.PI/180;const dLat=toRad(b.latitude-a.latitude),dLon=toRad(b.longitude-a.longitude);const q=Math.sin(dLat/2)**2+Math.cos(toRad(a.latitude))*Math.cos(toRad(b.latitude))*Math.sin(dLon/2)**2;return 2*r*Math.asin(Math.sqrt(q))}

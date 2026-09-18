@@ -5,6 +5,7 @@ dist/
 !.env.example
 coverage/
 *.log
+*.tsbuildinfo
 
 .expo/
 .expo-export/

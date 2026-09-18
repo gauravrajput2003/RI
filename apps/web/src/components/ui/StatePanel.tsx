@@ -1,0 +1,2 @@
+import {AlertTriangle,Inbox,LoaderCircle} from 'lucide-react';import {Button} from './Button';
+export function StatePanel({kind,title,detail,onRetry}:{kind:'loading'|'empty'|'error';title:string;detail?:string;onRetry?:()=>void}){const Icon=kind==='loading'?LoaderCircle:kind==='error'?AlertTriangle:Inbox;return <div className={`state-panel ${kind}`}><Icon className={kind==='loading'?'spin':''}/><strong>{title}</strong>{detail&&<span>{detail}</span>}{onRetry&&<Button onClick={onRetry}>Retry</Button>}</div>}

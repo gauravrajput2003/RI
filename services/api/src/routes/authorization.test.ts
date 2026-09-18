@@ -15,10 +15,7 @@ import { createSocketPrincipalReader } from '../realtime/socket-auth.js';
 // Execute production SQL in PostgreSQL (WASM), not a mock ownership predicate.
 // PostGIS is unavailable here: only spatial types/functions/indexes are adapted.
 const state = vi.hoisted(() => ({ db: undefined as PGlite | undefined }));
-vi.mock('../db/pool.js', () => ({ query: async (sql: string, values?: unknown[]) => {
-  const result = await state.db!.query(sql, values);
-  return { rows: result.rows, rowCount: result.affectedRows || result.rows.length };
-} }));
+vi.mock('../db/pool.js', () => {const run=async(sql:string,values?:unknown[])=>{const result=await state.db!.query(sql,values);return{rows:result.rows,rowCount:result.affectedRows||result.rows.length}};return{query:run,transaction:async<T>(work:(client:{query:typeof run})=>Promise<T>)=>{await state.db!.exec('BEGIN');try{const result=await work({query:run});await state.db!.exec('COMMIT');return result}catch(error){await state.db!.exec('ROLLBACK');throw error}}}});
 const secret = 'authorization-test-secret-at-least-32-characters';
 const a = randomUUID(), b = randomUUID();
 const va = randomUUID(), vb = randomUUID(), da = randomUUID(), db = randomUUID();
@@ -42,7 +39,7 @@ beforeAll(async () => {
   process.env.OFFLINE_TIMEOUT_SECONDS = '90';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -234,6 +231,90 @@ describe('resource authorization with both customers persisted', () => {
       await request(app).get(`/api/v1/vehicles/${vb}`).set('Authorization',`Bearer ${token(a,role)}`).expect(404);
     }
     expect((await get(a,'/vehicles').expect(200)).body.data.map((row:{id:string})=>row.id)).toEqual([va]);
+  });
+  it('keeps dashboard and playback inside the recursive ownership scope', async () => {
+    await state.db!.query("UPDATE users SET role='ADMIN' WHERE id=$1",[a]);
+    await state.db!.query('UPDATE users SET owner_id=$1 WHERE id=$2',[a,b]);
+    const dashboard=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'ADMIN')}`).expect(200);
+    expect(dashboard.body.data.map((row:{id:string})=>row.id).sort()).toEqual([va,vb].sort());
+    expect(dashboard.body.counts.ALL).toBe(2);
+    const playback=await request(app).get('/api/v1/playback').query({vehicleId:vb,start:'2026-05-31',end:'2026-06-02'})
+      .set('Authorization',`Bearer ${token(a,'ADMIN')}`).expect(200);
+    expect(playback.body.data.map((row:{id:string})=>row.id)).toEqual([lb]);
+    await request(app).get('/api/v1/playback').query({vehicleId:va,start:'2027-01-01',end:'2026-01-01'})
+      .set('Authorization',`Bearer ${token(a,'ADMIN')}`).expect(400);
+  });
+  it('creates admins only beneath an authorized owner and rejects duplicates and foreign owners', async () => {
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
+    const payload={ownerId:a,username:'ops.admin',password:'strong-password',name:'Operations Admin',email:'ops@test.local',coins:10,active:true};
+    const created=await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(payload).expect(201);
+    expect(created.body.data).toMatchObject({owner_id:a,username:'ops.admin',role:'ADMIN',active:true});
+    expect((await state.db!.query<{password_hash:string}>('SELECT password_hash FROM users WHERE id=$1',[created.body.data.id])).rows[0].password_hash).not.toBe(payload.password);
+    await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,email:'other@test.local'}).expect(409);
+    await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,username:'foreign',email:'foreign@test.local',ownerId:b}).expect(403);
+    const list=await request(app).get('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(list.body.data.map((row:{id:string})=>row.id)).toEqual([created.body.data.id]);
+  });
+  it('manages clients only beneath authorized admins without exposing credentials', async () => {
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
+    await state.db!.query("UPDATE users SET role='ADMIN',name='Foreign Admin' WHERE id=$1",[b]);
+    const adminPayload={ownerId:a,username:'client.owner',password:'strong-password',name:'Client Owner',email:'owner@test.local',coins:0,active:true};
+    const admin=(await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(adminPayload).expect(201)).body.data;
+    const payload={ownerId:admin.id,username:'acme.client',password:'client-password',name:'Acme Client',mobile:'+91 98100 12345',email:'client@test.local',company:'Acme',website:'https://acme.test',address:'Delhi',inactiveTimeoutSeconds:43200,active:true};
+    const created=await request(app).post('/api/v1/clients').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(payload).expect(201);
+    expect(created.body.data).toMatchObject({owner_id:admin.id,username:'acme.client',role:'CLIENT',active:true,inactive_timeout_seconds:43200});
+    expect(JSON.stringify(created.body)).not.toMatch(/password_hash|client-password/);
+    const stored=(await state.db!.query<{password_hash:string;owner_id:string}>('SELECT password_hash,owner_id FROM users WHERE id=$1',[created.body.data.id])).rows[0];
+    expect(stored.owner_id).toBe(admin.id);expect(stored.password_hash).not.toBe(payload.password);expect(await bcrypt.compare(payload.password,stored.password_hash)).toBe(true);
+    await request(app).post('/api/v1/clients').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,username:'forbidden',email:'forbidden@test.local',ownerId:b}).expect(403);
+    await request(app).post('/api/v1/clients').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,email:'duplicate@test.local'}).expect(409);
+    const list=await request(app).get('/api/v1/clients').query({search:'Acme',page:1,pageSize:1}).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(list.body.pagination).toMatchObject({page:1,pageSize:1,total:1});expect(list.body.data[0]).toMatchObject({id:created.body.data.id,vehicle_count:0});expect(JSON.stringify(list.body)).not.toMatch(/password/);
+    expect((await request(app).get(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200)).body.data.id).toBe(created.body.data.id);
+    for(const method of ['get','patch','delete'] as const) await request(app)[method](`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(b,'ADMIN')}`).send({active:false}).expect(404);
+    await request(app).delete(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(409);
+    await request(app).patch(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({active:false,name:'Updated Client'}).expect(200);
+    expect((await request(app).get('/api/v1/clients').query({active:'false'}).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200)).body.data[0]).toMatchObject({id:created.body.data.id,active:false,name:'Updated Client'});
+    await request(app).patch(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({active:true}).expect(200);
+    await request(app).delete(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(409);
+    await request(app).patch(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({active:false}).expect(200);
+    await state.db!.query('UPDATE vehicles SET owner_id=$1 WHERE id=$2',[created.body.data.id,va]);
+    await request(app).delete(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(409);
+    await state.db!.query('UPDATE vehicles SET owner_id=$1 WHERE id=$2',[a,va]);
+    await request(app).post(`/api/v1/clients/${created.body.data.id}/reset-password`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({password:'new-client-password',confirmPassword:'new-client-password'}).expect(200);
+    expect(await bcrypt.compare('new-client-password',(await state.db!.query<{password_hash:string}>('SELECT password_hash FROM users WHERE id=$1',[created.body.data.id])).rows[0].password_hash)).toBe(true);
+    await request(app).delete(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(204);
+    await request(app).get(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(404);
+  });
+  it('creates and reassigns managed vehicles only through authorized Admin, Client, and Device relationships', async()=>{
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
+    const adminId=randomUUID(),clientId=randomUUID(),foreignAdmin=randomUUID(),foreignClient=randomUUID(),device1=randomUUID(),device2=randomUUID();
+    await state.db!.query("INSERT INTO users(id,email,password_hash,role,owner_id,name) VALUES($1,'manager@test.local',$2,'ADMIN',$3,'Manager'),($4,'foreign-manager@test.local',$2,'ADMIN',$5,'Foreign Manager')",[adminId,passwordHash,a,foreignAdmin,b]);
+    await state.db!.query("INSERT INTO users(id,email,password_hash,role,owner_id,name) VALUES($1,'fleet-client@test.local',$2,'CLIENT',$3,'Fleet Client'),($4,'foreign-client@test.local',$2,'CLIENT',$5,'Foreign Client')",[clientId,passwordHash,adminId,foreignClient,foreignAdmin]);
+    await state.db!.query("UPDATE users SET username='1234',active=false WHERE id=$1",[clientId]);
+    const options=await request(app).get('/api/v1/vehicle-client-options').query({adminId}).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(options.body.data).toContainEqual(expect.objectContaining({id:clientId,username:'1234',active:false,owner_id:adminId}));
+    const capabilities={ignition:'SUPPORTED',door:'SUPPORTED',relay:'UNSUPPORTED',buzzer:'UNKNOWN',airCondition:'SUPPORTED',parkingAlarm:'SUPPORTED'};
+    await state.db!.query("INSERT INTO devices(id,imei,protocol,identity_value,owner_id,capabilities) VALUES($1,'MANAGED-1','GT06','MANAGED-1',$3,$4),($2,'MANAGED-2','W15','MANAGED-2',$3,$4)",[device1,device2,clientId,JSON.stringify(capabilities)]);
+    const payload={adminId,clientId,deviceImei:'MANAGED-1',deviceProtocol:'GT06',simNumber:'9999999999',simOperator:'Jio',vehicleNumber:'MANAGED-VEHICLE',vehicleType:'Truck',mileage:100,overspeedLimit:80,coins:12,billingStart:'2026-09-01',billingDue:'2027-09-01',alias:'Managed',remark:'Test',active:true,autoRenewal:true,doorConfigured:true,relayConfigured:false,buzzerConfigured:false,ignitionWiring:'CONNECTED_POWER_PLUS',acPowerPlus:true,parkingAlarmOnIgnition:true};
+    const created=await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(payload).expect(201);
+    expect(created.body.data).toMatchObject({owner_id:clientId,vehicle_number:'MANAGED-VEHICLE',door_configured:true,ignition_wiring:'CONNECTED_POWER_PLUS'});expect(JSON.stringify(created.body)).not.toMatch(/password|secret/i);
+    await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,vehicleNumber:'DUPLICATE-DEVICE'}).expect(409);
+    const inlinePayload={...payload,deviceImei:'INLINE-NEW-IMEI',vehicleNumber:'INLINE-VEHICLE',doorConfigured:false,acPowerPlus:false,parkingAlarmOnIgnition:false};
+    await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(inlinePayload).expect(201);
+    expect((await state.db!.query('SELECT owner_id,protocol,sim_number,sim_operator FROM devices WHERE imei=$1',[inlinePayload.deviceImei])).rows[0]).toMatchObject({owner_id:clientId,protocol:'GT06',sim_number:'9999999999',sim_operator:'Jio'});
+    await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,vehicleNumber:'BAD-OWNER',adminId:foreignAdmin,clientId:foreignClient}).expect(403);
+    await state.db!.query("UPDATE devices SET capabilities='{}' WHERE id=$1",[device2]);
+    await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15'}).expect(400);
+    await state.db!.query('UPDATE devices SET capabilities=$2 WHERE id=$1',[device2,JSON.stringify(capabilities)]);
+    await state.db!.query("INSERT INTO locations(device_id,vehicle_id,server_received_at,gps_valid,protocol) VALUES($1,$2,'2026-09-10',true,'GT06')",[device1,created.body.data.id]);
+    await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15',active:false}).expect(200);
+    expect((await state.db!.query('SELECT device_id,unassigned_at FROM vehicle_device_assignments WHERE vehicle_id=$1 ORDER BY assigned_at',[created.body.data.id])).rows).toEqual([{device_id:device1,unassigned_at:expect.any(Date)},{device_id:device2,unassigned_at:null}]);
+    expect((await state.db!.query<{count:number}>('SELECT count(*)::int AS count FROM locations WHERE vehicle_id=$1 AND device_id=$2',[created.body.data.id,device1])).rows[0].count).toBe(1);
+    const list=await request(app).get('/api/v1/fleet-vehicles').query({search:'MANAGED',status:'INACTIVE',page:1,pageSize:1}).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(list.body.pagination.total).toBe(1);expect(list.body.counts.ALL).toBeGreaterThanOrEqual(1);expect(list.body.data[0]).toMatchObject({id:created.body.data.id,device_id:device2,fleet_status:'INACTIVE'});
+    await request(app).get(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(b,'ADMIN')}`).expect(404);
+    await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(b,'ADMIN')}`).send(payload).expect(403);
   });
   it('hides unassigned devices and events without an attributable vehicle', async () => {
     await state.db!.exec("INSERT INTO devices(imei,protocol,identity_value) VALUES('unassigned','TEST','unassigned')");

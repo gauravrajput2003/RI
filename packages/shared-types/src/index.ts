@@ -1,7 +1,7 @@
 /** Database/configuration protocol key. New adapters do not require shared-type changes. */
 export type DeviceProtocol = string;
 export type DeviceState = 'ONLINE' | 'OFFLINE' | 'MOVING' | 'IDLE' | 'STOPPED' | 'UNKNOWN';
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'USER';
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'CLIENT' | 'USER';
 export interface NormalizedLocation {
   deviceId: string | null; vehicleId: string | null; imei: string; protocol: DeviceProtocol;
   trackerTimestamp: Date | null; serverReceivedAt: Date; latitude: number | null; longitude: number | null;

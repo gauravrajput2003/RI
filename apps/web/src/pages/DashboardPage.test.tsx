@@ -1,0 +1,15 @@
+import '@testing-library/jest-dom/vitest';
+import type {ReactNode} from 'react';
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {MemoryRouter} from 'react-router-dom';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
+import {DashboardPage} from './DashboardPage';
+const mocks=vi.hoisted(()=>({get:vi.fn()}));
+vi.mock('../services/api/client',()=>({api:{get:mocks.get},errorMessage:()=> 'error'}));
+vi.mock('../features/map/MapSurface',()=>({FleetMap:()=> <div data-testid="map"/>}));
+vi.mock('socket.io-client',()=>({io:()=>({on:vi.fn(),disconnect:vi.fn()})}));
+const vehicle={id:'v1',vehicle_number:'HR12AV4151',alias:'North route',vehicle_type:'truck',active:true,overspeed_limit:80,owner_id:'u1',owner_email:'ops@test.local',device_id:'d1',last_seen_at:'2026-09-16T10:00:00Z',state:'MOVING',tracker_timestamp:'2026-09-16T10:00:00Z',server_received_at:'2026-09-16T10:00:00Z',latitude:28.87,longitude:76.62,speed:44,fleet_status:'RUNNING'};
+const wrapper=(ui:ReactNode)=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter>{ui}</MemoryRouter></QueryClientProvider>);
+afterEach(cleanup);
+describe('dashboard',()=>{beforeEach(()=>mocks.get.mockReset());it('renders API rows, changes the server filter, and links row selection to its summary',async()=>{mocks.get.mockResolvedValue({data:{success:true,data:[vehicle],counts:{ALL:1,OVERSPEED:0,RUNNING:1,IDLE:0,STOPPED:0,UNREACHABLE:0,NEW:0,INACTIVE:0},pagination:{page:1,pageSize:25,total:1}}});wrapper(<DashboardPage/>);expect(await screen.findByText('HR12AV4151')).toBeInTheDocument();fireEvent.click(screen.getByText('HR12AV4151'));expect(screen.getByText('Selected vehicle')).toBeInTheDocument();fireEvent.click(screen.getByText('Stopped'));await waitFor(()=>expect(mocks.get).toHaveBeenLastCalledWith('/dashboard/vehicles',expect.objectContaining({params:expect.objectContaining({status:'STOPPED'})}))) });it('shows an honest empty state without demo fallback',async()=>{mocks.get.mockResolvedValue({data:{success:true,data:[],counts:{ALL:0,OVERSPEED:0,RUNNING:0,IDLE:0,STOPPED:0,UNREACHABLE:0,NEW:0,INACTIVE:0},pagination:{page:1,pageSize:25,total:0}}});wrapper(<DashboardPage/>);expect(await screen.findByText('No vehicles found')).toBeInTheDocument();expect(screen.queryByText('HR12AV4151')).not.toBeInTheDocument()})});

@@ -1,9 +1,13 @@
 import * as resources from '../modules/resources/repository.js';
+import {webApi} from './web.js';
+import {reportsApi} from './reports.js';
 import {Router, type Router as RouterType} from 'express'; import {z} from 'zod'; import {authenticate, type AuthRequest} from '../middleware/auth.js'; import {login,logout,refresh} from '../modules/auth/service.js'; import * as vehicles from '../modules/vehicles/repository.js'; import {query} from '../db/pool.js'; import {AppError} from '../lib/errors.js';
 const asyncRoute=(fn:(req:AuthRequest,res:import('express').Response)=>Promise<void>)=>(req:AuthRequest,res:import('express').Response,next:import('express').NextFunction)=>fn(req,res).catch(next); const page=z.object({limit:z.coerce.number().int().min(1).max(100).default(25),cursor:z.string().uuid().optional()});
 export const api: RouterType=Router();
 api.post('/auth/login',asyncRoute(async(req,res)=>{const b=z.object({email:z.string().email(),password:z.string().min(8)}).parse(req.body);res.json({success:true,data:await login(b.email,b.password)})})); api.post('/auth/refresh',asyncRoute(async(req,res)=>{const b=z.object({refreshToken:z.string().min(1)}).parse(req.body);res.json({success:true,data:await refresh(b.refreshToken)})})); api.post('/auth/logout',asyncRoute(async(req,res)=>{const b=z.object({refreshToken:z.string().min(1)}).parse(req.body);await logout(b.refreshToken);res.status(204).end()}));
 api.use(authenticate);
+api.use(webApi);
+api.use('/reports',reportsApi);
 api.get('/vehicles',asyncRoute(async(req,res)=>{const p=page.parse(req.query);const r=await vehicles.listVehicles(req.user!.id,p.limit,p.cursor);res.json({success:true,data:r.rows,nextCursor:r.rows.length===p.limit?(r.rows.at(-1) as {id:string}|undefined)?.id:null})}));
 api.post('/vehicles',asyncRoute(async(req,res)=>{const b=z.object({vehicleNumber:z.string().min(1).max(80),alias:z.string().max(120).optional(),vehicleType:z.string().max(80).optional(),overspeedLimit:z.number().positive().optional()}).parse(req.body);const r=await query('INSERT INTO vehicles(vehicle_number,alias,vehicle_type,overspeed_limit,owner_id) VALUES($1,$2,$3,$4,$5) RETURNING *',[b.vehicleNumber,b.alias??null,b.vehicleType??null,b.overspeedLimit??null,req.user!.id]);res.status(201).json({success:true,data:r.rows[0]})}));
 api.get('/vehicles/:id',asyncRoute(async(req,res)=>{const r=await vehicles.findVehicle(z.string().uuid().parse(req.params.id),req.user!.id);if(!r.rows[0])throw new AppError(404,'VEHICLE_NOT_FOUND','Vehicle not found');res.json({success:true,data:r.rows[0]})}));
