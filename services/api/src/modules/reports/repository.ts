@@ -1,9 +1,9 @@
 import {query} from '../../db/pool.js';
 import {userScopeCte} from '../authorization/scope.js';
 import type {HistoryPoint} from './calculations.js';
-export interface ReportVehicle {id:string;vehicle_number:string;alias:string|null;total_count:number}
+export interface ReportVehicle {id:string;vehicle_number:string;alias:string|null;overspeed_limit:number|null;total_count:number}
 export async function reportVehicles(actorId:string,{vehicleId,search,page,pageSize}:{vehicleId?:string;search:string;page:number;pageSize:number}){return query<ReportVehicle>(`${userScopeCte}
- SELECT v.id,v.vehicle_number,v.alias,count(*) OVER()::int total_count FROM vehicles v JOIN user_scope s ON s.id=v.owner_id
+ SELECT v.id,v.vehicle_number,v.alias,v.overspeed_limit,count(*) OVER()::int total_count FROM vehicles v JOIN user_scope s ON s.id=v.owner_id
  WHERE ($2::uuid IS NULL OR v.id=$2) AND ($3='%%' OR v.vehicle_number ILIKE $3 OR COALESCE(v.alias,'') ILIKE $3)
  ORDER BY v.vehicle_number,v.id LIMIT $4 OFFSET $5`,[actorId,vehicleId??null,`%${search}%`,pageSize,(page-1)*pageSize])}
 export async function reportHistory(actorId:string,vehicleIds:string[],start:Date,end:Date,includePrevious=false){if(!vehicleIds.length)return{rows:[] as HistoryPoint[],rowCount:0};return query<HistoryPoint>(`${userScopeCte}, selected AS (SELECT v.id FROM vehicles v JOIN user_scope s ON s.id=v.owner_id WHERE v.id=ANY($2::uuid[])), ranged AS (
