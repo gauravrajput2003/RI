@@ -12,7 +12,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: ri-fleet-postgis
+          property: connectionString
       - key: CORS_ORIGINS
         fromService:
           type: web
@@ -24,3 +26,9 @@ services:
         generateValue: true
       - key: INTERNAL_TRACKER_SECRET
         generateValue: true
+
+databases:
+  - name: ri-fleet-postgis
+    region: singapore
+    plan: free
+    postgresMajorVersion: '16'
