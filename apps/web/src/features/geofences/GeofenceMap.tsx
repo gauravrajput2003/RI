@@ -120,7 +120,7 @@ export function GeofenceMap({rows,selected,onSelect,draft,editing,onChange,sessi
   };
   const tools=[['POLYGON','Polygon',Pentagon],['RECTANGLE','Rectangle',Square],['CIRCLE','Circle',CircleIcon],['POINT','Marker',MapPin]] as const;
   return <div className="geofence-map" ref={root}><MapContainer center={[22.8,79.1]} zoom={5} className="map" zoomControl={false}>
-    <TileLayer key={mapType} url={mapType==='satellite'?'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}':'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'} attribution={mapType==='satellite'?'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community':'&copy; OpenStreetMap contributors'} eventHandlers={{tileerror:()=>setTileError(true)}}/>
+    <TileLayer key={mapType} url={mapType==='satellite'?'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}':'https://tile.openstreetmap.org/{z}/{x}/{y}.png'} attribution={mapType==='satellite'?'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community':'&copy; OpenStreetMap contributors'} eventHandlers={{tileerror:()=>setTileError(true)}}/>
     <MapControls/><Resize/><Focus drawing={selected}/>
     {rows.filter(fence=>!editing||fence.id!==selected?.id).map(fence=><Shape key={fence.id} drawing={fence} selected={selected?.id===fence.id} onClick={()=>{if(!editing)onSelect(fence)}}/>)}
     {selected&&!rows.some(fence=>fence.id===selected.id)&&!editing&&<Shape drawing={selected} selected onClick={()=>onSelect(selected)}/>}

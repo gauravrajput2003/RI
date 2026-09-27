@@ -4,7 +4,7 @@ services:
     runtime: node
     region: singapore
     plan: free
-    autoDeployTrigger: off
+    autoDeployTrigger: commit
     healthCheckPath: /health/ready
     buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @fleet/api typecheck && VITE_API_URL=/api/v1 VITE_SOCKET_URL=/ pnpm --filter @fleet/web build
     startCommand: node --import tsx services/api/src/db/migrate.ts && node --import tsx services/api/src/server.ts
