@@ -11,6 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(3000),
+  PORT: z.coerce.number().int().positive().optional(),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),

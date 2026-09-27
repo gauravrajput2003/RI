@@ -19,5 +19,6 @@ app.locals.publishVehicleLocation=async(vehicleId:string,payload:Record<string,u
 };
 const unreachableSweep=setInterval(()=>{void processUnreachableVehicles().then(async notifications=>{for(const notification of notifications)await publishVehicleNotification(io,notification.vehicleId,notification as unknown as Record<string,unknown>)}).catch(error=>logger.error({error},'unreachable alert sweep failed'))},60_000);unreachableSweep.unref();
 const subscriptionSweep=setInterval(()=>{void processSubscriptionAlerts().then(notifications=>{for(const notification of notifications)publishUserNotification(io,notification.recipientUserId,notification as unknown as Record<string,unknown>)}).catch(error=>logger.error({error},'subscription alert sweep failed'))},60_000);subscriptionSweep.unref();
-server.listen(env.API_PORT,()=>logger.info({port:env.API_PORT},'api listening'));
+const port=env.PORT??env.API_PORT;
+server.listen(port,()=>logger.info({port},'api listening'));
 const shutdown=()=>{clearInterval(unreachableSweep);clearInterval(subscriptionSweep);server.close(()=>pool.end().finally(()=>process.exit(0)))};process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);

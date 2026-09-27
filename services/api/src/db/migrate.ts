@@ -1,9 +1,14 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { pool } from './pool.js';
 
-const dir = fileURLToPath(new URL('../../../../database/migrations/', import.meta.url));
+const migrationDirectories = [
+  resolve(process.cwd(), 'database/migrations'),
+  resolve(process.cwd(), '../../database/migrations'),
+];
+const dir = migrationDirectories.find(existsSync);
+if (!dir) throw new Error('Could not find database migrations');
 
 await pool.query('CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
 
@@ -24,4 +29,3 @@ for (const name of (await readdir(dir)).filter(x => x.endsWith('.sql')).sort()) 
 }
 
 await pool.end();
-
