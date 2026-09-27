@@ -78,6 +78,16 @@ beforeEach(async () => {
 });
 
 describe('resource authorization with both customers persisted', () => {
+  it('signs in by username while preserving email login and rejects ambiguous usernames', async () => {
+    await state.db!.query("UPDATE users SET username='fleet.operator' WHERE id=$1",[a]);
+    const usernameLogin=await request(app).post('/api/v1/auth/login')
+      .send({identifier:'FLEET.OPERATOR',password}).expect(200);
+    expect(jwt.verify(usernameLogin.body.data.accessToken,secret)).toMatchObject({id:a});
+    await request(app).post('/api/v1/auth/login').send({email:'a@test.local',password}).expect(200);
+    await state.db!.query("UPDATE users SET owner_id=$1,username='fleet.operator' WHERE id=$2",[a,b]);
+    await request(app).post('/api/v1/auth/login')
+      .send({identifier:'fleet.operator',password}).expect(401);
+  });
   it.each(['MOVING','STOPPED','IDLE','ONLINE'] as const)('preserves recent %s activity using configured timeout', state => {
     const now=new Date('2026-08-01T00:00:00Z');
     expect(deviceActivity(now,state,true,now)).toEqual({state,unreachable:false,status_checked_at:now.toISOString(),offline_at:'2026-08-01T00:01:30.000Z',unreachable_at:'2026-08-01T00:30:00.000Z'});
