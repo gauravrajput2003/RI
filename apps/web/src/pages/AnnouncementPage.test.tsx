@@ -11,8 +11,8 @@ beforeEach(()=>{mocks.get.mockReset();mocks.post.mockReset();mocks.patch.mockRes
 const renderPage=()=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><AnnouncementsPage/></QueryClientProvider>);
 
 it('renders every requested announcement column and the admin/client target form',async()=>{
- renderPage();expect(await screen.findByText('Service notice')).toBeVisible();expect(screen.getAllByRole('columnheader').map(cell=>cell.textContent)).toEqual(['SN','Announcement For','Admins','Clients','Message Title','Message Body','Start Date','End Date','Status','Created By','Added','Updated','Delete']);
- fireEvent.click(screen.getByRole('button',{name:/Add/i}));expect(screen.getByRole('dialog',{name:'Add Announcement'})).toBeVisible();expect(screen.getByText('Admin List *')).toBeVisible();
+ renderPage();expect(await screen.findByText('Service notice')).toBeVisible();expect(screen.getAllByRole('columnheader').map(cell=>cell.textContent?.replace(/↕/g,''))).toEqual(['','SN','Announcement For','Admins','Clients','Message Title','Message Body','Start Date','End Date','Status','Created By','Added','Updated','Delete']);
+ fireEvent.click(screen.getByRole('button',{name:'Add'}));expect(screen.getByRole('dialog',{name:'Add Announcement'})).toBeVisible();expect(screen.getByText('Admin List *')).toBeVisible();
  fireEvent.change(screen.getByRole('combobox',{name:'Announcement For'}),{target:{value:'CLIENT'}});expect(screen.getByRole('combobox',{name:'Admin List'})).toBeVisible();fireEvent.change(screen.getByRole('combobox',{name:'Admin List'}),{target:{value:'11111111-1111-4111-8111-111111111111'}});
  expect(screen.getByText('Client List *')).toBeVisible();
 });

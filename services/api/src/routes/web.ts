@@ -8,6 +8,7 @@ import * as admins from '../modules/admins/repository.js';
 import * as clients from '../modules/clients/repository.js';
 import * as vehicleManagement from '../modules/vehicles/management.js';
 import {query} from '../db/pool.js';
+import {uploadAvatar,deleteAvatar} from '../modules/profile/cloudinary.js';
 
 const asyncRoute=(fn:(req:AuthRequest,res:Response)=>Promise<void>)=>(req:AuthRequest,res:Response,next:NextFunction)=>fn(req,res).catch(next);
 const paging=z.object({page:z.coerce.number().int().min(1).default(1),pageSize:z.coerce.number().int().min(1).max(100).default(25),search:z.string().trim().max(100).default('')});
@@ -19,9 +20,22 @@ const inactiveTimeout=z.coerce.number().int().min(300).max(31536000);
 export const webApi:RouterType=Router();
 
 webApi.get('/account-summary',asyncRoute(async(req,res)=>{
-  const result=await query<{name:string|null;email:string;coins:string}>('SELECT name,email,coins FROM users WHERE id=$1 AND active=true',[req.user!.id]);
+  const result=await query<{id:string;name:string|null;username:string|null;mobile:string|null;email:string;avatarUrl:string|null;coins:string}>('SELECT id,name,username,mobile,email,avatar_url AS "avatarUrl",coins FROM users WHERE id=$1 AND active=true',[req.user!.id]);
   if(!result.rows[0])throw new AppError(404,'ACCOUNT_NOT_FOUND','Account not found');
   res.json({success:true,data:result.rows[0]});
+}));
+
+webApi.post('/account-avatar',asyncRoute(async(req,res)=>{
+  const {dataUri}=z.object({dataUri:z.string().max(3_000_000)}).parse(req.body);
+  const account=await query<{avatar_public_id:string|null}>('SELECT avatar_public_id FROM users WHERE id=$1 AND active=true',[req.user!.id]);
+  if(!account.rows[0])throw new AppError(404,'ACCOUNT_NOT_FOUND','Account not found');
+  const uploaded=await uploadAvatar(req.user!.id,dataUri);
+  try{
+    const updated=await query<{avatarUrl:string}>('UPDATE users SET avatar_url=$2,avatar_public_id=$3,updated_at=now() WHERE id=$1 AND active=true RETURNING avatar_url AS "avatarUrl"',[req.user!.id,uploaded.url,uploaded.publicId]);
+    if(!updated.rows[0])throw new AppError(404,'ACCOUNT_NOT_FOUND','Account not found');
+    if(account.rows[0].avatar_public_id)void deleteAvatar(account.rows[0].avatar_public_id).catch(()=>{});
+    res.json({success:true,data:updated.rows[0]});
+  }catch(error){void deleteAvatar(uploaded.publicId).catch(()=>{});throw error}
 }));
 
 webApi.get('/dashboard/vehicles',asyncRoute(async(req,res)=>{

@@ -19,6 +19,9 @@ const schema = z.object({
   NO_SIGNAL_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
   MOVEMENT_THRESHOLD_KPH: z.coerce.number().nonnegative().default(5),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);
