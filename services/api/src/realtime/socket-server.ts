@@ -36,3 +36,11 @@ export async function publishVehicleLocation(io:Server,vehicleId:string,payload:
     } catch { await socket.leave(`vehicle:${vehicleId}`); }
   }
 }
+export async function publishVehicleNotification(io:Server,vehicleId:string,payload:Record<string,unknown>):Promise<void>{
+  const authorizer=authorizers.get(io);if(!authorizer)return;
+  for(const socket of await io.in(`vehicle:${vehicleId}`).fetchSockets()){
+    const principal=socket.data.principal as SocketPrincipal|undefined;
+    try{if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId))socket.emit('notification:new',payload);else await socket.leave(`vehicle:${vehicleId}`)}catch{await socket.leave(`vehicle:${vehicleId}`)}
+  }
+}
+export function publishUserNotification(io:Server,userId:string,payload:Record<string,unknown>):void{io.to(`user:${userId}`).emit('notification:new',payload)}

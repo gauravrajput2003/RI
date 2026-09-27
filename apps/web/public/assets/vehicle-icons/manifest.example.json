@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "vehicleTypes": [
+    "bike",
+    "car",
+    "scooter",
+    "ev-scooter",
+    "three-wheeler",
+    "bus",
+    "truck",
+    "van"
+  ],
+  "requiredVehicleStates": [
+    "running",
+    "stopped",
+    "idle",
+    "unreachable"
+  ],
+  "optionalVehicleStates": [
+    "default",
+    "overspeed",
+    "new",
+    "inactive"
+  ],
+  "statusIcons": [
+    "all",
+    "overspeed",
+    "running",
+    "idle",
+    "stopped",
+    "unreachable",
+    "new",
+    "inactive"
+  ],
+  "metricIcons": [
+    "speed",
+    "today-km",
+    "status",
+    "since",
+    "location",
+    "last-update",
+    "address"
+  ]
+}

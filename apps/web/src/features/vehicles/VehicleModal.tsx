@@ -18,6 +18,7 @@ const matchesOwner=(owner:Owner,value:string)=>optionValues(owner).some(option=>
 const localDate=(date:Date)=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const capabilitiesFor=(protocol:Protocol,vehicle:ManagedVehicle|null)=>protocol===vehicle?.protocol?(vehicle.capabilities||{}):protocol==='GT06'?{ignition:'SUPPORTED' as CapabilityState}:{};
 const supported=(capabilities:Record<string,CapabilityState|boolean>,key:string)=>capabilities[key]==='SUPPORTED'||capabilities[key]===true;
+const available=(capabilities:Record<string,CapabilityState|boolean>,key:string)=>capabilities[key]!=='UNSUPPORTED'&&capabilities[key]!==false;
 const capabilityState=(capabilities:Record<string,CapabilityState|boolean>,key:string)=>supported(capabilities,key)?'Supported':capabilities[key]==='UNSUPPORTED'||capabilities[key]===false?'Not supported':'Unknown';
 
 export function VehicleModal({open,vehicle,onClose}:{open:boolean;vehicle:ManagedVehicle|null;onClose:()=>void}){
@@ -35,8 +36,8 @@ export function VehicleModal({open,vehicle,onClose}:{open:boolean;vehicle:Manage
   function chooseClient(value:string){setClientText(value);const match=clients.data?.find(owner=>matchesOwner(owner,value));field('clientId',match?.id||'')}
   function chooseCoin(value:string){const normalized=value.replace(/[^0-9.]/g,'');field('coins',normalized);if(normalized==='12'){const start=new Date(),due=new Date(start);due.setMonth(due.getMonth()+12);setForm(current=>({...current,coins:normalized,billingStart:localDate(start),billingDue:localDate(due),autoRenewal:true}))}}
   function submit(event:FormEvent){event.preventDefault();mutation.mutate()}
-  const capability=(key:'doorConfigured'|'relayConfigured'|'buzzerConfigured'|'acPowerPlus'|'parkingAlarmOnIgnition',capabilityKey:string,label:string)=><label className="vehicle-config-check" title={capabilityState(capabilities,capabilityKey)}><input type="checkbox" checked={form[key] as boolean} disabled={!supported(capabilities,capabilityKey)} onChange={event=>field(key,event.target.checked)}/>{label}</label>;
-  return <Modal open={open} title={vehicle?'Edit Vehicle':'Add Vehicle'} onClose={onClose}><form className="admin-form vehicle-form" onSubmit={submit}>
+  const capability=(key:'doorConfigured'|'relayConfigured'|'buzzerConfigured'|'acPowerPlus'|'parkingAlarmOnIgnition',capabilityKey:string,label:string)=><label className="vehicle-config-check" title={capabilityState(capabilities,capabilityKey)}><input type="checkbox" checked={form[key] as boolean} disabled={!available(capabilities,capabilityKey)} onChange={event=>field(key,event.target.checked)}/>{label}</label>;
+  return <Modal open={open} title={vehicle?'Edit Vehicle':'Add Vehicle'} onClose={onClose} className="vehicle-modal"><form className="admin-form vehicle-form" onSubmit={submit}>
     <label>Vehicle Number<input required value={form.vehicleNumber} onChange={e=>field('vehicleNumber',e.target.value)} placeholder="Vehicle Number"/></label>
     <label>Vehicle Type<input required list="vehicle-types" value={form.vehicleType} onChange={e=>field('vehicleType',e.target.value)} placeholder="Select Vehicle"/><datalist id="vehicle-types">{vehicleTypes.map(value=><option key={value} value={value}/>)}</datalist></label>
     <label>Mileage<input required type="number" min="0" value={form.mileage} onChange={e=>field('mileage',e.target.value)} placeholder="Mileage"/></label>
@@ -56,8 +57,8 @@ export function VehicleModal({open,vehicle,onClose}:{open:boolean;vehicle:Manage
       <label className="vehicle-config-check"><input type="checkbox" checked={form.active} onChange={e=>field('active',e.target.checked)}/>Active</label>
       <label className="vehicle-config-check"><input type="checkbox" checked={form.autoRenewal} onChange={e=>field('autoRenewal',e.target.checked)}/>Auto Renewal</label>
       {capability('doorConfigured','door','Door')}{capability('relayConfigured','relay','Relay')}{capability('buzzerConfigured','buzzer','Buzzer')}
-      <label className="vehicle-config-check" title={capabilityState(capabilities,'ignition')}><input type="checkbox" disabled={!supported(capabilities,'ignition')} checked={form.ignitionWiring==='NOT_CONNECTED'} onChange={e=>field('ignitionWiring',e.target.checked?'NOT_CONNECTED':'UNKNOWN')}/>Ignition Wire not Connected</label>
-      <label className="vehicle-config-check" title={capabilityState(capabilities,'ignition')}><input type="checkbox" disabled={!supported(capabilities,'ignition')} checked={form.ignitionWiring==='CONNECTED_POWER_PLUS'} onChange={e=>field('ignitionWiring',e.target.checked?'CONNECTED_POWER_PLUS':'UNKNOWN')}/>Ignition Wire Connected in power(+)</label>
+      <label className="vehicle-config-check" title={capabilityState(capabilities,'ignition')}><input type="checkbox" disabled={!available(capabilities,'ignition')} checked={form.ignitionWiring==='NOT_CONNECTED'} onChange={e=>field('ignitionWiring',e.target.checked?'NOT_CONNECTED':'UNKNOWN')}/>Ignition Wire not Connected</label>
+      <label className="vehicle-config-check" title={capabilityState(capabilities,'ignition')}><input type="checkbox" disabled={!available(capabilities,'ignition')} checked={form.ignitionWiring==='CONNECTED_POWER_PLUS'} onChange={e=>field('ignitionWiring',e.target.checked?'CONNECTED_POWER_PLUS':'UNKNOWN')}/>Ignition Wire Connected in power(+)</label>
       {capability('acPowerPlus','airCondition','Air condition Wire Connected in power(+)')}{capability('parkingAlarmOnIgnition','parkingAlarm','Parking violation alarm on Ignition on')}
     </div>
     {(admins.isError||clients.isError)&&<div className="form-error wide" role="alert">Could not load authorized Admin or Client options.</div>}{mutation.isError&&<div className="form-error wide" role="alert">{errorMessage(mutation.error)}</div>}

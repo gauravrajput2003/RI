@@ -16,6 +16,7 @@ const schema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   INTERNAL_TRACKER_SECRET: z.string().min(32),
   OFFLINE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(600),
+  NO_SIGNAL_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
   MOVEMENT_THRESHOLD_KPH: z.coerce.number().nonnegative().default(5),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
 });

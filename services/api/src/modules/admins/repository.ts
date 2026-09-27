@@ -1,18 +1,36 @@
 import bcrypt from 'bcrypt';
-import { query } from '../../db/pool.js';
+import { query,transaction } from '../../db/pool.js';
 import { AppError } from '../../lib/errors.js';
 import { userScopeCte } from '../authorization/scope.js';
 const withoutTotal=(row:Record<string,unknown>)=>{const copy={...row};delete copy.total_count;return copy};
 
+const adminScopeCte=`WITH actor AS (
+  SELECT role FROM users WHERE id=$1
+), admin_scope AS (
+  SELECT candidate.id FROM users candidate CROSS JOIN actor
+  WHERE candidate.role='ADMIN' AND candidate.id<>$1
+    AND (actor.role='SUPER_ADMIN' OR (actor.role='ADMIN' AND candidate.owner_id=$1))
+)`;
+
+const eligibleAdminOwnerCte=`WITH actor AS (
+  SELECT role FROM users WHERE id=$1
+), eligible_owner AS (
+  SELECT candidate.id FROM users candidate CROSS JOIN actor
+  WHERE candidate.active=true AND candidate.role IN ('SUPER_ADMIN','ADMIN')
+    AND ((actor.role='SUPER_ADMIN' AND (candidate.id=$1 OR candidate.role='ADMIN'))
+      OR (actor.role='ADMIN' AND candidate.id=$1))
+)`;
+
 export interface AdminInput {ownerId:string;username:string;password:string;name:string;mobile?:string;email:string;company?:string;website?:string;address?:string;coins:number;active:boolean}
+export type AdminUpdate=Partial<AdminInput>;
 
 export async function listAdmins(actorId:string,search:string,page:number,pageSize:number){
-  const result=await query(`${userScopeCte}
+  const result=await query(`${adminScopeCte}
     SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.owner_id,
       owner.name AS owner_name,owner.email AS owner_email,u.created_at,u.updated_at,
       count(DISTINCT v.id)::int AS vehicle_count,count(DISTINCT assignment.device_id)::int AS device_count,
       count(*) OVER()::int AS total_count
-    FROM users u JOIN user_scope scope ON scope.id=u.id
+    FROM users u JOIN admin_scope scope ON scope.id=u.id
     LEFT JOIN users owner ON owner.id=u.owner_id LEFT JOIN vehicles v ON v.owner_id=u.id
     LEFT JOIN vehicle_device_assignments assignment ON assignment.vehicle_id=v.id AND assignment.unassigned_at IS NULL
     WHERE u.id<>$1 AND u.role='ADMIN' AND ($2='%%' OR COALESCE(u.username,'') ILIKE $2 OR u.email ILIKE $2 OR COALESCE(u.name,'') ILIKE $2 OR COALESCE(u.company,'') ILIKE $2)
@@ -21,9 +39,9 @@ export async function listAdmins(actorId:string,search:string,page:number,pageSi
   return {rows:result.rows.map(withoutTotal),total:Number(result.rows[0]?.total_count??0)};
 }
 
-export const ownerOptions=(actorId:string)=>query(`${userScopeCte}
-  SELECT u.id,u.name,u.email,u.username FROM users u JOIN user_scope scope ON scope.id=u.id
-  WHERE u.active=true AND u.role IN ('SUPER_ADMIN','ADMIN') ORDER BY u.name NULLS LAST,u.email`,[actorId]);
+export const ownerOptions=(actorId:string)=>query(`${eligibleAdminOwnerCte}
+  SELECT u.id,u.name,u.email,u.username FROM users u JOIN eligible_owner scope ON scope.id=u.id
+  ORDER BY u.name NULLS LAST,u.email`,[actorId]);
 
 export const clientOptions=(actorId:string)=>query(`${userScopeCte}
   SELECT u.id,u.name,u.email,u.username,u.owner_id FROM users u JOIN user_scope scope ON scope.id=u.id
@@ -32,22 +50,65 @@ export const clientOptions=(actorId:string)=>query(`${userScopeCte}
 export async function createAdmin(actorId:string,input:AdminInput){
   const passwordHash=await bcrypt.hash(input.password,12);
   try{
-    const result=await query(`${userScopeCte}, allowed_owner AS (
-      SELECT u.id FROM users u JOIN user_scope scope ON scope.id=u.id
-      WHERE u.id=$2 AND u.active=true AND u.role IN ('SUPER_ADMIN','ADMIN')
-    ) INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,coins,active)
-      SELECT id,$3,lower($4),$5,'ADMIN',$6,$7,$8,$9,$10,$11,$12 FROM allowed_owner
-      RETURNING id,owner_id,username,email,role,name,mobile,company,website,address,coins,active,created_at,updated_at`,
-      [actorId,input.ownerId,input.username.trim(),input.email.trim(),passwordHash,input.name.trim(),input.mobile||null,input.company||null,input.website||null,input.address||null,input.coins,input.active]);
-    if(!result.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy');
-    return result.rows[0];
+    return await transaction(async client=>{
+      const result=await client.query(`${eligibleAdminOwnerCte} INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,coins,active)
+        SELECT id,$3,lower($4),$5,'ADMIN',$6,$7,$8,$9,$10,$11,$12 FROM eligible_owner
+        WHERE id=$2
+        RETURNING id,owner_id,username,email,role,name,mobile,company,website,address,coins,active,created_at,updated_at`,
+        [actorId,input.ownerId,input.username.trim(),input.email.trim(),passwordHash,input.name.trim(),input.mobile||null,input.company||null,input.website||null,input.address||null,input.coins,input.active]);
+      if(!result.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy');
+      if(input.coins>0)await client.query(`INSERT INTO coin_transactions(distributor_id,counterparty_id,created_by,amount,transaction_type)
+        VALUES($1,$2,$3,$4,'DISTRIBUTED')`,[input.ownerId,result.rows[0].id,actorId,input.coins]);
+      return result.rows[0];
+    });
   }catch(error){
     if(error&&typeof error==='object'&&'code' in error&&(error as {code:string}).code==='23505')throw new AppError(409,'ADMIN_EXISTS','Username or email already exists');
     throw error;
   }
 }
 
-export const setAdminActive=(actorId:string,id:string,active:boolean)=>query(`${userScopeCte}
-  UPDATE users u SET active=$3,updated_at=now() FROM user_scope scope
-  WHERE u.id=$2 AND u.id=scope.id AND u.id<>$1 AND u.role='ADMIN'
+export const setAdminActive=(actorId:string,id:string,active:boolean)=>query(`${adminScopeCte}
+  UPDATE users u SET active=$3,updated_at=now() FROM admin_scope scope
+  WHERE u.id=$2 AND u.id=scope.id
   RETURNING u.id,u.active,u.updated_at`,[actorId,id,active]);
+
+export const findAdmin=(actorId:string,id:string)=>query(`${adminScopeCte}
+  SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.owner_id,
+    owner.name AS owner_name,owner.email AS owner_email,u.created_at,u.updated_at
+  FROM users u JOIN admin_scope scope ON scope.id=u.id LEFT JOIN users owner ON owner.id=u.owner_id
+  WHERE u.id=$2`,[actorId,id]);
+
+export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
+  try{
+    return await transaction(async client=>{
+      if(input.ownerId){const owner=await client.query(`${eligibleAdminOwnerCte} SELECT u.id FROM users u JOIN eligible_owner scope ON scope.id=u.id WHERE u.id=$2`,[actorId,input.ownerId]);if(!owner.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy')}
+      const current=await client.query<{coins:string;owner_id:string}>(`${adminScopeCte} SELECT u.coins,u.owner_id FROM users u JOIN admin_scope scope ON scope.id=u.id WHERE u.id=$2 FOR UPDATE OF u`,[actorId,id]);
+      if(!current.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
+      const values:unknown[]=[actorId,id],assignments:string[]=[];
+      const add=(column:string,value:unknown)=>{values.push(value);assignments.push(`${column}=$${values.length}`)};
+      if(input.ownerId!==undefined)add('owner_id',input.ownerId);
+      if(input.username!==undefined)add('username',input.username.trim());
+      if(input.name!==undefined)add('name',input.name.trim());
+      if(input.mobile!==undefined)add('mobile',input.mobile||null);
+      if(input.email!==undefined)add('email',input.email.trim().toLowerCase());
+      if(input.company!==undefined)add('company',input.company||null);
+      if(input.website!==undefined)add('website',input.website||null);
+      if(input.address!==undefined)add('address',input.address||null);
+      if(input.coins!==undefined)add('coins',input.coins);
+      if(input.active!==undefined)add('active',input.active);
+      if(input.password!==undefined)add('password_hash',await bcrypt.hash(input.password,12));
+      if(!assignments.length)throw new AppError(400,'EMPTY_UPDATE','At least one admin field is required');
+      const result=await client.query(`${adminScopeCte} UPDATE users u SET ${assignments.join(',')},updated_at=now() FROM admin_scope scope WHERE u.id=$2 AND u.id=scope.id RETURNING u.id,u.owner_id,u.username,u.email,u.role,u.name,u.mobile,u.company,u.website,u.address,u.coins,u.active,u.created_at,u.updated_at`,values);
+      if(!result.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
+      if(input.coins!==undefined){const delta=input.coins-Number(current.rows[0].coins);if(delta!==0)await client.query(`INSERT INTO coin_transactions(distributor_id,counterparty_id,created_by,amount,transaction_type)
+        VALUES($1,$2,$3,$4,$5)`,[result.rows[0].owner_id,id,actorId,Math.abs(delta),delta>0?'DISTRIBUTED':'RECLAIMED'])}
+      return result.rows[0];
+    });
+  }catch(error){if(error&&typeof error==='object'&&'code'in error&&(error as {code:string}).code==='23505')throw new AppError(409,'ADMIN_EXISTS','Username or email already exists');throw error}
+}
+
+export async function deactivateAdmin(actorId:string,id:string){
+  const result=await setAdminActive(actorId,id,false);
+  if(!result.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
+  return result.rows[0];
+}

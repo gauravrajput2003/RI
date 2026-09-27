@@ -1,3 +1,4 @@
+import {verifyGeofences} from './geofences.integration.js';
 import { afterAll, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
@@ -16,7 +17,8 @@ let admin: Pool | undefined, verification: Pool | undefined, application: Pool |
 let created = false;
 let originalFleet: unknown;
 const tables = ['users','groups','devices','vehicles','vehicle_device_assignments','vehicle_groups',
-  'device_status','locations','events','subscriptions','refresh_tokens','schema_migrations'].sort();
+  'device_status','locations','events','subscriptions','refresh_tokens','schema_migrations','geofences','geofence_vehicle_assignments',
+  'alert_configurations','alert_configuration_events','notification_history','alert_vehicle_event_state','alert_geofence_state','alert_subscription_event_state','announcements','announcement_dismissals','announcement_recipients','coin_transactions'].sort();
 
 async function snapshot() {
   return {
@@ -86,7 +88,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   const resolved = fileURLToPath(new URL(relative!,runner));
   expect(await realpath(resolved)).toBe(await realpath(fileURLToPath(new URL('../../../database/migrations',import.meta.url))));
   const names=(await readdir(resolved)).filter(name=>name.endsWith('.sql')).sort();
-  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql']);
+  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql']);
   console.info('MIGRATION TARGET',JSON.stringify({database,runner:fileURLToPath(runner),directory:resolved,names}));
   const migrate = async (cwd:string) => {
     const output=await exec(process.execPath,['--import','tsx',fileURLToPath(runner)],{
@@ -108,9 +110,8 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   // Assert all application primary keys and declared foreign-key relationships.
   const primary = Object.fromEntries(first.constraints.filter(row=>row.contype==='p' && tables.includes(row.table_name))
     .map(row=>[row.table_name,row.definition]));
-  for (const table of tables) expect(primary[table]).toBe(
-    table==='vehicle_groups'?'PRIMARY KEY (vehicle_id, group_id)':table==='device_status'?'PRIMARY KEY (device_id)':
-    table==='schema_migrations'?'PRIMARY KEY (name)':'PRIMARY KEY (id)');
+  const compositePrimary:Record<string,string>={vehicle_groups:'PRIMARY KEY (vehicle_id, group_id)',device_status:'PRIMARY KEY (device_id)',schema_migrations:'PRIMARY KEY (name)',alert_configuration_events:'PRIMARY KEY (alert_id, event_type)',alert_vehicle_event_state:'PRIMARY KEY (vehicle_id, event_type)',alert_geofence_state:'PRIMARY KEY (geofence_id, vehicle_id)',alert_subscription_event_state:'PRIMARY KEY (subscription_id, event_type)',announcement_dismissals:'PRIMARY KEY (announcement_id, user_id)',announcement_recipients:'PRIMARY KEY (announcement_id, user_id)'};
+  for (const table of tables) expect(primary[table]).toBe(compositePrimary[table]??'PRIMARY KEY (id)');
   const expectedForeign:Record<string,string[]> = {
     users:['FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT'],
     groups:['FOREIGN KEY (owner_id) REFERENCES users(id)'],devices:['FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT'],vehicles:['FOREIGN KEY (owner_id) REFERENCES users(id)'],
@@ -120,6 +121,8 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     locations:['FOREIGN KEY (device_id) REFERENCES devices(id)','FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)'],
     events:['FOREIGN KEY (device_id) REFERENCES devices(id)','FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)'],
     subscriptions:['FOREIGN KEY (user_id) REFERENCES users(id)'],refresh_tokens:['FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE'],
+    coin_transactions:['FOREIGN KEY (distributor_id) REFERENCES users(id) ON DELETE RESTRICT','FOREIGN KEY (counterparty_id) REFERENCES users(id) ON DELETE RESTRICT','FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT'],
+    announcement_recipients:['FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE','FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE'],
   };
   for (const [table,definitions] of Object.entries(expectedForeign)) expect(first.constraints
     .filter(row=>row.table_name===table && row.contype==='f').map(row=>row.definition).sort()).toEqual(definitions.sort());
@@ -140,6 +143,8 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     events:['id','event_type','severity','occurred_at','payload','created_at'],
     subscriptions:['id','user_id','plan','status','created_at','updated_at'],
     refresh_tokens:['id','user_id','token_hash','expires_at','created_at'],schema_migrations:['name','applied_at'],
+    coin_transactions:['id','distributor_id','counterparty_id','created_by','amount','transaction_type','created_at'],
+    announcement_recipients:['announcement_id','user_id'],
   };
   for(const [table,columns] of Object.entries(notNull)) expect(first.columns
     .filter(row=>row.table_name===table && row.is_nullable==='NO').map(row=>row.column_name).sort()).toEqual(columns.sort());
@@ -160,6 +165,9 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     devices_owner_active_idx:'ON public.devices USING btree (owner_id, active)',
     vehicles_owner_updated_idx:'ON public.vehicles USING btree (owner_id, updated_at DESC)',
     users_owner_username_unique:'UNIQUE INDEX users_owner_username_unique ON public.users USING btree (COALESCE(owner_id, \'00000000-0000-0000-0000-000000000000\'::uuid), lower(username)) WHERE (username IS NOT NULL)',
+    coin_transactions_distributor_time_idx:'ON public.coin_transactions USING btree (distributor_id, created_at DESC)',
+    coin_transactions_counterparty_time_idx:'ON public.coin_transactions USING btree (counterparty_id, created_at DESC)',
+    announcement_recipients_user_idx:'ON public.announcement_recipients USING btree (user_id, announcement_id)',
   };
   for(const [name,definition] of Object.entries(indexes)) expect(first.indexes.find(row=>row.indexname===name)?.indexdef.replaceAll('"','')).toContain(definition.replaceAll('"',''));
   expect((await verification.query(`SELECT i.indexrelid FROM pg_index i JOIN pg_class t ON t.oid=i.indrelid
@@ -224,5 +232,6 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   await rejects("UPDATE vehicle_device_assignments SET unassigned_at=assigned_at WHERE device_id=$1",[device],'23514');
   await rejects('UPDATE device_status SET current_position=ST_SetSRID(ST_MakePoint(10,20),4269)::geography WHERE device_id=$1',[device],'22023');
   await rejects("UPDATE locations SET position=ST_GeogFromText('SRID=4326;LINESTRING(10 20,11 21)') WHERE device_id=$1",[device],'22023');
+  await verifyGeofences(app,verification,token,user,vehicle);
   console.info('APPLICATION COMPATIBILITY PASS: real login, vehicle CRUD, 5 lists, latest/history, PostGIS roundtrip and constraint rejection');
 });

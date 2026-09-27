@@ -1,3 +1,4 @@
-export function resolveDemoMode(flag: string | undefined, _development: boolean): boolean {
+export function resolveDemoMode(flag: string | undefined, development: boolean): boolean {
+  void development;
   return flag === 'true';
 }

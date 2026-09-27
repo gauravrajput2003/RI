@@ -1,0 +1,5 @@
+import {Clock3,Gauge,MapPin,Navigation,Route,ShieldAlert,X} from 'lucide-react';
+import type {FleetVehicle} from '../../types';
+import {coordinates,dateTime,speed} from '../../lib/format';
+const km=(value:number|null)=>value==null?'Unavailable':`${Number(value).toFixed(1)} km`;
+export function VehiclePopup({vehicle,onClose}:{vehicle:FleetVehicle;onClose?:()=>void}){return <article className="map-popup" aria-label={`${vehicle.vehicle_number} map details`}><header><strong>{vehicle.vehicle_number}</strong>{onClose&&<button onClick={onClose} aria-label="Close vehicle details"><X/></button>}</header><div><span><Gauge/>Speed <b>{speed(vehicle.speed)}</b></span><span><Route/>Today km <b>{km(vehicle.today_distance_km)}</b></span><span><ShieldAlert/>Status <b>{vehicle.fleet_status}</b></span><span><Clock3/>Since <b>{dateTime(vehicle.status_since_at)}</b></span><span><MapPin/>Location <b>{coordinates(vehicle.latitude,vehicle.longitude)}</b></span><span><Clock3/>Last update <b>{dateTime(vehicle.server_received_at)}</b></span><span className="wide"><Navigation/>Address <b>{vehicle.address||'Unavailable'}</b></span></div></article>}

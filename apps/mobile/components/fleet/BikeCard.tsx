@@ -6,13 +6,15 @@ import type { CardExtras } from '../../features/dashboard/model';
 import { MetricIcon, type MetricIconKind } from './MetricIcon';
 import { stateForVehicle } from '../../features/vehicles/status';
 import { statusLabel } from '../../utils/format';
+import { VehicleIcon } from './VehicleIcon';
 function Metric({ label, value, icon }: { label: string; value: string; icon: MetricIconKind }) {
   return <View style={styles.metric}><View style={styles.metricIcon}><MetricIcon kind={icon} /></View><View style={styles.metricText}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View></View>;
 }
 export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }: { vehicle: Vehicle; live?: Location; extra?: CardExtras; onPress(): void }) {
+  const state=stateForVehicle(vehicle,live)??'UNKNOWN';
   return <Pressable accessibilityRole="button" accessibilityLabel={'Open actions for ' + vehicle.vehicle_number} onPress={onPress} style={styles.card}>
     <View style={styles.top}>
-      <View style={styles.identity}><Text style={styles.bike}>{extra?.visual === 'scooter' ? '🛵' : '🏍️'}</Text><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text><Text style={styles.alias}>{statusLabel(stateForVehicle(vehicle, live))}</Text></View>
+      <View style={styles.identity}><VehicleIcon type={vehicle.vehicle_type??extra?.visual} state={state} size={45}/><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text><Text style={styles.alias}>{statusLabel(state)}</Text></View>
       <View style={styles.metrics}>
         <Metric label="KM" value={extra?.distance ?? '—'} icon="distance" />
         <Metric label="Fuel" value={extra?.fuel ?? '—'} icon="fuel" />
@@ -35,7 +37,7 @@ export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }
 const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', marginHorizontal: 9, marginBottom: 10, borderRadius: 14, borderWidth: 1, borderColor: '#e7e7e7', elevation: 3, boxShadow: '0px 2px 4px #00000020', overflow: 'hidden' },
   top: { flexDirection: 'row', padding: 12, paddingBottom: 5, minHeight: 162, gap: 7 },
-  identity: { width: '35%', alignItems: 'center' }, bike: { fontSize: 62, lineHeight: 69, marginBottom: 5 }, number: { fontSize: 16, fontWeight: '700', color: '#210c43', textAlign: 'center' }, alias: { fontSize: 12, color: '#28184b', textAlign: 'center', marginTop: 4, lineHeight: 16 },
+  identity: { width: '35%', alignItems: 'center', gap: 5 }, number: { fontSize: 16, fontWeight: '700', color: '#210c43', textAlign: 'center' }, alias: { fontSize: 12, color: '#28184b', textAlign: 'center', marginTop: 4, lineHeight: 16 },
   metrics: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start', gap: 4 },
   metric: { width: '48%', minHeight: 39, flexDirection: 'row', borderWidth: 1, borderColor: '#f0f0f2', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 4, gap: 4, alignItems: 'flex-start' },
   metricIcon: { borderWidth: 1, borderColor: '#efeff1', borderRadius: 4, padding: 1 }, metricText: { flex: 1 }, metricLabel: { fontSize: 10, fontWeight: '600', color: '#210c43', marginBottom: 2 }, metricValue: { fontSize: 10, color: '#444', lineHeight: 12 },

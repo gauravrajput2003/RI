@@ -1,20 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { config } from '../../constants/config';
 import { NoticeSheet, Sheet } from './Sheet';
+import {dismissAnnouncement,getCurrentAnnouncements} from '../../services/api/announcements';
+const announcementText=(html:string)=>html.replace(/<br\s*\/?\s*>/gi,'\n').replace(/<\/p>/gi,'\n').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/\n\s+/g,'\n').replace(/[ \t]+/g,' ').trim();
 export function FleetHeader({ title, onSearch }: { title: string; onSearch?(): void }) {
-  const [menu, setMenu] = useState(false); const [message, setMessage] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false); const [message, setMessage] = useState<string | null>(null);const[announcementOpen,setAnnouncementOpen]=useState(false);const[index,setIndex]=useState(0);const opened=useRef(false),cache=useQueryClient();
+  const announcements=useQuery({queryKey:['mobile-announcements'],queryFn:({signal})=>getCurrentAnnouncements(signal),staleTime:60_000});const current=announcements.data?.[index];
+  useEffect(()=>{if(!opened.current&&announcements.data?.length){opened.current=true;setIndex(0);setAnnouncementOpen(true)}},[announcements.data]);
+  const dismiss=useMutation({mutationFn:(id:string)=>dismissAnnouncement(id),onSuccess:async()=>{await cache.invalidateQueries({queryKey:['mobile-announcements']});setIndex(0);setAnnouncementOpen(false)}});
+  const openAnnouncements=()=>{if(announcements.isError)setMessage('Announcements could not be loaded. Please try again.');else if(!announcements.data?.length)setMessage('No active announcements.');else{setIndex(0);setAnnouncementOpen(true)}};
+  const closeAnnouncement=()=>{if(current?.dontShowAgain)dismiss.mutate(current.id);else setAnnouncementOpen(false)};
   return <><View style={styles.header}>
     <Pressable accessibilityRole="button" accessibilityLabel="Open navigation menu" hitSlop={8} onPress={() => setMenu(true)}><Feather name="menu" size={28} color="#111" /></Pressable>
     <View style={styles.heading}><Text style={styles.title}>{title}</Text>{config.demoMode ? <Text style={styles.demo}>DEMO</Text> : null}</View>
     {onSearch ? <Pressable accessibilityRole="button" accessibilityLabel="Search vehicles" onPress={onSearch} style={styles.action}><Feather name="search" size={21} /></Pressable> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Announcements" style={styles.action} onPress={() => setMessage('Announcements are unavailable until a backend is connected.')}><Feather name="volume-2" size={20} /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Announcements" style={styles.action} onPress={openAnnouncements}><Feather name="volume-2" size={20} />{announcements.data?.length?<View style={styles.badge}><Text style={styles.badgeText}>{announcements.data.length}</Text></View>:null}</Pressable>
     <Pressable accessibilityRole="button" accessibilityLabel="Support" style={styles.action} onPress={() => setMessage('Support contact details have not been configured.')}><Feather name="headphones" size={21} /></Pressable>
   </View>
   <Sheet visible={menu} onClose={() => setMenu(false)} title="Menu">
     {(['Home', 'Report', 'Profile'] as const).map(label => <Pressable key={label} accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenu(false); router.push(label === 'Home' ? '/(app)' : label === 'Report' ? '/(app)/reports' : '/(app)/profile'); }}><Text style={{ fontSize: 17 }}>{label}</Text></Pressable>)}
-  </Sheet><NoticeSheet message={message} onClose={() => setMessage(null)} /></>;
+  </Sheet><NoticeSheet message={message} onClose={() => setMessage(null)} /><Sheet visible={announcementOpen&&Boolean(current)} onClose={closeAnnouncement} title={current?.title??'Announcement'}>{current?<><Text style={styles.announcementBody}>{announcementText(current.bodyHtml)}</Text><View style={styles.announcementActions}>{index>0?<Pressable accessibilityRole="button" onPress={()=>setIndex(value=>value-1)} style={styles.secondary}><Text>Previous</Text></Pressable>:null}{index+1<(announcements.data?.length??0)?<Pressable accessibilityRole="button" onPress={()=>setIndex(value=>value+1)} style={styles.secondary}><Text>Next</Text></Pressable>:null}<Pressable accessibilityRole="button" disabled={dismiss.isPending} onPress={closeAnnouncement} style={styles.closeAnnouncement}><Text style={styles.closeText}>{current.dontShowAgain?'Dismiss':'Close'}</Text></Pressable></View></>:null}</Sheet></>;
 }
-const styles = StyleSheet.create({ header: { height: 47, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#dedede', gap: 10 }, heading: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }, title: { fontSize: 18, fontWeight: '600', color: '#0a0a0a' }, demo: { fontSize: 8, color: '#986b18', fontWeight: '700' }, action: { width: 29, height: 40, justifyContent: 'center', alignItems: 'center' }, menuItem: { padding: 16, borderBottomColor: '#eee', borderBottomWidth: 1 } });
+const styles = StyleSheet.create({ header: { height: 47, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#dedede', gap: 10 }, heading: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }, title: { fontSize: 18, fontWeight: '600', color: '#0a0a0a' }, demo: { fontSize: 8, color: '#986b18', fontWeight: '700' }, action: { width: 29, height: 40, justifyContent: 'center', alignItems: 'center' }, badge:{position:'absolute',right:-2,top:2,minWidth:15,height:15,borderRadius:8,backgroundColor:'#d71920',alignItems:'center',justifyContent:'center',paddingHorizontal:3},badgeText:{color:'#fff',fontSize:9,fontWeight:'800'}, menuItem: { padding: 16, borderBottomColor: '#eee', borderBottomWidth: 1 },announcementBody:{fontSize:16,lineHeight:24,color:'#27384a',padding:12,minHeight:90},announcementActions:{flexDirection:'row',justifyContent:'flex-end',gap:8,paddingVertical:12},secondary:{paddingVertical:11,paddingHorizontal:16,borderWidth:1,borderColor:'#ccd6de',borderRadius:8},closeAnnouncement:{paddingVertical:11,paddingHorizontal:20,backgroundColor:'#0a416c',borderRadius:8},closeText:{color:'#fff',fontWeight:'700'} });

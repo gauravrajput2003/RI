@@ -6,11 +6,14 @@ import { query } from '../../db/pool.js';
 export function deviceActivity(lastSeen: Date | string | null, storedState: DeviceState | null, active = true, now = new Date()) {
   const seen = lastSeen == null ? NaN : new Date(lastSeen).getTime();
   const offlineAt = seen + env.OFFLINE_TIMEOUT_SECONDS * 1000;
+  const unreachableAt = seen + env.NO_SIGNAL_TIMEOUT_MINUTES * 60_000;
   const offline = !active || !Number.isFinite(seen) || now.getTime() > offlineAt;
   return {
     state: (offline ? 'OFFLINE' : storedState && storedState !== 'OFFLINE' && storedState !== 'UNKNOWN' ? storedState : 'ONLINE') as DeviceState,
+    unreachable: !active || !Number.isFinite(seen) || now.getTime() > unreachableAt,
     status_checked_at: now.toISOString(),
     offline_at: Number.isFinite(offlineAt) && active ? new Date(offlineAt).toISOString() : null,
+    unreachable_at: Number.isFinite(unreachableAt) && active ? new Date(unreachableAt).toISOString() : null,
   };
 }
 

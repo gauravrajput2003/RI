@@ -6,14 +6,18 @@ import { pool } from './db/pool.js';
 import { logger } from './lib/logger.js';
 import { configureSockets } from './realtime/socket-server.js';
 import { vehicleAuthorizer } from './realtime/vehicle-authorizer.js';
-import { publishVehicleLocation } from './realtime/socket-server.js';
+import { publishVehicleLocation,publishVehicleNotification,publishUserNotification } from './realtime/socket-server.js';
 import { publishedVehicleActivity } from './modules/vehicles/repository.js';
+import {processVehicleTelemetry,processUnreachableVehicles,type TelemetryAlertInput} from './modules/alerts/engine.js';
+import {processSubscriptionAlerts} from './modules/alerts/subscriptions.js';
 
 const server=createServer(app); export const io=new Server(server,{cors:{origin:env.CORS_ORIGINS.split(',')}});
 configureSockets(io,vehicleAuthorizer);
 app.locals.publishVehicleLocation=async(vehicleId:string,payload:Record<string,unknown>)=>{
   const activity=(await publishedVehicleActivity(vehicleId)).rows[0];
-  if(activity)await publishVehicleLocation(io,vehicleId,{...payload,...activity});
+  if(activity){const combined:Record<string,unknown>={...payload,...activity,fleet_status:activity.state==='MOVING'?'RUNNING':activity.state};await publishVehicleLocation(io,vehicleId,combined);for(const notification of await processVehicleTelemetry(vehicleId,combined as TelemetryAlertInput))await publishVehicleNotification(io,vehicleId,notification as unknown as Record<string,unknown>)}
 };
+const unreachableSweep=setInterval(()=>{void processUnreachableVehicles().then(async notifications=>{for(const notification of notifications)await publishVehicleNotification(io,notification.vehicleId,notification as unknown as Record<string,unknown>)}).catch(error=>logger.error({error},'unreachable alert sweep failed'))},60_000);unreachableSweep.unref();
+const subscriptionSweep=setInterval(()=>{void processSubscriptionAlerts().then(notifications=>{for(const notification of notifications)publishUserNotification(io,notification.recipientUserId,notification as unknown as Record<string,unknown>)}).catch(error=>logger.error({error},'subscription alert sweep failed'))},60_000);subscriptionSweep.unref();
 server.listen(env.API_PORT,()=>logger.info({port:env.API_PORT},'api listening'));
-const shutdown=()=>server.close(()=>pool.end().finally(()=>process.exit(0)));process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
+const shutdown=()=>{clearInterval(unreachableSweep);clearInterval(subscriptionSweep);server.close(()=>pool.end().finally(()=>process.exit(0)))};process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);

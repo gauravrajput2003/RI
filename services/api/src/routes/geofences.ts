@@ -1,0 +1,14 @@
+import {Router,type Router as RouterType,type Response,type NextFunction} from 'express';
+import {z} from 'zod';
+import type {AuthRequest} from '../middleware/auth.js';
+import {fenceBody} from '../modules/geofences/validation.js';
+import * as fences from '../modules/geofences/repository.js';
+const route=(fn:(req:AuthRequest,res:Response)=>Promise<void>)=>(req:AuthRequest,res:Response,next:NextFunction)=>fn(req,res).catch(next);
+const paging=z.object({search:z.string().trim().max(100).default(''),page:z.coerce.number().int().min(1).max(1000000).default(1),pageSize:z.coerce.number().int().min(1).max(100).default(25)});
+export const geofencesApi:RouterType=Router();
+geofencesApi.get('/vehicle-options',route(async(req,res)=>{const q=paging.parse(req.query),r=await fences.vehicleOptions(req.user!.id,q.search,q.page,q.pageSize);res.json({success:true,data:r.rows,pagination:{...q,total:r.total}})}));
+geofencesApi.get('/',route(async(req,res)=>{const q=paging.parse(req.query),r=await fences.list(req.user!.id,q.search,q.page,q.pageSize);res.json({success:true,data:r.rows,pagination:{page:q.page,pageSize:q.pageSize,total:r.total}})}));
+geofencesApi.get('/:id',route(async(req,res)=>{res.json({success:true,data:await fences.find(req.user!.id,z.string().uuid().parse(req.params.id))})}));
+geofencesApi.post('/',route(async(req,res)=>{res.status(201).json({success:true,data:await fences.save(req.user!.id,fenceBody.parse(req.body))})}));
+geofencesApi.patch('/:id',route(async(req,res)=>{res.json({success:true,data:await fences.save(req.user!.id,fenceBody.parse(req.body),z.string().uuid().parse(req.params.id))})}));
+geofencesApi.delete('/:id',route(async(req,res)=>{await fences.remove(req.user!.id,z.string().uuid().parse(req.params.id));res.status(204).end()}));

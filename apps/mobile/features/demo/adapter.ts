@@ -35,6 +35,8 @@ export function createDemoAdapter(): AxiosAdapter {
       return fail(401);
     }
     if (request.headers.get('Authorization') !== 'Bearer ' + demoTokens.accessToken) return fail(401);
+    if (method === 'get' && path === '/announcements/current') return reply({ success: true, data: [] });
+    if (method === 'post' && /^\/announcements\/[^/]+\/dismiss$/.test(path)) return reply(undefined, 204);
     if (method === 'get' && path === '/vehicles') return reply({ success: true, data: demoVehicles.map(vehicle => ({ ...vehicle })), nextCursor: null });
     const match = path.match(/^\/vehicles\/([^/]+)\/latest-location$/);
     if (method === 'get' && match) {
@@ -55,4 +57,3 @@ export function createDemoAdapter(): AxiosAdapter {
     return fail(404);
   };
 }
-

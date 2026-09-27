@@ -1,0 +1,2 @@
+import {describe,expect,it} from 'vitest';import {subscriptionIsExpired} from './subscriptions.js';
+describe('subscription alert source',()=>{it('uses persisted status and dates without fabricated values',()=>{const now=new Date('2026-09-23T12:00:00Z');expect(subscriptionIsExpired('expired',null,now)).toBe(true);expect(subscriptionIsExpired('active',new Date('2026-09-23T11:59:59Z'),now)).toBe(true);expect(subscriptionIsExpired('active',new Date('2026-10-23T12:00:00Z'),now)).toBe(false)})});

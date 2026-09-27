@@ -26,6 +26,10 @@ it('shows the requested fields, filters Clients by Admin, and fills a 12-month b
   expect(Array.from(document.querySelectorAll('#sim-operators option')).map(option=>option.getAttribute('value'))).toEqual(['Jio','Airtel','VI']);
   fireEvent.change(screen.getByLabelText('Device Type'),{target:{value:'GT06'}});
   expect(screen.getByRole('checkbox',{name:'Ignition Wire Connected in power(+)'})).not.toBeDisabled();
+  const door=screen.getByRole('checkbox',{name:'Door'});
+  expect(door).not.toBeDisabled();
+  fireEvent.click(door);
+  expect(door).toBeChecked();
   fireEvent.change(screen.getByLabelText('Coin'),{target:{value:'12'}});
   const start=(screen.getByLabelText('Billing Start') as HTMLInputElement).value;
   const due=(screen.getByLabelText('Billing Due') as HTMLInputElement).value;
