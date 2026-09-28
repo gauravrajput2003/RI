@@ -84,6 +84,14 @@ export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
       if(input.ownerId){const owner=await client.query(`${eligibleAdminOwnerCte} SELECT u.id FROM users u JOIN eligible_owner scope ON scope.id=u.id WHERE u.id=$2`,[actorId,input.ownerId]);if(!owner.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy')}
       const current=await client.query<{coins:string;owner_id:string}>(`${adminScopeCte} SELECT u.coins,u.owner_id FROM users u JOIN admin_scope scope ON scope.id=u.id WHERE u.id=$2 FOR UPDATE OF u`,[actorId,id]);
       if(!current.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
+      if(input.ownerId!==undefined){
+        const cycle=await client.query(`WITH RECURSIVE descendants AS (
+          SELECT id FROM users WHERE id=$1
+          UNION
+          SELECT u.id FROM users u JOIN descendants d ON u.owner_id=d.id WHERE u.role='ADMIN'
+        ) SELECT id FROM descendants WHERE id=$2 LIMIT 1`,[id,input.ownerId]);
+        if(cycle.rows[0])throw new AppError(400,'INVALID_OWNER','An admin cannot be assigned to itself or one of its descendants');
+      }
       const values:unknown[]=[actorId,id],assignments:string[]=[];
       const add=(column:string,value:unknown)=>{values.push(value);assignments.push(`${column}=$${values.length}`)};
       if(input.ownerId!==undefined)add('owner_id',input.ownerId);

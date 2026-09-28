@@ -1,9 +1,22 @@
 import '@testing-library/jest-dom/vitest';
-import {fireEvent,render,screen} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
-import {expect,it,vi} from 'vitest';
+import {afterEach,expect,it,vi} from 'vitest';
 import {AddAdminModal} from './AddAdminModal';
-const mocks=vi.hoisted(()=>({get:vi.fn(),post:vi.fn()}));
+import type {Admin} from '../../types';
+const mocks=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),patch:vi.fn()}));
 mocks.get.mockResolvedValue({data:{data:[]}});
-vi.mock('../../services/api/client',()=>({api:{get:mocks.get,post:mocks.post},errorMessage:()=> 'error'}));
+vi.mock('../../services/api/client',()=>({api:{get:mocks.get,post:mocks.post,patch:mocks.patch},errorMessage:()=> 'error'}));
+afterEach(()=>{cleanup();mocks.patch.mockClear();mocks.post.mockClear()});
 it('requires owner, username, password, name, and valid email before submitting',async()=>{render(<QueryClientProvider client={new QueryClient()}><AddAdminModal open onClose={()=>undefined}/></QueryClientProvider>);await screen.findByRole('option',{name:'Select authorized owner'});fireEvent.click(screen.getByRole('button',{name:'Save admin'}));expect(mocks.post).not.toHaveBeenCalled();expect(screen.getByLabelText('Owner')).toBeRequired();expect(screen.getByLabelText('Username')).toBeRequired();expect(screen.getByLabelText('Password')).toHaveAttribute('minLength','8');expect(screen.getByLabelText('Email')).toHaveAttribute('type','email')});
+it('prefills and saves admin edits without replacing the password unless entered',async()=>{
+  const admin={id:'admin-id',owner_id:'owner-id',owner_name:'Owner',owner_email:'owner@test.local',username:'admin.user',name:'Admin User',mobile:'9876543210',email:'admin@test.local',company:'Fleet',website:null,address:null,coins:'2.00',active:true} as Admin;
+  mocks.patch.mockResolvedValue({data:{data:{}}});
+  render(<QueryClientProvider client={new QueryClient()}><AddAdminModal open admin={admin} onClose={()=>undefined}/></QueryClientProvider>);
+  expect(screen.getByLabelText('Username')).toHaveValue('admin.user');
+  expect(screen.getByLabelText('New password (optional)')).not.toBeRequired();
+  fireEvent.change(screen.getByLabelText('Name'),{target:{value:'Updated Admin'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save changes'}));
+  await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('/admins/admin-id',expect.objectContaining({name:'Updated Admin',username:'admin.user',coins:2})));
+  expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('password');
+});

@@ -275,6 +275,24 @@ describe('resource authorization with both customers persisted', () => {
     await request(app).delete(`/api/v1/admins/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(204);
     expect((await state.db!.query<{active:boolean}>('SELECT active FROM users WHERE id=$1',[created.body.data.id])).rows[0].active).toBe(false);
   });
+  it('updates admin details and password without allowing an ownership cycle', async () => {
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN' WHERE id=$1",[a]);
+    const auth=token(a,'SUPER_ADMIN');
+    const parent=(await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${auth}`)
+      .send({ownerId:a,username:'parent.admin',password:'old-password',name:'Parent',email:'parent@test.local',coins:0,active:true}).expect(201)).body.data;
+    const child=(await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${auth}`)
+      .send({ownerId:parent.id,username:'child.admin',password:'child-password',name:'Child',email:'child@test.local',coins:0,active:true}).expect(201)).body.data;
+    await request(app).patch(`/api/v1/admins/${parent.id}`).set('Authorization',`Bearer ${auth}`)
+      .send({ownerId:child.id}).expect(400);
+    const updated=await request(app).patch(`/api/v1/admins/${parent.id}`).set('Authorization',`Bearer ${auth}`)
+      .send({username:'updated.admin',password:'new-password',name:'Updated Parent',mobile:'9876543210',email:'updated@test.local',company:'Fleet Co',website:'https://fleet.example',address:'Main Road',coins:4,active:true}).expect(200);
+    expect(updated.body.data).toMatchObject({username:'updated.admin',name:'Updated Parent',mobile:'9876543210',email:'updated@test.local',company:'Fleet Co',website:'https://fleet.example',address:'Main Road',coins:'4.00',active:true});
+    expect(JSON.stringify(updated.body)).not.toMatch(/password_hash|new-password/);
+    await request(app).post('/api/v1/auth/login').send({identifier:'updated.admin',password:'old-password'}).expect(401);
+    await request(app).post('/api/v1/auth/login').send({identifier:'updated.admin',password:'new-password'}).expect(200);
+    await request(app).patch(`/api/v1/admins/${parent.id}`).set('Authorization',`Bearer ${auth}`)
+      .send({email:'child@test.local'}).expect(409);
+  });
   it('limits an admin to direct child admins until recursive admin management is defined', async () => {
     await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
     await state.db!.query("UPDATE users SET role='ADMIN',owner_id=$1,name='Parent Admin' WHERE id=$2",[a,b]);
