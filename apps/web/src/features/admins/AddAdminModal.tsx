@@ -5,6 +5,7 @@ import {api,errorMessage} from '../../services/api/client';
 import type {Admin,Envelope,Owner} from '../../types';
 import {Modal} from '../../components/ui/Modal';
 import {Button} from '../../components/ui/Button';
+import {SearchableSelect} from '../../components/ui/SearchableSelect';
 
 const initial={ownerId:'',username:'',password:'',name:'',mobile:'',email:'',company:'',website:'',address:'',coins:'0',active:true};
 type AdminForm=typeof initial;
@@ -38,11 +39,7 @@ export function AddAdminModal({open,admin=null,onClose,onSaved}:{open:boolean;ad
   const currentOwnerMissing=admin?.owner_id&&!owners.data?.some(owner=>owner.id===admin.owner_id);
   return <Modal open={open} title={admin?'Edit admin':'Add admin'} onClose={onClose}>
     <form className="admin-form" onSubmit={submit}>
-      <label>Owner<select required value={form.ownerId} onChange={e=>field('ownerId',e.target.value)}>
-        <option value="">Select authorized owner</option>
-        {currentOwnerMissing&&<option value={admin.owner_id!}>{admin.owner_name||admin.owner_email||'Current owner'}</option>}
-        {owners.data?.map(owner=><option key={owner.id} value={owner.id}>{owner.name||owner.username||owner.email}</option>)}
-      </select></label>
+      <label>Owner<SearchableSelect required aria-label="Owner" placeholder="Select authorized owner" isLoading={owners.isLoading} value={form.ownerId} onChange={value=>field('ownerId',value)} options={[...(currentOwnerMissing?[{value:admin.owner_id!,label:admin.owner_name||admin.owner_email||'Current owner'}]:[]),...(owners.data??[]).map(owner=>({value:owner.id,label:owner.name||owner.username||owner.email}))]}/></label>
       <label>Username<input required minLength={3} maxLength={80} pattern="[A-Za-z0-9._-]+" value={form.username} onChange={e=>field('username',e.target.value)} placeholder="Username"/></label>
       <label>{admin?'New password (optional)':'Password'}<input required={!admin} minLength={8} maxLength={128} type="password" autoComplete="new-password" value={form.password} onChange={e=>field('password',e.target.value)} placeholder={admin?'Leave blank to keep current password':'Minimum 8 characters'}/></label>
       <label>Name<input required maxLength={120} value={form.name} onChange={e=>field('name',e.target.value)} placeholder="Full name"/></label>

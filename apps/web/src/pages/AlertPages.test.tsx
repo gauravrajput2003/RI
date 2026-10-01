@@ -16,10 +16,10 @@ it('shows the reference alert columns and the searchable Add Alert form',async()
  expect(screen.getAllByRole('columnheader').map(cell=>cell.textContent?.replace(/↕/g,''))).toEqual(['','Name','Mapping Type','Mapped Value','Created_At','Last_Update']);
  fireEvent.click(screen.getByRole('button',{name:'Add Alert'}));
  expect(screen.getByRole('dialog',{name:'Add Alert'})).toBeVisible();
- await waitFor(()=>expect(screen.getByRole('button',{name:'Select Event'})).toBeEnabled());
- fireEvent.click(screen.getByRole('button',{name:'Select Event'}));
- expect(screen.getByRole('textbox',{name:'Search events'})).toBeVisible();
- expect(screen.getByRole('button',{name:'Vehicle is Idle!'})).toBeVisible();
+ await waitFor(()=>expect(screen.getByRole('combobox',{name:'Select Event'})).toBeEnabled());
+ fireEvent.click(screen.getByRole('combobox',{name:'Select Event'}));
+ expect(screen.getByRole('textbox',{name:'Search Select Event'})).toBeVisible();
+ expect(await screen.findByRole('option',{name:'Vehicle is Idle!'})).toBeVisible();
 });
 
 it('shows the reference notification table and export actions when empty',async()=>{

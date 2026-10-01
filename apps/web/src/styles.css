@@ -124,3 +124,5 @@
 :is(.admin-page,.client-page) .management-add-button svg{width:15px;height:15px;stroke-width:3}
 .vehicle-page .toolbar-actions .vehicle-add-button{background:#092f55;border-color:#092f55;color:#fff}
 .vehicle-page .toolbar-actions .vehicle-add-button:hover{background:#0d456f}
+
+.admin-form .searchable-select-trigger{min-height:47px}.vehicle-modal .vehicle-form .searchable-select-trigger{min-height:53px}.vehicle-filter-strip .searchable-select-trigger{min-height:34px}.searchable-select-menu button{font-weight:400}

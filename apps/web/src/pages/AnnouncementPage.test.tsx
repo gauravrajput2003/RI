@@ -13,6 +13,18 @@ const renderPage=()=>render(<QueryClientProvider client={new QueryClient({defaul
 it('renders every requested announcement column and the admin/client target form',async()=>{
  renderPage();expect(await screen.findByText('Service notice')).toBeVisible();expect(screen.getAllByRole('columnheader').map(cell=>cell.textContent?.replace(/↕/g,''))).toEqual(['','SN','Announcement For','Admins','Clients','Message Title','Message Body','Start Date','End Date','Status','Created By','Added','Updated','Delete']);
  fireEvent.click(screen.getByRole('button',{name:'Add'}));expect(screen.getByRole('dialog',{name:'Add Announcement'})).toBeVisible();expect(screen.getByText('Admin List *')).toBeVisible();
- fireEvent.change(screen.getByRole('combobox',{name:'Announcement For'}),{target:{value:'CLIENT'}});expect(screen.getByRole('combobox',{name:'Admin List'})).toBeVisible();fireEvent.change(screen.getByRole('combobox',{name:'Admin List'}),{target:{value:'11111111-1111-4111-8111-111111111111'}});
+ fireEvent.click(screen.getByRole('combobox',{name:'Announcement For'}));fireEvent.click(screen.getByRole('option',{name:'Client'}));expect(screen.getByRole('combobox',{name:'Admin List'})).toBeVisible();fireEvent.click(screen.getByRole('combobox',{name:'Admin List'}));fireEvent.click(await screen.findByRole('option',{name:'Regional Admin'}));
  expect(screen.getByText('Client List *')).toBeVisible();
+});
+
+it('opens an existing image announcement with its image and previews it',async()=>{
+ const imageRow={...row,messageType:'IMAGE',bodyHtml:null,imageUrl:'https://res.cloudinary.com/test/image/upload/notice.png',imagePublicId:'fleet/announcements/admin/notice'};
+ mocks.get.mockImplementation(async(path:string)=>path==='/announcements'?{data:{data:[imageRow],pagination:{page:1,pageSize:25,total:1}}}:{data:{data:[]}});
+ renderPage();fireEvent.click(await screen.findByText('Service notice'));
+ expect(screen.getByRole('dialog',{name:'Edit Announcement'})).toBeVisible();
+ expect(screen.getByRole('combobox',{name:'Message Type'})).toHaveTextContent('IMAGE');
+ expect(screen.queryByLabelText('Message Body')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Preview'}));
+ expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+ expect(screen.getAllByRole('img',{name:'Service notice'}).length).toBeGreaterThan(0);
 });

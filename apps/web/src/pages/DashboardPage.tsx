@@ -1,4 +1,5 @@
 import {useDeferredValue,useEffect,useMemo,useRef,useState} from 'react';
+import {SearchableSelect} from '../components/ui/SearchableSelect';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Ban,Car,Clock3,Gauge,Minimize2,PauseCircle,PlayCircle,Search,Settings,Sparkles,WifiOff,X} from 'lucide-react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
@@ -122,7 +123,7 @@ export function DashboardPage(){
   </div>
   {chosen&&<SelectedVehicleSummary vehicle={chosen} onClose={()=>setSelected(null)}/>}
   {manager&&<PageFilterDrawer title="Client" ariaLabel="Dashboard filters">
-   <label>Client<select value={clientDraft} onChange={event=>setClientDraft(event.target.value)}><option value="">Select Client</option>{clients.data?.map(owner=><option key={owner.id} value={owner.id}>{owner.name||owner.username||owner.email}</option>)}</select></label>
+   <label>Client<SearchableSelect aria-label="Client" placeholder="Select Client" value={clientDraft} onChange={setClientDraft} isClearable options={(clients.data??[]).map(owner=>({value:owner.id,label:owner.name||owner.username||owner.email}))}/></label>
    <button className="button" type="button" onClick={()=>{setClientId(clientDraft);pageFilter.close()}}>Search</button>
   </PageFilterDrawer>}
  </section>;

@@ -18,7 +18,7 @@ it('renders the coin ledger and applies the admin and date filters to the backen
  expect(screen.getAllByRole('columnheader').map(cell=>cell.textContent?.replace('↕',''))).toEqual(['SN','Username','Counter Party','Amount','Type','Transaction Time']);
  expect(screen.getByText('Distributed')).toBeVisible();
  expect(screen.getByRole('button',{name:'PDF'})).toBeEnabled();expect(screen.getByRole('button',{name:'Excel'})).toBeEnabled();
- fireEvent.change(screen.getByRole('combobox',{name:'Admin'}),{target:{value:'11111111-1111-4111-8111-111111111111'}});
+ fireEvent.click(screen.getByRole('combobox',{name:'Admin'}));fireEvent.click(await screen.findByRole('option',{name:'regional'}));
  fireEvent.change(screen.getByLabelText('Date range start'),{target:{value:'2026-09-15T00:00'}});
  fireEvent.change(screen.getByLabelText('Date range end'),{target:{value:'2026-09-16T00:00'}});
  fireEvent.click(screen.getByRole('button',{name:'Search'}));

@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -348,9 +348,9 @@ describe('resource authorization with both customers persisted', () => {
     expect(options.body.data).toContainEqual(expect.objectContaining({id:clientId,username:'1234',active:false,owner_id:adminId}));
     const capabilities={ignition:'SUPPORTED',door:'SUPPORTED',relay:'UNSUPPORTED',buzzer:'UNKNOWN',airCondition:'SUPPORTED',parkingAlarm:'SUPPORTED'};
     await state.db!.query("INSERT INTO devices(id,imei,protocol,identity_value,owner_id,capabilities) VALUES($1,'MANAGED-1','GT06','MANAGED-1',$3,$4),($2,'MANAGED-2','W15','MANAGED-2',$3,$4)",[device1,device2,clientId,JSON.stringify(capabilities)]);
-    const payload={adminId,clientId,deviceImei:'MANAGED-1',deviceProtocol:'GT06',simNumber:'9999999999',simOperator:'Jio',vehicleNumber:'MANAGED-VEHICLE',vehicleType:'Truck',mileage:100,overspeedLimit:80,coins:12,billingStart:'2026-09-01',billingDue:'2027-09-01',alias:'Managed',remark:'Test',active:true,autoRenewal:true,doorConfigured:true,relayConfigured:false,buzzerConfigured:false,ignitionWiring:'CONNECTED_POWER_PLUS',acPowerPlus:true,parkingAlarmOnIgnition:true};
+    const payload={adminId,clientId,deviceImei:'MANAGED-1',deviceProtocol:'GT06',simNumber:'9999999999',simOperator:'Jio',simInfo:'  SIM 8991101200001234567  ',gpsLocation:'  Upper dashboard  ',vehicleNumber:'MANAGED-VEHICLE',vehicleType:'Truck',mileage:100,overspeedLimit:80,coins:12,billingStart:'2026-09-01',billingDue:'2027-09-01',alias:'Managed',remark:'Test',active:true,autoRenewal:true,doorConfigured:true,relayConfigured:false,buzzerConfigured:false,ignitionWiring:'CONNECTED_POWER_PLUS',acPowerPlus:true,parkingAlarmOnIgnition:true};
     const created=await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(payload).expect(201);
-    expect(created.body.data).toMatchObject({owner_id:clientId,vehicle_number:'MANAGED-VEHICLE',door_configured:true,ignition_wiring:'CONNECTED_POWER_PLUS'});expect(JSON.stringify(created.body)).not.toMatch(/password|secret/i);
+    expect(created.body.data).toMatchObject({owner_id:clientId,vehicle_number:'MANAGED-VEHICLE',sim_info:'SIM 8991101200001234567',gps_location:'Upper dashboard',door_configured:true,ignition_wiring:'CONNECTED_POWER_PLUS'});expect(JSON.stringify(created.body)).not.toMatch(/password|secret/i);
     await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,vehicleNumber:'DUPLICATE-DEVICE'}).expect(409);
     const inlinePayload={...payload,deviceImei:'INLINE-NEW-IMEI',vehicleNumber:'INLINE-VEHICLE',doorConfigured:false,acPowerPlus:false,parkingAlarmOnIgnition:false};
     await request(app).post('/api/v1/fleet-vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(inlinePayload).expect(201);
@@ -360,6 +360,12 @@ describe('resource authorization with both customers persisted', () => {
     await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15',relayConfigured:true}).expect(400);
     await state.db!.query("UPDATE devices SET capabilities='{}' WHERE id=$1",[device2]);
     await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15'}).expect(200);
+    const installationUpdate=await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15',simInfo:'SIM replacement',gpsLocation:'Lower panel'}).expect(200);
+    expect(installationUpdate.body.data).toMatchObject({sim_info:'SIM replacement',gps_location:'Lower panel'});
+    expect((await request(app).get(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200)).body.data).toMatchObject({sim_info:'SIM replacement',gps_location:'Lower panel'});
+    await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,simInfo:'x'.repeat(501)}).expect(400);
+    const cleared=await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15',simInfo:'',gpsLocation:''}).expect(200);
+    expect(cleared.body.data).toMatchObject({sim_info:null,gps_location:null});
     await state.db!.query('UPDATE devices SET capabilities=$2 WHERE id=$1',[device2,JSON.stringify(capabilities)]);
     await state.db!.query("INSERT INTO locations(device_id,vehicle_id,server_received_at,gps_valid,protocol) VALUES($1,$2,'2026-09-10',true,'GT06')",[device1,created.body.data.id]);
     await request(app).put(`/api/v1/fleet-vehicles/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,deviceImei:'MANAGED-2',deviceProtocol:'W15',active:false}).expect(200);

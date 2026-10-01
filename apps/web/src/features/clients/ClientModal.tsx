@@ -5,6 +5,7 @@ import {api,errorMessage} from '../../services/api/client';
 import type {Client,Envelope,Owner} from '../../types';
 import {Modal} from '../../components/ui/Modal';
 import {Button} from '../../components/ui/Button';
+import {SearchableSelect} from '../../components/ui/SearchableSelect';
 
 const empty={ownerId:'',username:'',password:'',name:'',mobile:'',email:'',company:'',website:'',address:'',inactiveTimeoutSeconds:'43200',active:true};
 const timeoutOptions=[['3600','1 Hour'],['21600','6 Hours'],['43200','12 Hours'],['86400','24 Hours'],['172800','48 Hours']];
@@ -17,7 +18,7 @@ export function ClientModal({open,client,onClose}:{open:boolean;client:Client|nu
   function field<K extends keyof typeof empty>(key:K,value:(typeof empty)[K]){setForm(current=>({...current,[key]:value}));mutation.reset();setSuccess('')}
   function submit(event:FormEvent){event.preventDefault();mutation.mutate()}
   return <Modal open={open} title={client?'Edit client':'Add client'} onClose={onClose}><form className="admin-form client-form" onSubmit={submit}>
-    {!client&&<label>Owner<select required aria-label="Owner" value={form.ownerId} onChange={e=>field('ownerId',e.target.value)}><option value="">Select authorized admin</option>{owners.data?.map(owner=><option key={owner.id} value={owner.id}>{owner.name||owner.username||owner.email}</option>)}</select></label>}
+    {!client&&<label>Owner<SearchableSelect required aria-label="Owner" placeholder="Select authorized admin" isLoading={owners.isLoading} value={form.ownerId} onChange={value=>field('ownerId',value)} options={(owners.data??[]).map(owner=>({value:owner.id,label:owner.name||owner.username||owner.email}))}/></label>}
     <label>Username<input required minLength={3} pattern="[A-Za-z0-9._-]+" value={form.username} onChange={e=>field('username',e.target.value)} placeholder="Username"/></label>
     {!client&&<label>Password<input required minLength={8} type="password" autoComplete="new-password" value={form.password} onChange={e=>field('password',e.target.value)} placeholder="Minimum 8 characters"/></label>}
     <label>Name<input value={form.name} onChange={e=>field('name',e.target.value)} placeholder="Full name"/></label>
@@ -26,7 +27,7 @@ export function ClientModal({open,client,onClose}:{open:boolean;client:Client|nu
     <label>Company<input value={form.company} onChange={e=>field('company',e.target.value)} placeholder="Company"/></label>
     <label>Website<input type="url" value={form.website} onChange={e=>field('website',e.target.value)} placeholder="https://example.com"/></label>
     <label className="wide">Address<input value={form.address} onChange={e=>field('address',e.target.value)} placeholder="Business address"/></label>
-    <label>Inactive time<select required value={form.inactiveTimeoutSeconds} onChange={e=>field('inactiveTimeoutSeconds',e.target.value)}>{timeoutOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+    <label>Inactive time<SearchableSelect required aria-label="Inactive time" value={form.inactiveTimeoutSeconds} onChange={value=>field('inactiveTimeoutSeconds',value)} options={timeoutOptions.map(([value,label])=>({value,label}))}/></label>
     <label className="checkbox"><input type="checkbox" checked={form.active} onChange={e=>field('active',e.target.checked)}/>Active</label>
     {!client&&owners.isLoading&&<div className="form-success wide">Loading authorized admins…</div>}
     {!client&&owners.isError&&<div className="form-error wide" role="alert">Could not load authorized admins. {errorMessage(owners.error)}</div>}
