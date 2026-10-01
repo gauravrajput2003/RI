@@ -20,7 +20,7 @@ const supported=(capabilities:Record<string,CapabilityState|boolean>,key:string)
 const available=(capabilities:Record<string,CapabilityState|boolean>,key:string)=>capabilities[key]!=='UNSUPPORTED'&&capabilities[key]!==false;
 const capabilityState=(capabilities:Record<string,CapabilityState|boolean>,key:string)=>supported(capabilities,key)?'Supported':capabilities[key]==='UNSUPPORTED'||capabilities[key]===false?'Not supported':'Unknown';
 
-export function VehicleModal({open,vehicle,onClose}:{open:boolean;vehicle:ManagedVehicle|null;onClose:()=>void}){
+export function VehicleModal({open,vehicle,onClose,readOnly=false}:{readOnly?:boolean;open:boolean;vehicle:ManagedVehicle|null;onClose:()=>void}){
   const [form,setForm]=useState(empty);
   const cache=useQueryClient();
   useEffect(()=>{if(!open)return;setForm(vehicle?{adminId:vehicle.admin_id,clientId:vehicle.owner_id,deviceImei:vehicle.imei||'',deviceProtocol:(vehicle.protocol||'') as Protocol,simNumber:vehicle.sim_number||'',simInfo:vehicle.sim_info||'',gpsLocation:vehicle.gps_location||'',simOperator:(vehicle.sim_operator||'') as SimOperator,vehicleNumber:vehicle.vehicle_number,vehicleType:vehicle.vehicle_type||'',mileage:vehicle.mileage==null?'':String(vehicle.mileage),overspeedLimit:vehicle.overspeed_limit==null?'':String(vehicle.overspeed_limit),coins:String(vehicle.coins),billingStart:vehicle.billing_start?.slice(0,10)||'',billingDue:vehicle.billing_due?.slice(0,10)||'',alias:vehicle.alias||'',remark:vehicle.remark||'',active:vehicle.active,autoRenewal:vehicle.auto_renewal,doorConfigured:vehicle.door_configured,relayConfigured:vehicle.relay_configured,buzzerConfigured:vehicle.buzzer_configured,ignitionWiring:vehicle.ignition_wiring,acPowerPlus:vehicle.ac_power_plus,parkingAlarmOnIgnition:vehicle.parking_alarm_on_ignition}:empty)},[open,vehicle]);
@@ -31,9 +31,9 @@ export function VehicleModal({open,vehicle,onClose}:{open:boolean;vehicle:Manage
   function field<K extends keyof typeof empty>(key:K,value:(typeof empty)[K]){setForm(current=>({...current,[key]:value}));mutation.reset()}
   function chooseAdmin(value:string){setForm(current=>({...current,adminId:value,clientId:''}));mutation.reset()}
   function chooseCoin(value:string){const normalized=value.replace(/[^0-9.]/g,'');field('coins',normalized);if(normalized==='12'){const start=new Date(),due=new Date(start);due.setMonth(due.getMonth()+12);setForm(current=>({...current,coins:normalized,billingStart:localDate(start),billingDue:localDate(due),autoRenewal:true}))}}
-  function submit(event:FormEvent){event.preventDefault();mutation.mutate()}
+  function submit(event:FormEvent){event.preventDefault();if(!readOnly)mutation.mutate()}
   const capability=(key:'doorConfigured'|'relayConfigured'|'buzzerConfigured'|'acPowerPlus'|'parkingAlarmOnIgnition',capabilityKey:string,label:string)=><label className="vehicle-config-check" title={capabilityState(capabilities,capabilityKey)}><input type="checkbox" checked={form[key] as boolean} disabled={!available(capabilities,capabilityKey)} onChange={event=>field(key,event.target.checked)}/>{label}</label>;
-  return <Modal open={open} title={vehicle?'Edit Vehicle':'Add Vehicle'} onClose={onClose} className="vehicle-modal"><form className="admin-form vehicle-form" onSubmit={submit}>
+  return <Modal open={open} title={readOnly?'Preview Vehicle':vehicle?'Edit Vehicle':'Add Vehicle'} onClose={onClose} className="vehicle-modal"><form className="admin-form vehicle-form" onSubmit={submit}><fieldset disabled={readOnly} style={{display:'contents'}} aria-label="Vehicle details">
     <label>Vehicle Number<input required value={form.vehicleNumber} onChange={e=>field('vehicleNumber',e.target.value)} placeholder="Vehicle Number"/></label>
     <label>Vehicle Type<SearchableSelect required aria-label="Vehicle Type" value={form.vehicleType} onChange={value=>field('vehicleType',value)} placeholder="Select Vehicle" options={vehicleTypes.map(value=>({value,label:value}))}/></label>
     <label>Mileage<input required type="number" min="0" value={form.mileage} onChange={e=>field('mileage',e.target.value)} placeholder="Mileage"/></label>
@@ -60,6 +60,6 @@ export function VehicleModal({open,vehicle,onClose}:{open:boolean;vehicle:Manage
       {capability('acPowerPlus','airCondition','Air condition Wire Connected in power(+)')}{capability('parkingAlarmOnIgnition','parkingAlarm','Parking violation alarm on Ignition on')}
     </div>
     {(admins.isError||clients.isError)&&<div className="form-error wide" role="alert">Could not load authorized Admin or Client options.</div>}{mutation.isError&&<div className="form-error wide" role="alert">{errorMessage(mutation.error)}</div>}
-    <footer className="wide"><button type="button" className="secondary-button" onClick={onClose}>Close</button><Button disabled={mutation.isPending}>{mutation.isPending?<><LoaderCircle className="spin"/>Saving…</>:vehicle?'Save changes':'Save vehicle'}</Button></footer>
+    </fieldset><footer className="wide"><button type="button" className="secondary-button" onClick={onClose}>Close</button>{!readOnly&&<Button disabled={mutation.isPending}>{mutation.isPending?<><LoaderCircle className="spin"/>Saving…</>:vehicle?'Save changes':'Save vehicle'}</Button>}</footer>
   </form></Modal>;
 }

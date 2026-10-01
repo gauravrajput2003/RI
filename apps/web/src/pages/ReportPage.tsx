@@ -3,6 +3,7 @@ import {useQuery} from '@tanstack/react-query';
 import {api,errorMessage} from '../services/api/client';
 import type {Envelope,Pagination} from '../types';
 import {presetRange,selectedDay,toIso,type RangePreset} from '../lib/reportDates';
+import {claims} from '../lib/auth';
 import {ClassicReportView} from '../features/shell/ClassicReportView';
 
 export type ReportKind='distance'|'ac'|'packet'|'travel-summary'|'daily-trip-summary'|'status'|'idle'|'running'|'stoppage'|'overspeed'|'unreachable';
@@ -36,16 +37,17 @@ const address=(value:unknown)=>value?String(value):'Address unavailable';
 const sortable=(key:string,label:string,render:(row:Row,index:number)=>ReactNode,value?:(row:Row)=>unknown,className?:string):Column=>({key,label,render,value:value||((row)=>row[key]),className});
 
 export function ReportPage({kind}:{kind:ReportKind}){
+ const aggregateAllowed=claims()?.role==='SUPER_ADMIN';
  const daily=kind==='daily-trip-summary',details=config[kind],initialPreset:Exclude<RangePreset,'custom'>=kind==='distance'?'last30':'today',initial=presetRange(initialPreset);
  const [vehicleId,setVehicleId]=useState(''),[preset,setPreset]=useState<RangePreset>(initialPreset),[start,setStart]=useState(initial.start),[end,setEnd]=useState(initial.end),[date,setDate]=useState(dayValue()),[interval,setInterval]=useState(1),[status,setStatus]=useState('IGNITION_ON'),[search,setSearch]=useState(''),[page,setPage]=useState(1),[sort,setSort]=useState<{key:string;direction:SortDirection}>({key:'startTime',direction:'desc'}),[validation,setValidation]=useState('');
  const [applied,setApplied]=useState(()=>({...daily?selectedDay(dayValue()):{start:toIso(initial.start),end:toIso(initial.end)},vehicleId:'',status:'IGNITION_ON',intervalHours:1}));
  const deferredSearch=useDeferredValue(search),timeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
  const vehicles=useQuery({queryKey:['report-options'],queryFn:async()=>(await api.get<Envelope<VehicleOption[]>>('/reports/options')).data.data});
  const params={...applied,timeZone,vehicleId:applied.vehicleId||undefined,status:kind==='status'?applied.status:undefined,intervalHours:kind==='packet'?applied.intervalHours:undefined,search:deferredSearch,page,pageSize:25,sort:serverSortKeys.has(sort.key)?sort.key:'startTime',order:sort.direction};
- const query=useQuery({queryKey:['report',kind,params],queryFn:async()=>(await api.get<ReportResponse>(details.endpoint,{params})).data});
+ const query=useQuery({queryKey:['report',kind,params],enabled:aggregateAllowed||Boolean(applied.vehicleId),queryFn:async()=>(await api.get<ReportResponse>(details.endpoint,{params})).data});
  const rows=query.data?.data||[],total=query.data?.pagination?.total||0;
  function choosePreset(value:RangePreset){setPreset(value);if(value!=='custom'){const next=presetRange(value);setStart(next.start);setEnd(next.end)}}
- function applyFilters(){if(!daily&&(!start||!end||new Date(start)>=new Date(end))){setValidation('Choose a valid start and end time.');return}setValidation('');setPage(1);setApplied({...daily?selectedDay(date):{start:toIso(start),end:toIso(end)},vehicleId,status,intervalHours:interval})}
+ function applyFilters(){if(!vehicleId&&!aggregateAllowed){setValidation('Select a vehicle for this report.');return}if(!daily&&(!start||!end||new Date(start)>=new Date(end))){setValidation('Choose a valid start and end time.');return}setValidation('');setPage(1);setApplied({...daily?selectedDay(date):{start:toIso(start),end:toIso(end)},vehicleId,status,intervalHours:interval})}
  const base:Column[]=[sortable('sn','SN',(_,index)=>(page-1)*25+index+1)];
  const sessionCore:Column[]=[sortable('startTime','Start Time',row=>stamp(row.startTime)),sortable('endTime','End Time',row=>stamp(row.endTime)),sortable('durationSeconds','Duration',row=>seconds(row.durationSeconds))];
  const startLocation=sortable('startLocation','Start Location',row=>coords(row.startLocation));
@@ -66,7 +68,8 @@ export function ReportPage({kind}:{kind:ReportKind}){
   if(kind==='overspeed')return[...base,...sessionCore,sortable('km','Km',row=>decimal(row.km,' km')),startLocation,startAddress,endAddress,endLocation,sortable('maxSpeed','MAX Speed',row=>decimal(row.maxSpeed,' km/h')),sortable('avgSpeed','AVG Speed',row=>decimal(row.avgSpeed,' km/h'))];
   return[...base,...sessionCore,startLocation,startAddress,endAddress,endLocation];
  },[kind,query.data?.dates,page,applied.start,applied.end]);
+ const displayColumns=aggregateAllowed&&!applied.vehicleId&&!columns.some(column=>column.key==='vehicleNumber')?[sortable('vehicleNumber','Vehicle',row=>text(row.vehicleNumber)),...columns]:columns;
  const sortedRows=useMemo(()=>{const column=columns.find(item=>item.key===sort.key);if(!column?.value)return rows;return[...rows].sort((a,b)=>{const left=column.value!(a),right=column.value!(b),result=typeof left==='number'&&typeof right==='number'?left-right:String(left??'').localeCompare(String(right??''));return sort.direction==='asc'?result:-result})},[rows,columns,sort]);
  function changeSort(column:Column){if(!column.value)return;setSort(current=>current.key===column.key?{key:column.key,direction:current.direction==='asc'?'desc':'asc'}:{key:column.key,direction:'asc'})}
- return <ClassicReportView kind={kind} title={details.title} columns={columns} rows={sortedRows} total={total} page={page} setPage={setPage} search={search} setSearch={value=>{setSearch(value);setPage(1)}} loading={query.isLoading} error={query.isError?errorMessage(query.error):undefined} retry={()=>{void query.refetch()}} sort={sort} onSort={changeSort} vehicles={vehicles.data??[]} vehicleId={vehicleId} setVehicleId={setVehicleId} status={status} setStatus={setStatus} preset={preset} choosePreset={choosePreset} start={start} end={end} setStart={value=>{setStart(value);setPreset('custom')}} setEnd={value=>{setEnd(value);setPreset('custom')}} date={date} setDate={setDate} interval={interval} setInterval={setInterval} validation={validation} apply={applyFilters}/>;
+ return <ClassicReportView kind={kind} title={details.title} aggregateAllowed={aggregateAllowed} columns={displayColumns} rows={sortedRows} total={total} page={page} setPage={setPage} search={search} setSearch={value=>{setSearch(value);setPage(1)}} loading={query.isLoading&&Boolean(aggregateAllowed||applied.vehicleId)} error={query.isError?errorMessage(query.error):undefined} retry={()=>{void query.refetch()}} sort={sort} onSort={changeSort} vehicles={vehicles.data??[]} vehicleId={vehicleId} setVehicleId={setVehicleId} status={status} setStatus={setStatus} preset={preset} choosePreset={choosePreset} start={start} end={end} setStart={value=>{setStart(value);setPreset('custom')}} setEnd={value=>{setEnd(value);setPreset('custom')}} date={date} setDate={setDate} interval={interval} setInterval={setInterval} validation={validation} apply={applyFilters}/>;
 }

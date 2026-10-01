@@ -21,6 +21,7 @@ beforeAll(async()=>{
  state.db=new PGlite();
  await state.db.exec('CREATE TABLE users(id uuid PRIMARY KEY,email text,name text,username text,mobile text,coins numeric,active boolean,updated_at timestamptz DEFAULT now())');
  await state.db.exec(await readFile(new URL('../../../../database/migrations/011_user_avatars.sql',import.meta.url),'utf8'));
+ await state.db.exec(await readFile(new URL('../../../../database/migrations/014_packet_health_permission.sql',import.meta.url),'utf8'));
  const {api}=await import('./api.js');const {errorHandler}=await import('../lib/errors.js');
  app=express();app.use(express.json({limit:'3mb'}));app.use('/api/v1',api);app.use(errorHandler);
 },30000);

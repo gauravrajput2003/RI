@@ -126,3 +126,7 @@
 .vehicle-page .toolbar-actions .vehicle-add-button:hover{background:#0d456f}
 
 .admin-form .searchable-select-trigger{min-height:47px}.vehicle-modal .vehicle-form .searchable-select-trigger{min-height:53px}.vehicle-filter-strip .searchable-select-trigger{min-height:34px}.searchable-select-menu button{font-weight:400}
+
+.admin-password-input{position:relative;width:100%}.admin-form .admin-password-input input{padding-right:48px}.admin-password-input button{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:#536a7d;cursor:pointer}.admin-password-input button:hover{background:#edf4f8}.admin-password-input button:focus-visible{outline:2px solid #087ca7;outline-offset:2px}.admin-password-input button svg{width:19px;height:19px}
+
+.password-recovery{border-top:1px solid #d8e1e8;padding-top:16px}.password-recovery p{margin:0 0 12px;font-size:.85rem;color:#536a7d}.password-recovery-result{display:flex;align-items:flex-end;gap:12px;margin-top:14px}.admin-form .password-recovery-result label{flex:1;margin-bottom:0}.password-recovery-result input{font-family:monospace}.password-recovery-result button{flex-shrink:0}.password-recovery [role="status"]{display:block;margin-top:8px;color:#14693d;font-size:.82rem}@media(max-width:600px){.password-recovery-result{align-items:stretch;flex-direction:column}}

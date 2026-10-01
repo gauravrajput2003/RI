@@ -7,7 +7,8 @@ import { playbackPoints } from '../modules/playback/repository.js';
 import * as admins from '../modules/admins/repository.js';
 import * as clients from '../modules/clients/repository.js';
 import * as vehicleManagement from '../modules/vehicles/management.js';
-import {query} from '../db/pool.js';
+import {query,transaction} from '../db/pool.js';
+import {userScopeCte} from '../modules/authorization/scope.js';
 import {uploadAvatar,deleteAvatar} from '../modules/profile/cloudinary.js';
 
 const asyncRoute=(fn:(req:AuthRequest,res:Response)=>Promise<void>)=>(req:AuthRequest,res:Response,next:NextFunction)=>fn(req,res).catch(next);
@@ -19,8 +20,21 @@ const website=z.string().url().optional().or(z.literal(''));
 const inactiveTimeout=z.coerce.number().int().min(300).max(31536000);
 export const webApi:RouterType=Router();
 
+webApi.patch('/users/:id/lock',authorize('SUPER_ADMIN'),asyncRoute(async(req,res)=>{
+  const id=z.string().uuid().parse(req.params.id),{locked}=z.object({locked:z.boolean()}).parse(req.body);
+  const account=await transaction(async client=>{
+    const result=await client.query(`${userScopeCte} UPDATE users u SET active=$3,updated_at=now()
+      FROM user_scope s WHERE u.id=$2 AND u.id=s.id AND u.role IN ('ADMIN','CLIENT')
+      RETURNING u.id,u.active`,[req.user!.id,id,!locked]);
+    if(!result.rows[0])throw new AppError(404,'ACCOUNT_NOT_FOUND','Account not found');
+    if(locked)await client.query('UPDATE refresh_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[id]);
+    return result.rows[0];
+  });
+  res.json({success:true,data:{...account,locked}});
+}));
+
 webApi.get('/account-summary',asyncRoute(async(req,res)=>{
-  const result=await query<{id:string;name:string|null;username:string|null;mobile:string|null;email:string;avatarUrl:string|null;coins:string}>('SELECT id,name,username,mobile,email,avatar_url AS "avatarUrl",coins FROM users WHERE id=$1 AND active=true',[req.user!.id]);
+  const result=await query<{id:string;name:string|null;username:string|null;mobile:string|null;email:string;avatarUrl:string|null;coins:string}>('SELECT id,name,username,mobile,email,avatar_url AS "avatarUrl",coins,can_view_packet_health FROM users WHERE id=$1 AND active=true',[req.user!.id]);
   if(!result.rows[0])throw new AppError(404,'ACCOUNT_NOT_FOUND','Account not found');
   res.json({success:true,data:result.rows[0]});
 }));
@@ -65,7 +79,7 @@ webApi.post('/admins',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)
   const body=z.object({ownerId:z.string().uuid(),username:z.string().trim().min(3).max(80).regex(/^[a-zA-Z0-9._-]+$/),password:z.string().min(8).max(128),name:z.string().trim().min(1).max(120),mobile:z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).optional().or(z.literal('')),email:z.string().email(),company:z.string().trim().max(160).optional(),website:z.string().url().optional().or(z.literal('')),address:z.string().trim().max(500).optional(),coins:z.coerce.number().min(0).default(0),active:z.boolean().default(true)}).parse(req.body);
   res.status(201).json({success:true,data:await admins.createAdmin(req.user!.id,body)});
 }));
-webApi.patch('/admins/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{const body=z.object({ownerId:z.string().uuid().optional(),username:username.optional(),password:z.string().min(8).max(128).optional(),name:z.string().trim().min(1).max(120).optional(),mobile, email:z.string().email().optional(),company:optionalText(160),website,address:optionalText(500),coins:z.coerce.number().min(0).optional(),active:z.boolean().optional()}).refine(value=>Object.keys(value).length>0,'At least one field is required').parse(req.body);res.json({success:true,data:await admins.updateAdmin(req.user!.id,z.string().uuid().parse(req.params.id),body)})}));
+webApi.patch('/admins/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{const body=z.object({ownerId:z.string().uuid().optional(),username:username.optional(),password:z.string().min(8).max(128).optional(),name:z.string().trim().min(1).max(120).optional(),mobile, email:z.string().email().optional(),company:optionalText(160),website,address:optionalText(500),coins:z.coerce.number().min(0).optional(),active:z.boolean().optional(),canViewPacketHealth:z.boolean().optional()}).refine(value=>Object.keys(value).length>0,'At least one field is required').parse(req.body);res.json({success:true,data:await admins.updateAdmin(req.user!.id,z.string().uuid().parse(req.params.id),body)})}));
 webApi.delete('/admins/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{await admins.deactivateAdmin(req.user!.id,z.string().uuid().parse(req.params.id));res.status(204).end()}));
 
 webApi.get('/client-owners',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{res.json({success:true,data:(await clients.clientOwnerOptions(req.user!.id)).rows})}));

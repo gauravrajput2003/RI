@@ -18,6 +18,7 @@ const schema = z.object({
   INTERNAL_TRACKER_SECRET: z.string().min(32),
   OFFLINE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(600),
   NO_SIGNAL_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
+  EXPECTED_PACKET_INTERVAL_SECONDS: z.coerce.number().int().positive().default(10),
   MOVEMENT_THRESHOLD_KPH: z.coerce.number().nonnegative().default(5),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),

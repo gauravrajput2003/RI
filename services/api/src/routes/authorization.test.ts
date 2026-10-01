@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -373,6 +373,7 @@ describe('resource authorization with both customers persisted', () => {
     expect((await state.db!.query<{count:number}>('SELECT count(*)::int AS count FROM locations WHERE vehicle_id=$1 AND device_id=$2',[created.body.data.id,device1])).rows[0].count).toBe(1);
     const list=await request(app).get('/api/v1/fleet-vehicles').query({search:'MANAGED',status:'INACTIVE',page:1,pageSize:1}).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
     expect(list.body.pagination.total).toBe(1);expect(list.body.counts.ALL).toBeGreaterThanOrEqual(1);expect(list.body.data[0]).toMatchObject({id:created.body.data.id,device_id:device2,fleet_status:'INACTIVE'});
+    await state.db!.query('UPDATE users SET active=true WHERE id=$1',[clientId]);
     const clientList=await request(app).get('/api/v1/fleet-vehicles').query({status:'INACTIVE'}).set('Authorization',`Bearer ${token(clientId,'CLIENT')}`).expect(200);
     expect(clientList.body.data[0]).toMatchObject({id:created.body.data.id,vehicle_number:'MANAGED-VEHICLE',fleet_status:'INACTIVE'});
     expect(clientList.body.data[0]).not.toHaveProperty('imei');expect(clientList.body.data[0]).not.toHaveProperty('client_email');expect(clientList.body.data[0]).not.toHaveProperty('coins');

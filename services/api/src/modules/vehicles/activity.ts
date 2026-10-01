@@ -2,9 +2,17 @@ import type { DeviceState } from '@fleet/shared-types';
 import { env } from '../../config/env.js';
 import { query } from '../../db/pool.js';
 
+const lastPacketTime=(lastSeen:Date|string|null)=>lastSeen==null?NaN:new Date(lastSeen).getTime();
+
+/** Diagnostic cadence only; does not change vehicle/dashboard status. */
+export function packetActivity(lastSeen:Date|string|null,now=new Date()){
+  const seen=lastPacketTime(lastSeen),seconds=Number.isFinite(seen)?Math.max(0,(+now-seen)/1000):null;
+  return {seconds_since_last_packet:seconds,packet_health:seconds===null?'silent':seconds<=env.EXPECTED_PACKET_INTERVAL_SECONDS*2?'on-time':seconds<=env.NO_SIGNAL_TIMEOUT_MINUTES*60?'delayed':'silent',expected_packet_interval_seconds:env.EXPECTED_PACKET_INTERVAL_SECONDS,status_checked_at:now.toISOString()};
+}
+
 /** Read-time status only: never updates current-state merges or location history. */
 export function deviceActivity(lastSeen: Date | string | null, storedState: DeviceState | null, active = true, now = new Date()) {
-  const seen = lastSeen == null ? NaN : new Date(lastSeen).getTime();
+  const seen = lastPacketTime(lastSeen);
   const offlineAt = seen + env.OFFLINE_TIMEOUT_SECONDS * 1000;
   const unreachableAt = seen + env.NO_SIGNAL_TIMEOUT_MINUTES * 60_000;
   const offline = !active || !Number.isFinite(seen) || now.getTime() > offlineAt;

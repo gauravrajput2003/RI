@@ -4,29 +4,29 @@ import { AppError } from '../../lib/errors.js';
 import { userScopeCte } from '../authorization/scope.js';
 const withoutTotal=(row:Record<string,unknown>)=>{const copy={...row};delete copy.total_count;return copy};
 
-const adminScopeCte=`WITH actor AS (
+const adminScopeCte=`${userScopeCte}, actor AS (
   SELECT role FROM users WHERE id=$1
 ), admin_scope AS (
-  SELECT candidate.id FROM users candidate CROSS JOIN actor
+  SELECT candidate.id FROM users candidate JOIN user_scope s ON s.id=candidate.id CROSS JOIN actor
   WHERE candidate.role='ADMIN' AND candidate.id<>$1
     AND (actor.role='SUPER_ADMIN' OR (actor.role='ADMIN' AND candidate.owner_id=$1))
 )`;
 
-const eligibleAdminOwnerCte=`WITH actor AS (
+const eligibleAdminOwnerCte=`${userScopeCte}, actor AS (
   SELECT role FROM users WHERE id=$1
 ), eligible_owner AS (
-  SELECT candidate.id FROM users candidate CROSS JOIN actor
+  SELECT candidate.id FROM users candidate JOIN user_scope s ON s.id=candidate.id CROSS JOIN actor
   WHERE candidate.active=true AND candidate.role IN ('SUPER_ADMIN','ADMIN')
     AND ((actor.role='SUPER_ADMIN' AND (candidate.id=$1 OR candidate.role='ADMIN'))
       OR (actor.role='ADMIN' AND candidate.id=$1))
 )`;
 
-export interface AdminInput {ownerId:string;username:string;password:string;name:string;mobile?:string;email:string;company?:string;website?:string;address?:string;coins:number;active:boolean}
+export interface AdminInput {ownerId:string;username:string;password:string;name:string;mobile?:string;email:string;company?:string;website?:string;address?:string;coins:number;active:boolean;canViewPacketHealth?:boolean}
 export type AdminUpdate=Partial<AdminInput>;
 
 export async function listAdmins(actorId:string,search:string,page:number,pageSize:number){
   const result=await query(`${adminScopeCte}
-    SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.owner_id,
+    SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.owner_id,
       owner.name AS owner_name,owner.email AS owner_email,u.created_at,u.updated_at,
       count(DISTINCT v.id)::int AS vehicle_count,count(DISTINCT assignment.device_id)::int AS device_count,
       count(*) OVER()::int AS total_count
@@ -73,7 +73,7 @@ export const setAdminActive=(actorId:string,id:string,active:boolean)=>query(`${
   RETURNING u.id,u.active,u.updated_at`,[actorId,id,active]);
 
 export const findAdmin=(actorId:string,id:string)=>query(`${adminScopeCte}
-  SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.owner_id,
+  SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.owner_id,
     owner.name AS owner_name,owner.email AS owner_email,u.created_at,u.updated_at
   FROM users u JOIN admin_scope scope ON scope.id=u.id LEFT JOIN users owner ON owner.id=u.owner_id
   WHERE u.id=$2`,[actorId,id]);
@@ -103,11 +103,13 @@ export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
       if(input.website!==undefined)add('website',input.website||null);
       if(input.address!==undefined)add('address',input.address||null);
       if(input.coins!==undefined)add('coins',input.coins);
+      if(input.canViewPacketHealth!==undefined){const actor=await client.query('SELECT role FROM users WHERE id=$1',[actorId]);if(actor.rows[0]?.role!=='SUPER_ADMIN')throw new AppError(403,'FORBIDDEN','Only the super-admin can change packet-health access');add('can_view_packet_health',input.canViewPacketHealth)}
       if(input.active!==undefined)add('active',input.active);
       if(input.password!==undefined)add('password_hash',await bcrypt.hash(input.password,12));
       if(!assignments.length)throw new AppError(400,'EMPTY_UPDATE','At least one admin field is required');
-      const result=await client.query(`${adminScopeCte} UPDATE users u SET ${assignments.join(',')},updated_at=now() FROM admin_scope scope WHERE u.id=$2 AND u.id=scope.id RETURNING u.id,u.owner_id,u.username,u.email,u.role,u.name,u.mobile,u.company,u.website,u.address,u.coins,u.active,u.created_at,u.updated_at`,values);
+      const result=await client.query(`${adminScopeCte} UPDATE users u SET ${assignments.join(',')},updated_at=now() FROM admin_scope scope WHERE u.id=$2 AND u.id=scope.id RETURNING u.id,u.owner_id,u.username,u.email,u.role,u.name,u.mobile,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.created_at,u.updated_at`,values);
       if(!result.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
+      if(input.password!==undefined)await client.query('UPDATE refresh_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[id]);
       if(input.coins!==undefined){const delta=input.coins-Number(current.rows[0].coins);if(delta!==0)await client.query(`INSERT INTO coin_transactions(distributor_id,counterparty_id,created_by,amount,transaction_type)
         VALUES($1,$2,$3,$4,$5)`,[result.rows[0].owner_id,id,actorId,Math.abs(delta),delta>0?'DISTRIBUTED':'RECLAIMED'])}
       return result.rows[0];

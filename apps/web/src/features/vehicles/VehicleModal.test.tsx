@@ -59,3 +59,13 @@ it('loads, saves, and resets SIM and installation text',async()=>{
   expect(screen.getByLabelText('SIM Info')).toHaveValue('');
   expect(screen.getByLabelText('GPS Location')).toHaveValue('');
 });
+
+it('previews a vehicle including SIM and GPS installation data without saving',()=>{
+ const vehicle={id:'vehicle-1',admin_id:'admin-1',owner_id:'client-1',vehicle_number:'ABC123',coins:0,active:true,auto_renewal:false,door_configured:false,relay_configured:false,buzzer_configured:false,ignition_wiring:'UNKNOWN',ac_power_plus:false,parking_alarm_on_ignition:false,sim_info:'SIM 899110',gps_location:'Upper dashboard'} as import('../../types').ManagedVehicle;
+ const {container}=render(<QueryClientProvider client={new QueryClient()}><VehicleModal open readOnly vehicle={vehicle} onClose={()=>undefined}/></QueryClientProvider>);
+ expect(screen.getByRole('dialog')).toHaveTextContent('Preview Vehicle');
+ expect(screen.getByLabelText('SIM Info')).toHaveValue('SIM 899110');
+ expect(screen.getByLabelText('GPS Location')).toBeDisabled();
+ expect(screen.queryByRole('button',{name:'Save changes'})).not.toBeInTheDocument();
+ mocks.put.mockClear();fireEvent.submit(container.querySelector('form')!);expect(mocks.put).not.toHaveBeenCalled();
+});

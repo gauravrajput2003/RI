@@ -5,15 +5,17 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {ReportPage} from './ReportPage';
 import {PageFilterContext,usePageFilterDrawer} from '../features/shell/pageFilterContext';
-const mocks=vi.hoisted(()=>({get:vi.fn()}));
+const mocks=vi.hoisted(()=>({get:vi.fn(),role:'ADMIN'}));
+vi.mock('../lib/auth',()=>({claims:()=>({id:'root',role:mocks.role})}));
 vi.mock('../services/api/client',()=>({api:{get:mocks.get},errorMessage:()=> 'request failed'}));
-beforeEach(()=>{mocks.get.mockReset();mocks.get.mockImplementation(async(path:string)=>path==='/reports/options'?{data:{data:[{id:'11111111-1111-4111-8111-111111111111',vehicle_number:'RI-01',alias:'Field unit'}]}}:{data:{data:[{id:'session-1',vehicleId:'11111111-1111-4111-8111-111111111111',vehicleNumber:'RI-01',startTime:'2026-09-18T00:00:00Z',endTime:'2026-09-18T00:10:00Z',durationSeconds:600,location:{latitude:28,longitude:76},address:null}],pagination:{page:1,pageSize:25,total:1}}})});
+beforeEach(()=>{mocks.role='ADMIN';mocks.get.mockReset();mocks.get.mockImplementation(async(path:string)=>path==='/reports/options'?{data:{data:[{id:'11111111-1111-4111-8111-111111111111',vehicle_number:'RI-01',alias:'Field unit'}]}}:{data:{data:[{id:'session-1',vehicleId:'11111111-1111-4111-8111-111111111111',vehicleNumber:'RI-01',startTime:'2026-09-18T00:00:00Z',endTime:'2026-09-18T00:10:00Z',durationSeconds:600,location:{latitude:28,longitude:76},address:null}],pagination:{page:1,pageSize:25,total:1}}})});
 afterEach(cleanup);
 function renderReport(){const controller={open:true,setOpen:vi.fn(),toggle:vi.fn(),close:vi.fn()};render(<MemoryRouter><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PageFilterContext.Provider value={controller}><ReportPage kind="status"/></PageFilterContext.Provider></QueryClientProvider></MemoryRouter>)}
 it('shows the status report and applies the selected vehicle and status filters',async()=>{renderReport();expect(screen.getByRole('columnheader',{name:/Status/})).toBeInTheDocument();fireEvent.click(screen.getByRole('combobox',{name:'Vehicle Number'}));fireEvent.click(await screen.findByRole('option',{name:'RI-01'}));fireEvent.click(screen.getByRole('combobox',{name:'Status'}));fireEvent.click(screen.getByRole('option',{name:'Overspeed'}));fireEvent.click(screen.getByRole('button',{name:'Search'}));await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/reports/status'&&call[1]?.params.status==='OVERSPEED'&&call[1]?.params.vehicleId==='11111111-1111-4111-8111-111111111111')).toBe(true))});
-it('sort controls trigger validated server sorting',async()=>{renderReport();const time=screen.getAllByRole('columnheader')[8];fireEvent.click(time.querySelector('button')!);await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/reports/status'&&call[1]?.params.sort==='durationSeconds'&&call[1]?.params.order==='asc')).toBe(true))});
+it('sort controls trigger validated server sorting',async()=>{mocks.role='SUPER_ADMIN';renderReport();const time=screen.getByRole('columnheader',{name:/^Time/});fireEvent.click(time.querySelector('button')!);await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/reports/status'&&call[1]?.params.sort==='durationSeconds'&&call[1]?.params.order==='asc')).toBe(true))});
 
 it('opens distance filters from the page filter control and requests the last 30 days',async()=>{
+ mocks.role='SUPER_ADMIN';
  mocks.get.mockImplementation(async(path:string)=>path==='/reports/options'?{data:{data:[{id:'11111111-1111-4111-8111-111111111111',vehicle_number:'RI-01',alias:null}]}}:{data:{data:[],dates:['2026-09-25','2026-09-26'],pagination:{page:1,pageSize:25,total:0}}});
  function DistanceWithPageFilter(){const drawer=usePageFilterDrawer();return <PageFilterContext.Provider value={drawer}><button onClick={drawer.toggle}>Page filters</button><ReportPage kind="distance"/></PageFilterContext.Provider>}
  render(<MemoryRouter><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><DistanceWithPageFilter/></QueryClientProvider></MemoryRouter>);
@@ -60,4 +62,19 @@ it.each([
  if(kind==='status')expect(screen.getByRole('combobox',{name:'Status'})).toBeVisible();
  expect(screen.getByRole('button',{name:'PDF'}).querySelector('img')?.getAttribute('src')).toBe('/assets/export/pdf.png');
  expect(screen.getByRole('button',{name:'Excel'}).querySelector('img')?.getAttribute('src')).toBe('/assets/export/xls.png');
+});
+
+it('loads all vehicles only for the super-admin and searches by vehicle number or IMEI',async()=>{
+ mocks.role='SUPER_ADMIN';renderReport();
+ await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/reports/status'&&!call[1]?.params.vehicleId)).toBe(true));
+ expect(screen.getByRole('columnheader',{name:/Vehicle/})).toBeInTheDocument();
+ expect(screen.getByRole('combobox',{name:'Vehicle Number'})).toHaveTextContent('All vehicles across admins and clients');
+ fireEvent.change(screen.getByRole('textbox',{name:'Search Status Report'}),{target:{value:'GPS-12345'}});
+ await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/reports/status'&&call[1]?.params.search==='GPS-12345')).toBe(true));
+});
+it('requires a vehicle selection for an admin',async()=>{
+ renderReport();await screen.findByRole('combobox',{name:'Vehicle Number'});
+ fireEvent.click(screen.getByRole('button',{name:'Search'}));
+ expect(screen.getByRole('alert')).toHaveTextContent('Select a vehicle');
+ expect(mocks.get.mock.calls.some(call=>call[0]==='/reports/status')).toBe(false);
 });

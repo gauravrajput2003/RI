@@ -8,7 +8,7 @@ import {expect} from 'vitest';
 // Called only by the migration gate against its freshly created disposable PostGIS database.
 export async function verifyGeofences(app:Express,db:Pool,token:string,owner:string,vehicle:string){
  const stranger=randomUUID(),foreignVehicle=randomUUID(),child=randomUUID(),childVehicle=randomUUID();
- await db.query("INSERT INTO users(id,email,password_hash,owner_id) VALUES($1,$2,'test',NULL),($3,$4,'test',$5)",[stranger,`${stranger}@test.local`,child,`${child}@test.local`,owner]);
+ await db.query("INSERT INTO users(id,email,password_hash,owner_id) VALUES($1,$2,'test',(SELECT owner_id FROM users WHERE id=$5)),($3,$4,'test',$5)",[stranger,`${stranger}@test.local`,child,`${child}@test.local`,owner]);
  await db.query('INSERT INTO vehicles(id,vehicle_number,owner_id) VALUES($1,$2,$3),($4,$5,$6)',[foreignVehicle,'FOREIGN-FENCE',stranger,childVehicle,'CHILD-FENCE',child]);
  const foreignToken=jwt.sign({id:stranger,role:'USER'},process.env.JWT_SECRET!);
  const call=(method:'get'|'post'|'patch'|'delete',path='',auth=token)=>request(app)[method](`/api/v1/geofences${path}`).set('Authorization',`Bearer ${auth}`);

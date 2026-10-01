@@ -83,12 +83,12 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
 
   const runner = new URL('../src/db/migrate.ts',import.meta.url);
   const sourceText = await readFile(runner,'utf8');
-  const relative = sourceText.match(/new URL\('([^']+)', import\.meta\.url\)/)?.[1];
-  expect(relative).toBeDefined();
-  const resolved = fileURLToPath(new URL(relative!,runner));
+  expect(sourceText).toContain("'database/migrations'");
+  expect(sourceText).toContain("'../../database/migrations'");
+  const resolved=fileURLToPath(new URL('../../../database/migrations/',import.meta.url));
   expect(await realpath(resolved)).toBe(await realpath(fileURLToPath(new URL('../../../database/migrations',import.meta.url))));
   const names=(await readdir(resolved)).filter(name=>name.endsWith('.sql')).sort();
-  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql']);
+  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql','011_announcement_images.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql']);
   console.info('MIGRATION TARGET',JSON.stringify({database,runner:fileURLToPath(runner),directory:resolved,names}));
   const migrate = async (cwd:string) => {
     const output=await exec(process.execPath,['--import','tsx',fileURLToPath(runner)],{
@@ -133,7 +133,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     definition:'CHECK (((unassigned_at IS NULL) OR (unassigned_at > assigned_at)))'}));
 
   const notNull:Record<string,string[]> = {
-    users:['id','email','password_hash','role','active','coins','inactive_timeout_seconds','created_at','updated_at'],
+    users:['id','email','password_hash','role','active','coins','inactive_timeout_seconds','created_at','updated_at','can_view_packet_health'],
     groups:['id','name','owner_id','created_at','updated_at'],
     devices:['id','imei','protocol','active','created_at','updated_at','identity_type','identity_value','capabilities'],
     vehicles:['id','vehicle_number','active','owner_id','created_at','updated_at','coins','auto_renewal','door_configured','relay_configured','buzzer_configured','ignition_wiring','ac_power_plus','parking_alarm_on_ignition'],
@@ -191,8 +191,9 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   // Real API compatibility, using the freshly migrated DB and existing repositories.
   const {app}=await import('../src/app.js');
   application=(await import('../src/db/pool.js')).pool;
-  const user=randomUUID(),device=randomUUID(),password='migration-test-password';
-  await verification.query('INSERT INTO users(id,email,password_hash) VALUES($1,$2,$3)',[user,'migration@example.invalid',await bcrypt.hash(password,4)]);
+  const rootUser=randomUUID(),user=randomUUID(),device=randomUUID(),password='migration-test-password';
+  await verification.query("INSERT INTO users(id,email,password_hash,role) VALUES($1,'root@example.invalid','x','SUPER_ADMIN')",[rootUser]);
+  await verification.query("INSERT INTO users(id,email,password_hash,role,owner_id) VALUES($1,$2,$3,'ADMIN',$4)",[user,'migration@example.invalid',await bcrypt.hash(password,4),rootUser]);
   const login=await request(app).post('/api/v1/auth/login').send({email:'migration@example.invalid',password}).expect(200);
   const token=login.body.data.accessToken;
   const create=await request(app).post('/api/v1/vehicles').set('Authorization',`Bearer ${token}`).send({vehicleNumber:`migration-${user}`}).expect(201);
