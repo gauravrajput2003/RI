@@ -31,3 +31,9 @@ it('shows packet-health navigation when an admin has a grant',async()=>{
  await waitFor(()=>expect(screen.getByRole('link',{name:'Packet Health'})).toBeVisible());
  expect(screen.queryByRole('link',{name:'GPS / SIM Lookup'})).not.toBeInTheDocument();
 });
+
+it('uses the SIM-card and satellite-dish icons for super-admin diagnostics',()=>{
+ mocks.role='SUPER_ADMIN';render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><AppShell/></MemoryRouter></QueryClientProvider>);
+ expect(screen.getByRole('link',{name:'GPS / SIM Lookup'}).querySelector('svg')).toHaveAttribute('data-icon','sim-card');
+ expect(screen.getByRole('link',{name:'Packet Health'}).querySelector('svg')).toHaveAttribute('data-icon','satellite-dish');
+});

@@ -13,3 +13,19 @@ beforeEach(()=>{vi.clearAllMocks();mocks.role='ADMIN';mocks.delete.mockResolvedV
 it('renders vehicles without count or upload controls and reveals Edit vehicle only after checkbox selection',async()=>{renderPage();expect(await screen.findByText('TEST-001')).toBeInTheDocument();expect(screen.queryByText('1 vehicles')).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:/Upload Vehicle/i})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:/Edit vehicle/i})).not.toBeInTheDocument();fireEvent.click(screen.getByLabelText('Select TEST-001'));expect(screen.getByRole('button',{name:/Edit vehicle/i})).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:/New/}));await waitFor(()=>expect(mocks.get).toHaveBeenCalledWith('/fleet-vehicles',expect.objectContaining({params:expect.objectContaining({status:'NEW'})}))) });
 it('shows empty and error states without demo fallback',async()=>{mocks.get.mockImplementation((url:string)=>url==='/fleet-vehicles'?Promise.resolve({data:{data:[],counts:{...counts,ALL:0,NEW:0},pagination:{page:1,pageSize:25,total:0}}}):Promise.resolve({data:{data:[]}}));const view=renderPage();expect(await screen.findByText('No vehicles found')).toBeInTheDocument();view.unmount();cleanup();mocks.get.mockImplementation((url:string)=>url==='/fleet-vehicles'?Promise.reject(new Error('offline')):Promise.resolve({data:{data:[]}}));renderPage();expect(await screen.findByText('Vehicle list unavailable')).toBeInTheDocument()});
 it('shows clients only the reduced operational columns and no management actions',async()=>{mocks.role='CLIENT';renderPage();expect(await screen.findByText('TEST-001')).toBeInTheDocument();for(const heading of ['Vehicle Number','Vehicle Type','Status','Speed','Last GPS','Since','TodayKm','TodayDu','Overspeed'])expect(screen.getByRole('columnheader',{name:new RegExp(heading)})).toBeVisible();expect(screen.queryByRole('columnheader',{name:'IMEI'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:/Add Vehicle/i})).not.toBeInTheDocument();expect(screen.queryByLabelText('Select TEST-001')).not.toBeInTheDocument();expect(mocks.get).not.toHaveBeenCalledWith('/client-options')});
+
+it('shows the owning admin beside the client and opens editing directly for the super-admin',async()=>{
+ mocks.role='SUPER_ADMIN';renderPage();await screen.findByText('TEST-001');
+ expect(screen.getByRole('columnheader',{name:/^Admin/})).toBeVisible();
+ expect(screen.getByText('Admin A')).toBeVisible();
+ const headers=screen.getAllByRole('columnheader').map(header=>header.textContent);
+ expect(headers.findIndex(text=>text?.startsWith('Admin'))).toBe(headers.findIndex(text=>text?.startsWith('Client'))-1);
+ expect(screen.getByLabelText('Select TEST-001')).not.toBeChecked();
+ fireEvent.click(screen.getByRole('button',{name:'Edit TEST-001'}));
+ expect(screen.getByRole('dialog')).toHaveTextContent('Edit Vehicle');
+ expect(screen.getByLabelText('Vehicle Number')).toHaveValue('TEST-001');
+ expect(screen.getByLabelText('Vehicle Number')).not.toBeDisabled();
+ expect(screen.getByRole('combobox',{name:'Vehicle Type'})).not.toBeDisabled();
+ expect(screen.getByRole('combobox',{name:'Client'})).not.toBeDisabled();
+ expect(screen.getByRole('button',{name:'Save changes'})).toBeVisible();
+});

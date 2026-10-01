@@ -63,7 +63,10 @@ export function VehiclePage(){
  ];
  const adminColumns:Column<ManagedVehicle>[]=[
   {key:'select',label:'',render:row=><input type="checkbox" aria-label={`Select ${row.vehicle_number}`} checked={selected===row.id} onChange={()=>setSelected(current=>current===row.id?null:row.id)} onClick={event=>event.stopPropagation()}/>},
-  ...clientColumns.slice(0,4),
+  ...clientColumns.slice(0,2),
+  {key:'edit',label:'Edit',render:row=><button type="button" className="table-action" onClick={event=>{event.stopPropagation();setSelected(row.id);setReadOnly(false);setModal(true)}} aria-label={`Edit ${row.vehicle_number}`}><PenLine/>Edit</button>},
+  ...clientColumns.slice(2,4),
+  ...(role==='SUPER_ADMIN'?[{key:'admin',label:'Admin',sortValue:(row:ManagedVehicle)=>row.admin_name||row.admin_username||row.admin_email,render:(row:ManagedVehicle)=>row.admin_name||row.admin_username||row.admin_email||'Unavailable'}]:[]),
   {key:'client',label:'Client',sortValue:row=>row.client_name||row.client_username||row.client_email,render:row=>row.client_name||row.client_username||row.client_email||'Unavailable'},
   {key:'imei',label:'IMEI',sortValue:row=>row.imei,render:row=>row.imei||'Unavailable'},
   {key:'device',label:'Device Type',sortValue:row=>row.device_model||row.protocol,render:row=>row.device_model||row.protocol||'Unavailable'},
@@ -90,9 +93,9 @@ export function VehiclePage(){
  ];
  if(manager)adminColumns.push({key:'preview',label:'Preview',render:row=><button type="button" className="table-action" onClick={event=>{event.stopPropagation();setSelected(row.id);setReadOnly(true);setModal(true)}} aria-label={`Preview ${row.vehicle_number}`}><Eye/>Preview</button>});
  const columns=manager?adminColumns:clientColumns;
- const exportColumns=columns.filter(column=>column.key!=='select'&&column.key!=='delete'&&column.key!=='command');
+ const exportColumns=columns.filter(column=>!['select','edit','preview','delete','command'].includes(column.key));
  const exportRows:ExportValue[][]=rows.map((row,index)=>exportColumns.map(column=>{
-  const values:Record<string,ExportValue>={sn:(page-1)*25+index+1,number:row.vehicle_number,type:row.vehicle_type,status:row.fleet_status,client:row.client_name||row.client_username||row.client_email,imei:row.imei,device:row.device_model||row.protocol,sim:row.sim_number,simType:row.sim_type||row.sim_operator,speed:row.speed,gps:row.tracker_timestamp||row.server_received_at,since:row.status_since_at,todayKm:row.today_distance_km,todayDu:row.today_running_seconds,overspeed:row.overspeed_limit,mileage:row.mileage,odometer:row.odometer,alias:row.alias,active:row.active,subscriptionStart:row.billing_start,subscriptionDue:row.billing_due,autoRenewal:row.auto_renewal,wire:row.ignition_wiring,added:row.created_at,updated:row.updated_at,coin:row.coins,coinExpiry:row.billing_due,remark:row.remark,variance:null,address:row.address};return values[column.key]}));
+  const values:Record<string,ExportValue>={sn:(page-1)*25+index+1,number:row.vehicle_number,type:row.vehicle_type,status:row.fleet_status,admin:row.admin_name||row.admin_username||row.admin_email,client:row.client_name||row.client_username||row.client_email,imei:row.imei,device:row.device_model||row.protocol,sim:row.sim_number,simType:row.sim_type||row.sim_operator,speed:row.speed,gps:row.tracker_timestamp||row.server_received_at,since:row.status_since_at,todayKm:row.today_distance_km,todayDu:row.today_running_seconds,overspeed:row.overspeed_limit,mileage:row.mileage,odometer:row.odometer,alias:row.alias,active:row.active,subscriptionStart:row.billing_start,subscriptionDue:row.billing_due,autoRenewal:row.auto_renewal,wire:row.ignition_wiring,added:row.created_at,updated:row.updated_at,coin:row.coins,coinExpiry:row.billing_due,remark:row.remark,variance:null,address:row.address};return values[column.key]}));
  const total=query.data?.pagination?.total||0;
  const resetFilters=()=>{setDateFilter(null);setYear('');setDeviceType('');setStatus('ALL');setClientDraft('');setClientId('')};
  return <section className={`page vehicle-page ${manager?'manager-view':'client-view'}`}>

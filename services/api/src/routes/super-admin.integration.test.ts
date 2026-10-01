@@ -112,3 +112,20 @@ it('resets account passwords without exposing stored credentials and revokes old
     await request(app).post('/api/v1/auth/refresh').send({refreshToken:tokens.refreshToken}).expect(401);
   }
 });
+
+it('updates vehicle details and transfers the current GPS device with its vehicle to the selected client/admin',async()=>{
+ const changed={...payload(),vehicleNumber:'RENAMED-01',vehicleType:'Truck',adminId:other,clientId:otherClient};
+ await request(app).put(`/api/v1/fleet-vehicles/${vehicle}`).set(auth(a,'ADMIN')).send(changed).expect(403);
+ expect((await state.db!.query('SELECT owner_id FROM devices WHERE id=$1',[device])).rows[0]).toMatchObject({owner_id:client});
+ await request(app).put(`/api/v1/fleet-vehicles/${vehicle}`).set(auth()).send({...changed,deviceImei:'GPS-99999',clientId:client,adminId:b}).expect(403);
+ await request(app).put(`/api/v1/fleet-vehicles/${vehicle}`).set(auth()).send(changed).expect(200);
+ const detail=(await request(app).get(`/api/v1/fleet-vehicles/${vehicle}`).set(auth()).expect(200)).body.data;
+ expect(detail).toMatchObject({vehicle_number:'RENAMED-01',vehicle_type:'Truck',owner_id:otherClient,admin_id:other,admin_email:'other-admin@test.local',client_email:'other-client@test.local',device_id:device});
+ const list=await request(app).get('/api/v1/fleet-vehicles').query({search:'RENAMED-01'}).set(auth()).expect(200);
+ expect(list.body.data).toEqual([expect.objectContaining({admin_id:other,owner_id:otherClient,vehicle_number:'RENAMED-01'})]);
+ expect((await state.db!.query('SELECT owner_id FROM devices WHERE id=$1',[device])).rows[0]).toMatchObject({owner_id:otherClient});
+ await request(app).get(`/api/v1/vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(404);
+ await request(app).get(`/api/v1/vehicles/${vehicle}`).set(auth(otherClient,'CLIENT')).expect(200);
+ expect((await state.db!.query('SELECT device_id FROM vehicle_device_assignments WHERE vehicle_id=$1 AND unassigned_at IS NULL',[vehicle])).rows).toEqual([{device_id:device}]);
+ expect((await state.db!.query('SELECT count(*)::int AS count FROM locations WHERE vehicle_id=$1',[vehicle])).rows[0]).toEqual({count:2});
+});
