@@ -17,6 +17,7 @@ import {VehiclePopup} from '../features/dashboard/VehiclePopup';
 import {VehicleIcon} from '../features/vehicles/VehicleIcon';
 import {PageFilterDrawer} from '../features/shell/PageFilterDrawer';
 import {usePageFilterDrawer} from '../features/shell/pageFilterContext';
+import {useCompactLayout} from '../lib/useCompactLayout';
 import {dateTime,speed} from '../lib/format';
 
 const filters=[['ALL','All',Car],['OVERSPEED','Overspeed',Gauge],['RUNNING','Running',PlayCircle],['IDLE','Idle',Clock3],['STOPPED','Stopped',PauseCircle],['UNREACHABLE','Unreachable',WifiOff],['NEW','New',Sparkles],['INACTIVE','Inactive',Ban]] as const;
@@ -59,6 +60,7 @@ export function withDashboardPreviewTelemetry(vehicles:FleetVehicle[]):FleetVehi
 }
 
 export function DashboardPage(){
+ const compact=useCompactLayout();
  const role=claims()?.role;
  const manager=role==='ADMIN'||role==='SUPER_ADMIN';
  const [status,setStatus]=useState<FleetStatus>('ALL');
@@ -84,6 +86,7 @@ export function DashboardPage(){
  useEffect(()=>{const token=getTokens()?.accessToken;if(!token)return;const base=(import.meta.env.VITE_SOCKET_URL||import.meta.env.VITE_API_URL||'http://localhost:3000').replace(/\/api\/v1\/?$/,'');const socket=io(base,{auth:{token},transports:['websocket']});socket.on('vehicle:location',(payload:Partial<FleetVehicle>&{vehicleId?:string})=>{client.setQueriesData<FleetResponse>({queryKey:['fleet']},old=>old?{...old,data:old.data.map(vehicle=>vehicle.id===(payload.vehicleId||payload.id)?{...vehicle,...payload}:vehicle)}:old)});return()=>{socket.disconnect()}},[client]);
  useEffect(()=>{if(!resizing)return;const move=(event:PointerEvent)=>{const bounds=workspaceRef.current?.getBoundingClientRect();if(!bounds)return;setSplitPercent(Math.max(30,Math.min(70,((event.clientX-bounds.left)/bounds.width)*100)))};const stop=()=>setResizing(false);window.addEventListener('pointermove',move);window.addEventListener('pointerup',stop,{once:true});return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop)}},[resizing]);
 
+ const effectiveMode=compact?(panelMode==='map'?'map':'table'):panelMode;
  const apiRows=query.data?.data;
  const rows=useMemo(()=>withDashboardPreviewTelemetry(apiRows||[]),[apiRows]);
  const chosen=rows.find(vehicle=>vehicle.id===selected)||null;
@@ -102,9 +105,10 @@ export function DashboardPage(){
  }),[page]);
  const columns=(manager?[...operationalColumns.slice(0,3),'client' as ColumnKey,...operationalColumns.slice(3)]:operationalColumns).map(key=>allColumns[key]);
 
- return <section className={`page dashboard-page dashboard-mode-${panelMode} ${chosen?'has-selected':''}`}>
+ return <section className={`page dashboard-page dashboard-mode-${effectiveMode} ${chosen?'has-selected':''}`}>
   <div className="status-grid">{filters.map(([key,label,Icon])=><FilterPill key={key} status={key} label={label} count={query.data?.counts?.[key]} icon={Icon} active={status===key} onClick={()=>setStatus(key)}/>)}</div>
-  <div ref={workspaceRef} className={`dashboard-workspace mode-${panelMode}`} style={panelMode==='split'?{gridTemplateColumns:`minmax(420px,${splitPercent}fr) 8px minmax(420px,${100-splitPercent}fr)`}:undefined}>
+  {compact&&<div className="dashboard-panel-switch" role="group" aria-label="Fleet view"><button type="button" aria-pressed={effectiveMode==='table'} onClick={()=>setPanelMode('table')}>Vehicle list</button><button type="button" aria-pressed={effectiveMode==='map'} onClick={()=>setPanelMode('map')}>Map</button></div>}
+  <div ref={workspaceRef} className={`dashboard-workspace mode-${effectiveMode}`} style={effectiveMode==='split'?{gridTemplateColumns:`minmax(0,${splitPercent}fr) 8px minmax(0,${100-splitPercent}fr)`}:undefined}>
    <section className="fleet-panel">
     <div className="panel-toolbar">
      <label className="search-box"><Search/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search vehicle or alias" aria-label="Search vehicles"/>{search&&<button onClick={()=>setSearch('')} aria-label="Clear search"><X/></button>}</label>

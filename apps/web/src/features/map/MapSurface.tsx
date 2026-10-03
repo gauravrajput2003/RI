@@ -2,7 +2,26 @@ import {useEffect,useMemo} from 'react';import {CircleMarker,MapContainer,Marker
 import {renderToStaticMarkup} from 'react-dom/server';
 import {VehicleIcon} from '../vehicles/VehicleIcon';
 type Point={id:string;latitude:number|null;longitude:number|null;status?:string;label?:string;vehicleType?:string|null};
-function Fit({points,selected}:{points:Point[];selected?:Point}){const map=useMap();useEffect(()=>{if(selected?.latitude!=null&&selected.longitude!=null){map.flyTo([selected.latitude,selected.longitude],15,{duration:.55});return}const valid=points.filter(p=>p.latitude!=null&&p.longitude!=null);if(valid.length)map.fitBounds(L.latLngBounds(valid.map(p=>[p.latitude!,p.longitude!])),{padding:[34,34],maxZoom:13})},[map,points,selected]);return null}
+function Fit({points,selected}:{points:Point[];selected?:Point}){
+ const map=useMap();
+ useEffect(()=>{
+  const container=map.getContainer();let frame=0;
+  const fit=()=>{
+   // A mounted map may be hidden by the phone list view or fullscreen table.
+   // Leaflet cannot project a flight with a zero-size viewport.
+   if(!container.clientWidth||!container.clientHeight){map.stop();return}
+   map.invalidateSize({animate:false,pan:false});
+   if(selected?.latitude!=null&&selected.longitude!=null){map.setView([selected.latitude,selected.longitude],15,{animate:false});return}
+   const valid=points.filter(p=>p.latitude!=null&&p.longitude!=null);
+   if(valid.length)map.fitBounds(L.latLngBounds(valid.map(p=>[p.latitude!,p.longitude!])),{padding:[34,34],maxZoom:13});
+  };
+  const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(fit)};
+  schedule();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(schedule);observer?.observe(container);
+  window.addEventListener('resize',schedule);
+  return()=>{cancelAnimationFrame(frame);observer?.disconnect();window.removeEventListener('resize',schedule)};
+ },[map,points,selected]);
+ return null;
+}
 function ResizeAwareMap(){const map=useMap();useEffect(()=>{let frame=0;const invalidate=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>map.invalidateSize({animate:false,pan:false}))};invalidate();const container=map.getContainer();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(invalidate);observer?.observe(container);window.addEventListener('resize',invalidate);return()=>{cancelAnimationFrame(frame);observer?.disconnect();window.removeEventListener('resize',invalidate)}},[map]);return null}
 function markerIcon(type:string|null|undefined,status='UNREACHABLE',active=false){return L.divIcon({className:`fleet-marker-shell ${active?'active':''}`,html:renderToStaticMarkup(<VehicleIcon type={type} state={status as FleetVehicle['fleet_status']} size="md"/>),iconSize:[42,38],iconAnchor:[21,19]})}
 function endpointIcon(kind:'start'|'end'){return L.divIcon({className:'route-endpoint-shell',html:`<span class="route-endpoint ${kind}">${kind==='start'?'S':'E'}</span>`,iconSize:[30,30],iconAnchor:[15,15]})}

@@ -72,6 +72,6 @@
 .geofence-success{padding:12px;background:#e5f6ed;color:#176847;border-radius:6px;margin-bottom:12px}
 .geofence-page button:focus-visible,.geofence-page input:focus-visible,.geofence-page select:focus-visible{outline:3px solid #40aacd;outline-offset:2px}
 
-@media(min-width:1800px){.geofence-workspace:not(.table-fullscreen){grid-template-columns:minmax(0,1.4fr) minmax(400px,1fr)}}
-@media(max-width:1100px){.geofence-workspace{grid-template-columns:1fr}.geofence-list{min-height:320px}.geofence-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.geofence-map-panel{height:570px}}
-@media(max-width:600px){.geofence-form-grid{grid-template-columns:1fr}.geofence-map-panel{height:450px}.geofence-map,.geofence-map .map{min-height:450px;height:450px}.geofence-page .page-heading{gap:10px;flex-wrap:wrap}.geofence-vehicle-menu,.geofence-category-options{position:relative;top:5px}.geofence-form{padding:14px}.geofence-instruction{font-size:11px}}
+@media(min-width:1536px){.geofence-workspace:not(.table-fullscreen){grid-template-columns:minmax(0,1.4fr) minmax(400px,1fr)}}
+@media(max-width:1023px){.geofence-workspace{grid-template-columns:1fr}.geofence-list{min-height:320px}.geofence-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.geofence-map-panel{height:570px}}
+@media(max-width:639px){.geofence-form-grid{grid-template-columns:1fr}.geofence-map-panel{height:450px}.geofence-map,.geofence-map .map{min-height:450px;height:450px}.geofence-page .page-heading{gap:10px;flex-wrap:wrap}.geofence-vehicle-menu,.geofence-category-options{position:relative;top:5px}.geofence-form{padding:14px}.geofence-instruction{font-size:11px}}
