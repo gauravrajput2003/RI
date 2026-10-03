@@ -7,7 +7,7 @@ vi.mock('@tanstack/react-query',()=>({useQuery:()=>({data:[{id:'notice-1',title:
 vi.mock('../../constants/config',()=>({config:{demoMode:false}}));
 vi.mock('../../services/api/announcements',()=>({getCurrentAnnouncements:vi.fn(),dismissAnnouncement:vi.fn()}));
 vi.mock('expo-router',()=>({router:{push:vi.fn()}}));
-vi.mock('@expo/vector-icons',()=>({Feather:'Icon'}));
+vi.mock('@expo/vector-icons',()=>({Feather:'Icon',FontAwesome6:'Icon',MaterialCommunityIcons:'Icon'}));
 vi.mock('./Sheet',async()=>{const {createElement,Fragment}=await import('react');return{Sheet:({visible,title,children}:{visible:boolean;title?:string;children:React.ReactNode})=>visible?createElement(Fragment,null,createElement('SheetTitle',null,title),children):null,NoticeSheet:()=>null}});
 vi.mock('react-native',()=>({Pressable:'Pressable',Text:'Text',View:'View',StyleSheet:{create:(styles:unknown)=>styles}}));
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});

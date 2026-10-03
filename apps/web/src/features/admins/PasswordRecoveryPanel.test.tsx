@@ -1,38 +1,30 @@
 import '@testing-library/jest-dom/vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
-import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {PasswordRecoveryPanel} from './PasswordRecoveryPanel';
-const mocks=vi.hoisted(()=>({role:'SUPER_ADMIN',patch:vi.fn(),post:vi.fn(),copy:vi.fn()}));
+const mocks=vi.hoisted(()=>({role:'SUPER_ADMIN',post:vi.fn(),copy:vi.fn()}));
 vi.mock('../../lib/auth',()=>({claims:()=>({role:mocks.role})}));
-vi.mock('../../services/api/client',()=>({api:{patch:mocks.patch,post:mocks.post},errorMessage:()=> 'Reset failed'}));
-beforeEach(()=>{mocks.role='SUPER_ADMIN';mocks.patch.mockReset().mockResolvedValue({});mocks.post.mockReset().mockResolvedValue({});mocks.copy.mockReset().mockResolvedValue(undefined);Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:mocks.copy}})});
+vi.mock('../../services/api/client',()=>({api:{post:mocks.post},errorMessage:()=> 'Confirmation failed'}));
+beforeEach(()=>{mocks.role='SUPER_ADMIN';mocks.post.mockReset().mockResolvedValue({data:{data:{password:'recoverable-password'}}});mocks.copy.mockReset().mockResolvedValue(undefined);Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:mocks.copy}})});
 afterEach(cleanup);
-function show(kind:'admin'|'client'='admin'){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{mutations:{retry:false}}})}><PasswordRecoveryPanel id="account-1" kind={kind}/></QueryClientProvider>)}
-it.each(['admin','client'] as const)('resets a %s password before displaying it and supports copying',async kind=>{
-  show(kind);expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Generate and reset password'}));
-  const password=(await screen.findByLabelText('New password') as HTMLInputElement).value;
-  expect(password).toMatch(/^[A-Za-z0-9_-]{20}$/);
-  if(kind==='admin')expect(mocks.patch).toHaveBeenCalledWith('/admins/account-1',{password});
-  else expect(mocks.post).toHaveBeenCalledWith('/clients/account-1/reset-password',{password,confirmPassword:password});
-  fireEvent.click(screen.getByRole('button',{name:'Copy password'}));
-  await waitFor(()=>expect(mocks.copy).toHaveBeenCalledWith(password));
-  expect(await screen.findByRole('status')).toHaveTextContent('Password copied');
+it.each(['admin','client'] as const)('requires super-admin confirmation to reveal and copy a %s password',async kind=>{
+ render(<PasswordRecoveryPanel id="account-1" kind={kind}/>);
+ expect(screen.queryByLabelText('Account password')).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Verify and preview'})).toBeDisabled();
+ fireEvent.change(screen.getByLabelText('Super-admin password'),{target:{value:'root-password'}});
+ fireEvent.click(screen.getByRole('button',{name:'Verify and preview'}));
+ expect(await screen.findByLabelText('Account password')).toHaveValue('recoverable-password');
+ expect(mocks.post).toHaveBeenCalledWith('/users/account-1/password-recovery',{superAdminPassword:'root-password',action:'REVEAL'});
+ fireEvent.click(screen.getByRole('button',{name:'Copy password'}));await waitFor(()=>expect(mocks.copy).toHaveBeenCalledWith('recoverable-password'));
 });
-it.each(['ADMIN','CLIENT'])('hides password recovery from %s accounts',role=>{
-  mocks.role=role;show();expect(screen.queryByRole('region',{name:'Password recovery'})).not.toBeInTheDocument();expect(mocks.patch).not.toHaveBeenCalled();
-});
-it('never displays or copies a password when resetting fails',async()=>{
-  mocks.patch.mockRejectedValue(new Error('offline'));show();
-  fireEvent.click(screen.getByRole('button',{name:'Generate and reset password'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Reset failed');
-  expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
-  expect(screen.queryByRole('button',{name:'Copy password'})).not.toBeInTheDocument();
-});
-it('offers manual copying if clipboard access fails',async()=>{
-  mocks.copy.mockRejectedValue(new Error('denied'));show();
-  fireEvent.click(screen.getByRole('button',{name:'Generate and reset password'}));await screen.findByLabelText('New password');
-  fireEvent.click(screen.getByRole('button',{name:'Copy password'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('copy it manually');
+it.each(['ADMIN','CLIENT'])('never renders passwords for %s',role=>{mocks.role=role;render(<PasswordRecoveryPanel id="a" kind="admin" initialPassword="secret"/>);expect(screen.queryByRole('region')).not.toBeInTheDocument();expect(mocks.post).not.toHaveBeenCalled()});
+it('does not reveal credentials on failed confirmation',async()=>{mocks.post.mockRejectedValue(new Error('bad password'));render(<PasswordRecoveryPanel id="a" kind="admin"/>);fireEvent.change(screen.getByLabelText('Super-admin password'),{target:{value:'wrong'}});fireEvent.click(screen.getByRole('button',{name:'Verify and preview'}));expect(await screen.findByRole('alert')).toHaveTextContent('Confirmation failed');expect(screen.queryByLabelText('Account password')).not.toBeInTheDocument()});
+it('requires confirmation for a legacy password reset and uses the protected endpoint',async()=>{render(<PasswordRecoveryPanel id="a" kind="client" initialPassword={null}/>);expect(screen.getByRole('button',{name:'Generate and reset password'})).toBeDisabled();fireEvent.change(screen.getByLabelText('Super-admin password'),{target:{value:'root-password'}});fireEvent.click(screen.getByRole('button',{name:'Generate and reset password'}));await screen.findByLabelText('Account password');expect(mocks.post).toHaveBeenCalledWith('/users/a/password-recovery',{superAdminPassword:'root-password',action:'RESET'})});
+it('offers manual copying if clipboard access fails',async()=>{mocks.copy.mockRejectedValue(new Error('denied'));render(<PasswordRecoveryPanel id="a" kind="admin" initialPassword="secret"/>);fireEvent.click(screen.getByRole('button',{name:'Copy password'}));expect(await screen.findByRole('alert')).toHaveTextContent('copy it manually')});
+
+it('does not reopen a preview when confirmation completes after closing it',async()=>{
+ let resolve!:(value:unknown)=>void;const verified=vi.fn();mocks.post.mockImplementation(()=>new Promise(done=>{resolve=done}));
+ const {unmount}=render(<PasswordRecoveryPanel id="a" kind="admin" onVerified={verified}/>);
+ fireEvent.change(screen.getByLabelText('Super-admin password'),{target:{value:'root-password'}});fireEvent.click(screen.getByRole('button',{name:'Verify and preview'}));unmount();
+ await act(async()=>{resolve({data:{data:{password:'secret'}}})});expect(verified).not.toHaveBeenCalled();
 });

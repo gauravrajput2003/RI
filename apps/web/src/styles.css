@@ -230,3 +230,6 @@
 button:has(svg),.leaflet-control-zoom a{min-width:44px;min-height:44px}
 .leaflet-control-zoom a{line-height:44px}
 @media(max-width:1023px){.sidebar,.page-filter-drawer{overscroll-behavior:contain}.dashboard-page .summary-expand-toggle{width:44px;height:44px}.dashboard-page .summary-action{display:inline-flex;align-items:center}}
+
+.vehicle-page .status-badge{border-radius:4px;min-width:86px;justify-content:center;padding:3px 7px;color:#fff;line-height:1.2;font-size:.72rem}.vehicle-page .status-badge i{display:none}.vehicle-page .status-stopped{background:#f11212}.vehicle-page .status-unreachable{background:#8969b4}.vehicle-page .status-running{background:#229b38}.vehicle-page .status-idle{background:#a68b00}.vehicle-page .status-overspeed{background:#e66c24}.vehicle-page .status-new{background:#586c7a}.vehicle-page .status-inactive{background:#465463}
+.account-preview-confirmation{padding:22px}.account-preview-confirmation .password-recovery{border:0;padding:0}.password-recovery label{display:grid;gap:8px;font-size:.86rem;font-weight:700;margin-block:12px}.password-recovery input{width:100%;min-height:47px;padding:10px;border:1px solid #ced9e2;border-radius:7px}.password-recovery-actions{display:flex;gap:8px;flex-wrap:wrap}

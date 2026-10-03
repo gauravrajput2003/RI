@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import {sealPassword} from '../auth/password-recovery.js';
 import { query,transaction } from '../../db/pool.js';
 import { AppError } from '../../lib/errors.js';
 import { userScopeCte } from '../authorization/scope.js';
@@ -21,7 +22,7 @@ const eligibleAdminOwnerCte=`${userScopeCte}, actor AS (
       OR (actor.role='ADMIN' AND candidate.id=$1))
 )`;
 
-export interface AdminInput {ownerId:string;username:string;password:string;name:string;mobile?:string;email:string;company?:string;website?:string;address?:string;coins:number;active:boolean;canViewPacketHealth?:boolean}
+export interface AdminInput {username:string;password:string;name:string;mobile?:string;email:string;company?:string;website?:string;address?:string;coins:number;active:boolean;canViewPacketHealth?:boolean}
 export type AdminUpdate=Partial<AdminInput>;
 
 export async function listAdmins(actorId:string,search:string,page:number,pageSize:number){
@@ -51,14 +52,14 @@ export async function createAdmin(actorId:string,input:AdminInput){
   const passwordHash=await bcrypt.hash(input.password,12);
   try{
     return await transaction(async client=>{
-      const result=await client.query(`${eligibleAdminOwnerCte} INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,coins,active)
-        SELECT id,$3,lower($4),$5,'ADMIN',$6,$7,$8,$9,$10,$11,$12 FROM eligible_owner
+      const result=await client.query(`${eligibleAdminOwnerCte} INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,coins,active,password_recovery_ciphertext)
+        SELECT id,$3,lower($4),$5,'ADMIN',$6,$7,$8,$9,$10,$11,$12,$13 FROM eligible_owner
         WHERE id=$2
         RETURNING id,owner_id,username,email,role,name,mobile,company,website,address,coins,active,created_at,updated_at`,
-        [actorId,input.ownerId,input.username.trim(),input.email.trim(),passwordHash,input.name.trim(),input.mobile||null,input.company||null,input.website||null,input.address||null,input.coins,input.active]);
+        [actorId,actorId,input.username.trim(),input.email.trim(),passwordHash,input.name.trim(),input.mobile||null,input.company||null,input.website||null,input.address||null,input.coins,input.active,sealPassword(input.password)]);
       if(!result.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy');
       if(input.coins>0)await client.query(`INSERT INTO coin_transactions(distributor_id,counterparty_id,created_by,amount,transaction_type)
-        VALUES($1,$2,$3,$4,'DISTRIBUTED')`,[input.ownerId,result.rows[0].id,actorId,input.coins]);
+        VALUES($1,$2,$3,$4,'DISTRIBUTED')`,[actorId,result.rows[0].id,actorId,input.coins]);
       return result.rows[0];
     });
   }catch(error){
@@ -81,20 +82,10 @@ export const findAdmin=(actorId:string,id:string)=>query(`${adminScopeCte}
 export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
   try{
     return await transaction(async client=>{
-      if(input.ownerId){const owner=await client.query(`${eligibleAdminOwnerCte} SELECT u.id FROM users u JOIN eligible_owner scope ON scope.id=u.id WHERE u.id=$2`,[actorId,input.ownerId]);if(!owner.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy')}
       const current=await client.query<{coins:string;owner_id:string}>(`${adminScopeCte} SELECT u.coins,u.owner_id FROM users u JOIN admin_scope scope ON scope.id=u.id WHERE u.id=$2 FOR UPDATE OF u`,[actorId,id]);
       if(!current.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
-      if(input.ownerId!==undefined){
-        const cycle=await client.query(`WITH RECURSIVE descendants AS (
-          SELECT id FROM users WHERE id=$1
-          UNION
-          SELECT u.id FROM users u JOIN descendants d ON u.owner_id=d.id WHERE u.role='ADMIN'
-        ) SELECT id FROM descendants WHERE id=$2 LIMIT 1`,[id,input.ownerId]);
-        if(cycle.rows[0])throw new AppError(400,'INVALID_OWNER','An admin cannot be assigned to itself or one of its descendants');
-      }
       const values:unknown[]=[actorId,id],assignments:string[]=[];
       const add=(column:string,value:unknown)=>{values.push(value);assignments.push(`${column}=$${values.length}`)};
-      if(input.ownerId!==undefined)add('owner_id',input.ownerId);
       if(input.username!==undefined)add('username',input.username.trim());
       if(input.name!==undefined)add('name',input.name.trim());
       if(input.mobile!==undefined)add('mobile',input.mobile||null);
@@ -105,7 +96,7 @@ export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
       if(input.coins!==undefined)add('coins',input.coins);
       if(input.canViewPacketHealth!==undefined){const actor=await client.query('SELECT role FROM users WHERE id=$1',[actorId]);if(actor.rows[0]?.role!=='SUPER_ADMIN')throw new AppError(403,'FORBIDDEN','Only the super-admin can change packet-health access');add('can_view_packet_health',input.canViewPacketHealth)}
       if(input.active!==undefined)add('active',input.active);
-      if(input.password!==undefined)add('password_hash',await bcrypt.hash(input.password,12));
+      if(input.password!==undefined){add('password_hash',await bcrypt.hash(input.password,12));add('password_recovery_ciphertext',sealPassword(input.password))}
       if(!assignments.length)throw new AppError(400,'EMPTY_UPDATE','At least one admin field is required');
       const result=await client.query(`${adminScopeCte} UPDATE users u SET ${assignments.join(',')},updated_at=now() FROM admin_scope scope WHERE u.id=$2 AND u.id=scope.id RETURNING u.id,u.owner_id,u.username,u.email,u.role,u.name,u.mobile,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.created_at,u.updated_at`,values);
       if(!result.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');

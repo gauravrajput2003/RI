@@ -15,9 +15,10 @@ const auth=(id:string=root,role='SUPER_ADMIN')=>({Authorization:`Bearer ${jwt.si
 const range={start:'2026-09-17T00:00:00Z',end:'2026-09-18T00:00:00Z',timeZone:'UTC'};
 const payload=()=>({adminId:b,clientId:client,deviceImei:'GPS-12345',deviceProtocol:'GT06',simNumber:'9876543210',simOperator:'Jio',vehicleNumber:'DEEP-01',vehicleType:'Car',mileage:10,overspeedLimit:80,coins:0,active:true,simInfo:'SIM serial',gpsLocation:'Upper dashboard'});
 beforeAll(async()=>{
+  process.env.ACCOUNT_PASSWORD_ENCRYPTION_KEY='a'.repeat(64);
   process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';process.env.JWT_SECRET=secret;process.env.JWT_REFRESH_SECRET=secret+'-refresh';process.env.INTERNAL_TRACKER_SECRET=secret+'-internal';process.env.EXPECTED_PACKET_INTERVAL_SECONDS='10';process.env.NO_SIGNAL_TIMEOUT_MINUTES='30';
   state.db=new PGlite();
-  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql']){
+  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql']){
     let sql=await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g,'').replace(/geography\(Point, 4326\)/g,'point').replace(/CREATE INDEX locations_position_gist[^;]+;/g,'');await state.db.exec(sql);
   }
   await state.db.exec(`CREATE DOMAIN geometry AS point; CREATE FUNCTION ST_Distance(geometry,geometry) RETURNS double precision LANGUAGE SQL AS 'SELECT 0::double precision';`);
@@ -38,7 +39,8 @@ it('enforces one root, mandatory owners, valid parent roles, and cycle preventio
   await expect(state.db!.query("INSERT INTO users(email,password_hash,role) VALUES('orphan@test.local','x','ADMIN')")).rejects.toThrow();
   await expect(state.db!.query('UPDATE users SET owner_id=$1 WHERE id=$2',[b,a])).rejects.toThrow(/cycles/);
   await expect(state.db!.query('UPDATE users SET owner_id=$1 WHERE id=$2',[client,b])).rejects.toThrow(/owner/);
-  await request(app).post('/api/v1/admins').set(auth(a,'ADMIN')).send({ownerId:other,username:'outside',password:'test-password',name:'Outside',email:'outside@test.local',coins:0,active:true}).expect(403);
+  const created=await request(app).post('/api/v1/admins').set(auth(a,'ADMIN')).send({ownerId:other,username:'outside',password:'test-password',name:'Outside',email:'outside@test.local',coins:0,active:true}).expect(201);
+  expect(created.body.data.owner_id).toBe(a);
   await request(app).post('/api/v1/clients').set(auth(a,'ADMIN')).send({ownerId:other,username:'outside',password:'test-password',email:'outside@test.local',inactiveTimeoutSeconds:3600}).expect(403);
 });
 it('lets the super-admin read, edit, and deactivate deeply nested records',async()=>{
@@ -128,4 +130,44 @@ it('updates vehicle details and transfers the current GPS device with its vehicl
  await request(app).get(`/api/v1/vehicles/${vehicle}`).set(auth(otherClient,'CLIENT')).expect(200);
  expect((await state.db!.query('SELECT device_id FROM vehicle_device_assignments WHERE vehicle_id=$1 AND unassigned_at IS NULL',[vehicle])).rows).toEqual([{device_id:device}]);
  expect((await state.db!.query('SELECT count(*)::int AS count FROM locations WHERE vehicle_id=$1',[vehicle])).rows[0]).toEqual({count:2});
+});
+it('confirms the super-admin password, encrypts credentials, audits access, and excludes admins',async()=>{
+  const response=await request(app).post('/api/v1/admins').set(auth()).send({ownerId:root,username:'recoverable.admin',password:'created-password',name:'Recovery Admin',email:'recovery@test.local',coins:0,active:true}).expect(201);
+  const id=response.body.data.id;
+  expect(JSON.stringify(response.body)).not.toContain('created-password');
+  const stored=(await state.db!.query<{password_recovery_ciphertext:string}>('SELECT password_recovery_ciphertext FROM users WHERE id=$1',[id])).rows[0].password_recovery_ciphertext;
+  expect(stored).toBeTruthy();expect(stored).not.toContain('created-password');
+  const path=`/api/v1/users/${id}/password-recovery`;
+  await request(app).post(path).set(auth(a,'ADMIN')).send({superAdminPassword:'test-password'}).expect(403);
+  await request(app).post(path).set(auth()).send({superAdminPassword:'wrong-password'}).expect(403);
+  const revealed=await request(app).post(path).set(auth()).send({superAdminPassword:'test-password'}).expect(200);
+  expect(revealed.body.data.password).toBe('created-password');expect(revealed.headers['cache-control']).toBe('no-store');
+  await request(app).patch(`/api/v1/admins/${id}`).set(auth()).send({name:'Changed name'}).expect(200);
+  expect((await request(app).post(path).set(auth()).send({superAdminPassword:'test-password'}).expect(200)).body.data.password).toBe('created-password');
+  await request(app).patch(`/api/v1/admins/${id}`).set(auth()).send({password:'replacement-password'}).expect(200);
+  expect((await request(app).post(path).set(auth()).send({superAdminPassword:'test-password'}).expect(200)).body.data.password).toBe('replacement-password');
+  const legacyPath=`/api/v1/users/${client}/password-recovery`;
+  expect((await request(app).post(legacyPath).set(auth()).send({superAdminPassword:'test-password'}).expect(200)).body.data.password).toBeNull();
+  const reset=(await request(app).post(legacyPath).set(auth()).send({superAdminPassword:'test-password',action:'RESET'}).expect(200)).body.data.password;
+  await request(app).post('/api/v1/auth/login').send({email:'client-b@test.local',password:reset}).expect(200);
+  expect((await request(app).post(legacyPath).set(auth()).send({superAdminPassword:'test-password'}).expect(200)).body.data.password).toBe(reset);
+  await request(app).post(`/api/v1/users/${root}/password-recovery`).set(auth()).send({superAdminPassword:'test-password'}).expect(404);
+  expect((await state.db!.query<{action:string}>('SELECT action FROM password_access_audit WHERE target_id=$1',[client])).rows.map(row=>row.action)).toContain('RESET');
+});
+it('includes admin-owned vehicles in both inventories and supports editing them without provisioning a GPS',async()=>{
+ const legacy=randomUUID();await state.db!.query("INSERT INTO vehicles(id,vehicle_number,owner_id) VALUES($1,'LEGACY-ADMIN',$2)",[legacy,a]);
+ const dashboard=await request(app).get('/api/v1/dashboard/vehicles').set(auth()).expect(200);
+ const inventory=await request(app).get('/api/v1/fleet-vehicles').set(auth()).expect(200);
+ expect(inventory.body.data.map((row:{id:string})=>row.id).sort()).toEqual(dashboard.body.data.map((row:{id:string})=>row.id).sort());
+ expect(inventory.body.counts).toEqual(dashboard.body.counts);
+ expect(inventory.body.data.find((row:{id:string})=>row.id===legacy)).toMatchObject({admin_id:a,client_name:null});
+ await request(app).put(`/api/v1/fleet-vehicles/${legacy}`).set(auth()).send({...payload(),adminId:a,clientId:a,deviceImei:'',deviceProtocol:'',simOperator:'',vehicleNumber:'LEGACY-EDITED',mileage:null,overspeedLimit:null}).expect(200);
+ expect((await state.db!.query('SELECT vehicle_number,owner_id FROM vehicles WHERE id=$1',[legacy])).rows[0]).toEqual({vehicle_number:'LEGACY-EDITED',owner_id:a});
+ await request(app).get(`/api/v1/fleet-vehicles/${legacy}`).set(auth(other,'ADMIN')).expect(404);
+});
+it('shows ordinary admins only their direct child admins and keeps super-admin visibility complete',async()=>{
+ const visible=await request(app).get('/api/v1/admins').set(auth(a,'ADMIN')).expect(200);
+ expect(visible.body.data.map((row:{id:string})=>row.id)).toEqual([b]);
+ await request(app).get(`/api/v1/admins/${other}`).set(auth(a,'ADMIN')).expect(404);
+ expect((await request(app).get('/api/v1/admins').set(auth()).expect(200)).body.data).toHaveLength(3);
 });

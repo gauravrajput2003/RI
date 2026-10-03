@@ -13,6 +13,7 @@ const schema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),
   PORT: z.coerce.number().int().positive().optional(),
   DATABASE_URL: z.string().url(),
+  ACCOUNT_PASSWORD_ENCRYPTION_KEY: z.preprocess(value=>value===''?undefined:value,z.string().regex(/^[0-9a-fA-F]{64}$/).optional()),
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   INTERNAL_TRACKER_SECRET: z.string().min(32),

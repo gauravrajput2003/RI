@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome6, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { config } from '../../constants/config';
@@ -17,9 +17,9 @@ export function FleetHeader({ title, onSearch }: { title: string; onSearch?(): v
   return <><View style={styles.header}>
     <Pressable accessibilityRole="button" accessibilityLabel="Open navigation menu" hitSlop={8} onPress={() => setMenu(true)}><Feather name="menu" size={28} color="#111" /></Pressable>
     <View style={styles.heading}><Text style={styles.title}>{title}</Text>{config.demoMode ? <Text style={styles.demo}>DEMO</Text> : null}</View>
-    {onSearch ? <Pressable accessibilityRole="button" accessibilityLabel="Search vehicles" onPress={onSearch} style={styles.action}><Feather name="search" size={21} /></Pressable> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Announcements" style={styles.action} onPress={openAnnouncements}><Feather name="volume-2" size={20} />{announcements.data?.length?<View style={styles.badge}><Text style={styles.badgeText}>{announcements.data.length}</Text></View>:null}</Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel="Support" style={styles.action} onPress={() => setMessage('Support contact details have not been configured.')}><Feather name="headphones" size={21} /></Pressable>
+    {onSearch ? <Pressable accessibilityRole="button" accessibilityLabel="Search vehicles" onPress={onSearch} style={styles.action}><FontAwesome6 name="magnifying-glass" size={17} color="#111" /></Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel="Announcements" style={styles.action} onPress={openAnnouncements}><MaterialCommunityIcons name="bullhorn-outline" size={21} color="#111" />{announcements.data?.length?<View style={styles.badge}><Text style={styles.badgeText}>{announcements.data.length}</Text></View>:null}</Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Support" style={styles.action} onPress={() => setMessage('Support contact details have not been configured.')}><FontAwesome6 name="headset" size={18} color="#111" /></Pressable>
   </View>
   <Sheet visible={menu} onClose={() => setMenu(false)} title="Menu">
     {(['Home', 'Report', 'Profile'] as const).map(label => <Pressable key={label} accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenu(false); router.push(label === 'Home' ? '/(app)' : label === 'Report' ? '/(app)/reports' : '/(app)/profile'); }}><Text style={{ fontSize: 17 }}>{label}</Text></Pressable>)}

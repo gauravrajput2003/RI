@@ -15,20 +15,20 @@ const fleetCte=`${userScopeCte}, fleet AS (
     CASE WHEN last_stop.position IS NULL OR latest.position IS NULL THEN NULL ELSE ST_Distance(last_stop.position,latest.position)/1000.0 END AS distance_from_last_stop_km,
     NULL::double precision AS duration_at_last_stop_seconds,
     CASE
-      -- Product definitions for NEW and INACTIVE remain intentionally unassigned.
-      WHEN NOT v.active OR d.id IS NULL THEN 'UNREACHABLE'
-      WHEN d.last_seen_at IS NULL OR d.last_seen_at<now()-($2::int*interval '1 minute') THEN 'UNREACHABLE'
-      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(latest.speed,ds.current_speed,0)>v.overspeed_limit THEN 'OVERSPEED'
-      WHEN ds.state='MOVING' THEN 'RUNNING'
-      WHEN ds.state='IDLE' THEN 'IDLE'
-      WHEN ds.state='STOPPED' THEN 'STOPPED'
+      WHEN NOT v.active THEN 'INACTIVE'
+      WHEN d.id IS NULL THEN 'NEW'
+      WHEN d.last_seen_at IS NULL OR d.last_seen_at<d.current_assigned_at OR d.last_seen_at<now()-($2::int*interval '1 minute') THEN 'UNREACHABLE'
+      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(latest.speed,CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,0)>v.overspeed_limit THEN 'OVERSPEED'
+      WHEN ds.updated_at>=d.current_assigned_at AND ds.state='MOVING' THEN 'RUNNING'
+      WHEN ds.updated_at>=d.current_assigned_at AND ds.state='IDLE' THEN 'IDLE'
+      WHEN ds.updated_at>=d.current_assigned_at AND ds.state='STOPPED' THEN 'STOPPED'
       ELSE 'UNREACHABLE'
     END AS fleet_status
   FROM vehicles v
   JOIN user_scope scope ON scope.id=v.owner_id
   JOIN users owner ON owner.id=v.owner_id
   LEFT JOIN LATERAL (
-    SELECT device.* FROM vehicle_device_assignments assignment
+    SELECT device.*,assignment.assigned_at AS current_assigned_at FROM vehicle_device_assignments assignment
     JOIN devices device ON device.id=assignment.device_id
     WHERE assignment.vehicle_id=v.id AND assignment.unassigned_at IS NULL
     ORDER BY device.last_seen_at DESC NULLS LAST LIMIT 1
@@ -37,7 +37,7 @@ const fleetCte=`${userScopeCte}, fleet AS (
   LEFT JOIN LATERAL (
     SELECT l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.ignition,l.position,
       COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,NULLIF(l.metadata->>'address','') AS address
-    FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id
+    FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=d.current_assigned_at
     ORDER BY l.server_received_at DESC LIMIT 1
   ) latest ON true
   LEFT JOIN LATERAL (

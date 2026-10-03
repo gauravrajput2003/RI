@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import {sealPassword} from '../auth/password-recovery.js';
 import { query } from '../../db/pool.js';
 import { AppError } from '../../lib/errors.js';
 import { userScopeCte } from '../authorization/scope.js';
@@ -70,12 +71,12 @@ export async function createClient(actorId: string, input: ClientCreateInput) {
     const result = await query(`${userScopeCte}, allowed_owner AS (
       SELECT u.id FROM users u JOIN user_scope scope ON scope.id=u.id
       WHERE u.id=$2 AND u.active=true AND u.role='ADMIN'
-    ) INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,inactive_timeout_seconds,active)
-      SELECT id,$3,lower($4),$5,'CLIENT',$6,$7,$8,$9,$10,$11,$12 FROM allowed_owner
+    ) INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,inactive_timeout_seconds,active,password_recovery_ciphertext)
+      SELECT id,$3,lower($4),$5,'CLIENT',$6,$7,$8,$9,$10,$11,$12,$13 FROM allowed_owner
       RETURNING id,owner_id,username,email,role,name,mobile,company,website,address,inactive_timeout_seconds,active,created_at,updated_at`,
     [actorId, input.ownerId, input.username.trim(), input.email.trim(), passwordHash, input.name?.trim() || null,
       input.mobile?.trim() || null, input.company?.trim() || null, input.website?.trim() || null,
-      input.address?.trim() || null, input.inactiveTimeoutSeconds, input.active]);
+      input.address?.trim() || null, input.inactiveTimeoutSeconds, input.active,sealPassword(input.password)]);
     if (!result.rows[0]) throw new AppError(403, 'INVALID_OWNER', 'Owner is outside your authorized admin hierarchy');
     return result.rows[0];
   } catch (error) {
@@ -126,10 +127,10 @@ export async function updateClient(actorId: string, id: string, input: ClientUpd
 export async function resetClientPassword(actorId: string, id: string, password: string) {
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await query(`${userScopeCte}, updated AS (
-    UPDATE users u SET password_hash=$3,updated_at=now() FROM user_scope scope
+    UPDATE users u SET password_hash=$3,password_recovery_ciphertext=$4,updated_at=now() FROM user_scope scope
     WHERE u.id=$2 AND u.id=scope.id AND u.role='CLIENT' RETURNING u.id,u.updated_at
   ), revoked AS (UPDATE refresh_tokens SET revoked_at=now() WHERE user_id IN (SELECT id FROM updated) AND revoked_at IS NULL)
-  SELECT id,updated_at FROM updated`, [actorId, id, passwordHash]);
+  SELECT id,updated_at FROM updated`, [actorId, id, passwordHash,sealPassword(password)]);
   if (!result.rows[0]) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found');
   return result.rows[0];
 }

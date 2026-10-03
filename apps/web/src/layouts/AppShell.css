@@ -39,3 +39,5 @@
 .sidebar-collapsed .sidebar .profile .profile-card{display:block;padding:8px;border-radius:10px}
 .sidebar-collapsed .sidebar .profile .profile-heading{justify-content:center}
 .sidebar-collapsed .sidebar .profile .profile-eyebrow,.sidebar-collapsed .sidebar .profile .profile-identity,.sidebar-collapsed .sidebar .profile .profile-contact,.sidebar-collapsed .profile-upload-error{display:none}
+
+.profile-identity>strong{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;line-height:1.35}

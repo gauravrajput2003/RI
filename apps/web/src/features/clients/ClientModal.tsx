@@ -11,7 +11,7 @@ import {SearchableSelect} from '../../components/ui/SearchableSelect';
 const empty={ownerId:'',username:'',password:'',name:'',mobile:'',email:'',company:'',website:'',address:'',inactiveTimeoutSeconds:'43200',active:true};
 const timeoutOptions=[['3600','1 Hour'],['21600','6 Hours'],['43200','12 Hours'],['86400','24 Hours'],['172800','48 Hours']];
 
-export function ClientModal({open,client,onClose,readOnly=false}:{readOnly?:boolean;open:boolean;client:Client|null;onClose:()=>void}){
+export function ClientModal({open,client,onClose,readOnly=false,recoveredPassword}:{recoveredPassword?:string|null;readOnly?:boolean;open:boolean;client:Client|null;onClose:()=>void}){
   const [form,setForm]=useState(empty),[success,setSuccess]=useState('');const cache=useQueryClient();
   useEffect(()=>{if(open)setForm(client?{ownerId:client.owner_id,username:client.username||'',password:'',name:client.name||'',mobile:client.mobile||'',email:client.email,company:client.company||'',website:client.website||'',address:client.address||'',inactiveTimeoutSeconds:String(client.inactive_timeout_seconds),active:client.active}:empty)},[open,client]);
   const owners=useQuery({queryKey:['client-owner-options'],enabled:open&&!client,queryFn:async()=>(await api.get<Envelope<Owner[]>>('/client-owners')).data.data});
@@ -33,6 +33,6 @@ export function ClientModal({open,client,onClose,readOnly=false}:{readOnly?:bool
     {!client&&owners.isLoading&&<div className="form-success wide">Loading authorized admins…</div>}
     {!client&&owners.isError&&<div className="form-error wide" role="alert">Could not load authorized admins. {errorMessage(owners.error)}</div>}
     {mutation.isError&&<div className="form-error wide" role="alert">{errorMessage(mutation.error)}</div>}{success&&<div className="form-success wide"><Check/>{success}</div>}
-    </fieldset>{readOnly&&client&&<PasswordRecoveryPanel key={client.id} id={client.id} kind="client"/>}<footer className="wide"><button type="button" className="secondary-button" onClick={onClose}>Close</button>{!readOnly&&<Button disabled={mutation.isPending}>{mutation.isPending?<><LoaderCircle className="spin"/>Saving…</>:<>{client?'Save changes':'Save client'}</>}</Button>}</footer>
+    </fieldset>{readOnly&&client&&<PasswordRecoveryPanel key={client.id} id={client.id} kind="client" initialPassword={recoveredPassword}/>}<footer className="wide"><button type="button" className="secondary-button" onClick={onClose}>Close</button>{!readOnly&&<Button disabled={mutation.isPending}>{mutation.isPending?<><LoaderCircle className="spin"/>Saving…</>:<>{client?'Save changes':'Save client'}</>}</Button>}</footer>
   </form></Modal>;
 }

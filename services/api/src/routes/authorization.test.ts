@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -258,16 +258,17 @@ describe('resource authorization with both customers persisted', () => {
     await request(app).get('/api/v1/playback').query({vehicleId:va,start:'2027-01-01',end:'2026-01-01'})
       .set('Authorization',`Bearer ${token(a,'ADMIN')}`).expect(400);
   });
-  it('creates admins only beneath an authorized owner and rejects duplicates and foreign owners', async () => {
+  it('captures the authenticated creator as owner and ignores forged owner IDs', async () => {
     await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
-    const payload={ownerId:a,username:'ops.admin',password:'strong-password',name:'Operations Admin',email:'ops@test.local',coins:10,active:true};
+    const payload={username:'ops.admin',password:'strong-password',name:'Operations Admin',email:'ops@test.local',coins:10,active:true};
     const created=await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(payload).expect(201);
     expect(created.body.data).toMatchObject({owner_id:a,username:'ops.admin',role:'ADMIN',active:true});
     expect((await state.db!.query<{password_hash:string}>('SELECT password_hash FROM users WHERE id=$1',[created.body.data.id])).rows[0].password_hash).not.toBe(payload.password);
     await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,email:'other@test.local'}).expect(409);
-    await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,username:'foreign',email:'foreign@test.local',ownerId:b}).expect(403);
+    const forged=await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({...payload,username:'foreign',email:'foreign@test.local',ownerId:b}).expect(201);
+    expect(forged.body.data.owner_id).toBe(a);
     const list=await request(app).get('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
-    expect(list.body.data.map((row:{id:string})=>row.id)).toEqual([created.body.data.id]);
+    expect(list.body.data.map((row:{id:string})=>row.id)).toEqual(expect.arrayContaining([created.body.data.id,forged.body.data.id]));
     expect((await request(app).get(`/api/v1/admins/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200)).body.data.id).toBe(created.body.data.id);
     for(const method of ['get','patch','delete'] as const)await request(app)[method](`/api/v1/admins/${created.body.data.id}`).set('Authorization',`Bearer ${token(b,'ADMIN')}`).send({active:false}).expect(404);
     expect((await request(app).patch(`/api/v1/admins/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send({name:'Updated Operations',coins:12}).expect(200)).body.data).toMatchObject({name:'Updated Operations',coins:'12.00'});
@@ -280,13 +281,13 @@ describe('resource authorization with both customers persisted', () => {
     const auth=token(a,'SUPER_ADMIN');
     const parent=(await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${auth}`)
       .send({ownerId:a,username:'parent.admin',password:'old-password',name:'Parent',email:'parent@test.local',coins:0,active:true}).expect(201)).body.data;
-    const child=(await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${auth}`)
+    const child=(await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(parent.id,'ADMIN')}`)
       .send({ownerId:parent.id,username:'child.admin',password:'child-password',name:'Child',email:'child@test.local',coins:0,active:true}).expect(201)).body.data;
     await request(app).patch(`/api/v1/admins/${parent.id}`).set('Authorization',`Bearer ${auth}`)
       .send({ownerId:child.id}).expect(400);
     const updated=await request(app).patch(`/api/v1/admins/${parent.id}`).set('Authorization',`Bearer ${auth}`)
-      .send({username:'updated.admin',password:'new-password',name:'Updated Parent',mobile:'9876543210',email:'updated@test.local',company:'Fleet Co',website:'https://fleet.example',address:'Main Road',coins:4,active:true}).expect(200);
-    expect(updated.body.data).toMatchObject({username:'updated.admin',name:'Updated Parent',mobile:'9876543210',email:'updated@test.local',company:'Fleet Co',website:'https://fleet.example',address:'Main Road',coins:'4.00',active:true});
+      .send({ownerId:child.id,username:'updated.admin',password:'new-password',name:'Updated Parent',mobile:'9876543210',email:'updated@test.local',company:'Fleet Co',website:'https://fleet.example',address:'Main Road',coins:4,active:true}).expect(200);
+    expect(updated.body.data).toMatchObject({owner_id:a,username:'updated.admin',name:'Updated Parent',mobile:'9876543210',email:'updated@test.local',company:'Fleet Co',website:'https://fleet.example',address:'Main Road',coins:'4.00',active:true});
     expect(JSON.stringify(updated.body)).not.toMatch(/password_hash|new-password/);
     await request(app).post('/api/v1/auth/login').send({identifier:'updated.admin',password:'old-password'}).expect(401);
     await request(app).post('/api/v1/auth/login').send({identifier:'updated.admin',password:'new-password'}).expect(200);

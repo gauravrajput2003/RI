@@ -1,34 +1,23 @@
-import {useState} from 'react';
-import {useMutation} from '@tanstack/react-query';
-import {Copy,Check,LoaderCircle} from 'lucide-react';
+import {useEffect,useRef,useState} from 'react';
+import {Copy,Check,Eye,LoaderCircle} from 'lucide-react';
 import {api,errorMessage} from '../../services/api/client';
 import {claims} from '../../lib/auth';
+import type {Envelope} from '../../types';
 
-function generatePassword(){
-  const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-  return Array.from(crypto.getRandomValues(new Uint8Array(20)),value=>alphabet[value&63]).join('');
-}
-
-export function PasswordRecoveryPanel({id,kind}:{id:string;kind:'admin'|'client'}){
-  const [password,setPassword]=useState(''),[copied,setCopied]=useState(false),[copyError,setCopyError]=useState('');
-  const reset=useMutation({gcTime:0,mutationFn:async()=>{
-    setPassword('');setCopied(false);setCopyError('');
-    const next=generatePassword();
-    if(kind==='admin')await api.patch(`/admins/${id}`,{password:next});
-    else await api.post(`/clients/${id}/reset-password`,{password:next,confirmPassword:next});
-    setPassword(next);
-  }});
-  async function copy(){
-    try{await navigator.clipboard.writeText(password);setCopied(true);setCopyError('')}
-    catch{setCopied(false);setCopyError('Could not access the clipboard. Select the password and copy it manually.')}
-  }
-  if(claims()?.role!=='SUPER_ADMIN')return null;
-  return <section className="wide password-recovery" aria-label="Password recovery">
-    <p>{password?'New password saved. Copy it for the account owner before closing this preview.':'Forgotten password? Generate a new password for this account. This replaces its current password.'}</p>
-    <button type="button" className="secondary-button" disabled={reset.isPending} onClick={()=>reset.mutate()}>{reset.isPending?<><LoaderCircle className="spin"/>Resetting password…</>:'Generate and reset password'}</button>
-    {password&&<div className="password-recovery-result"><label>New password<input type="text" autoComplete="off" readOnly value={password}/></label><button type="button" className="secondary-button" onClick={()=>void copy()} aria-label="Copy password">{copied?<Check/>:<Copy/>}{copied?'Copied':'Copy password'}</button></div>}
-    {copied&&<span role="status">Password copied.</span>}
-    {reset.isError&&<div className="form-error" role="alert">{errorMessage(reset.error)}</div>}
-    {copyError&&<div className="form-error" role="alert">{copyError}</div>}
-  </section>;
+export function PasswordRecoveryPanel({id,kind,initialPassword,onVerified}:{id:string;kind:'admin'|'client';initialPassword?:string|null;onVerified?:(password:string|null)=>void}){
+ const active=useRef(true);useEffect(()=>{active.current=true;return()=>{active.current=false}},[]);
+ const [password,setPassword]=useState<string|null|undefined>(initialPassword),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
+ async function request(action:'REVEAL'|'RESET'){
+  setBusy(true);setError('');setCopied(false);
+  try{const {data}=await api.post<Envelope<{password:string|null}>>(`/users/${id}/password-recovery`,{superAdminPassword:confirmation,action});if(!active.current)return;setPassword(data.data.password);setConfirmation('');onVerified?.(data.data.password)}
+  catch(cause){if(active.current){setPassword(undefined);setError(errorMessage(cause))}}finally{if(active.current)setBusy(false)}
+ }
+ async function copy(){try{await navigator.clipboard.writeText(password!);setCopied(true);setError('')}catch{setError('Could not access the clipboard. Select the password and copy it manually.')}}
+ if(claims()?.role!=='SUPER_ADMIN')return null;
+ return <section className="wide password-recovery" aria-label="Password recovery">
+  {password&&<div className="password-recovery-result"><label>Account password<input type="text" autoComplete="off" readOnly value={password}/></label><button type="button" className="secondary-button" onClick={()=>void copy()} aria-label="Copy password">{copied?<Check/>:<Copy/>}{copied?'Copied':'Copy password'}</button></div>}
+  {password===null&&<p>This older account has no recoverable password yet. It will be available after its next login, or you can generate a replacement below.</p>}
+  {!password&&<><p>Confirm your super-admin password to {password===null?'reset':'preview'} this {kind} account’s password.</p><label>Super-admin password<input type="password" autoComplete="off" value={confirmation} onChange={e=>setConfirmation(e.target.value)}/></label><div className="password-recovery-actions"><button type="button" className="secondary-button" disabled={busy||!confirmation} onClick={()=>void request('REVEAL')}>{busy?<LoaderCircle className="spin"/>:<Eye/>}Verify and preview</button>{password===null&&<button type="button" className="secondary-button" disabled={busy||!confirmation} onClick={()=>void request('RESET')}>Generate and reset password</button>}</div></>}
+  {copied&&<span role="status">Password copied.</span>}{error&&<div className="form-error" role="alert">{error}</div>}
+ </section>;
 }

@@ -67,7 +67,7 @@ export function VehiclePage(){
   {key:'edit',label:'Edit',render:row=><button type="button" className="table-action" onClick={event=>{event.stopPropagation();setSelected(row.id);setReadOnly(false);setModal(true)}} aria-label={`Edit ${row.vehicle_number}`}><PenLine/>Edit</button>},
   ...clientColumns.slice(2,4),
   ...(role==='SUPER_ADMIN'?[{key:'admin',label:'Admin',sortValue:(row:ManagedVehicle)=>row.admin_name||row.admin_username||row.admin_email,render:(row:ManagedVehicle)=>row.admin_name||row.admin_username||row.admin_email||'Unavailable'}]:[]),
-  {key:'client',label:'Client',sortValue:row=>row.client_name||row.client_username||row.client_email,render:row=>row.client_name||row.client_username||row.client_email||'Unavailable'},
+  {key:'client',label:'Client',sortValue:row=>row.client_name||row.client_username||row.client_email,render:row=>row.client_name||row.client_username||row.client_email||(row.owner_id===row.admin_id?'Assigned directly to admin':'Unassigned')},
   {key:'imei',label:'IMEI',sortValue:row=>row.imei,render:row=>row.imei||'Unavailable'},
   {key:'device',label:'Device Type',sortValue:row=>row.device_model||row.protocol,render:row=>row.device_model||row.protocol||'Unavailable'},
   {key:'sim',label:'SIM',sortValue:row=>row.sim_number,render:row=>row.sim_number||'Unavailable'},
