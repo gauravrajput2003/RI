@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -61,6 +61,7 @@ beforeAll(async () => {
 afterAll(async () => { await state.db?.close(); });
 beforeEach(async () => {
   await state.db!.exec('TRUNCATE users,devices CASCADE');
+  await state.db!.exec('INSERT INTO issuance_settings DEFAULT VALUES');
   const q = (sql: string, values?: unknown[]) => state.db!.query(sql, values);
   for (const [user, vehicle, device, group, subscription, event, location, label] of [
     [a, va, da, ga, sa, ea, la, 'A'], [b, vb, db, gb, sb, eb, lb, 'B'],

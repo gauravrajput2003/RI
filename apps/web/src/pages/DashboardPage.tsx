@@ -62,6 +62,7 @@ export function withDashboardPreviewTelemetry(vehicles:FleetVehicle[]):FleetVehi
 export function DashboardPage(){
  const compact=useCompactLayout();
  const role=claims()?.role;
+ const issuance=useQuery({queryKey:['monthly-issuance'],enabled:role==='SUPER_ADMIN',queryFn:async()=>(await api.get<Envelope<{monthly_target:string;issued:string;enforce_hard_cap:boolean}>>('/issuance-settings')).data.data,refetchInterval:30000});
  const manager=role==='ADMIN'||role==='SUPER_ADMIN';
  const [status,setStatus]=useState<FleetStatus>('ALL');
  const [search,setSearch]=useState('');
@@ -106,6 +107,7 @@ export function DashboardPage(){
  const columns=(manager?[...operationalColumns.slice(0,3),'client' as ColumnKey,...operationalColumns.slice(3)]:operationalColumns).map(key=>allColumns[key]);
 
  return <section className={`page dashboard-page dashboard-mode-${effectiveMode} ${chosen?'has-selected':''}`}>
+ {role==='SUPER_ADMIN'&&issuance.data&&<div className="dashboard-issuance" role="status">Monthly issuance: <strong>{Number(issuance.data.issued).toLocaleString()} / {Number(issuance.data.monthly_target).toLocaleString()} coins</strong><span>{issuance.data.enforce_hard_cap?'Monthly cap enabled':'Reporting target'}</span></div>}
   <div className="status-grid">{filters.map(([key,label,Icon])=><FilterPill key={key} status={key} label={label} count={query.data?.counts?.[key]} icon={Icon} active={status===key} onClick={()=>setStatus(key)}/>)}</div>
   {compact&&<div className="dashboard-panel-switch" role="group" aria-label="Fleet view"><button type="button" aria-pressed={effectiveMode==='table'} onClick={()=>setPanelMode('table')}>Vehicle list</button><button type="button" aria-pressed={effectiveMode==='map'} onClick={()=>setPanelMode('map')}>Map</button></div>}
   <div ref={workspaceRef} className={`dashboard-workspace mode-${effectiveMode}`} style={effectiveMode==='split'?{gridTemplateColumns:`minmax(0,${splitPercent}fr) 8px minmax(0,${100-splitPercent}fr)`}:undefined}>

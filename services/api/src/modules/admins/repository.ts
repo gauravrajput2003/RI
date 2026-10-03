@@ -1,3 +1,4 @@
+import {lockCoinLedger,moveCoins,spendableSql} from '../coins/management.js';
 import bcrypt from 'bcrypt';
 import {sealPassword} from '../auth/password-recovery.js';
 import { query,transaction } from '../../db/pool.js';
@@ -27,7 +28,7 @@ export type AdminUpdate=Partial<AdminInput>;
 
 export async function listAdmins(actorId:string,search:string,page:number,pageSize:number){
   const result=await query(`${adminScopeCte}
-    SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.owner_id,
+    SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,${spendableSql('u')} AS coins,u.active,u.can_view_packet_health,u.owner_id,
       owner.name AS owner_name,owner.email AS owner_email,u.created_at,u.updated_at,
       count(DISTINCT v.id)::int AS vehicle_count,count(DISTINCT assignment.device_id)::int AS device_count,
       count(*) OVER()::int AS total_count
@@ -52,14 +53,14 @@ export async function createAdmin(actorId:string,input:AdminInput){
   const passwordHash=await bcrypt.hash(input.password,12);
   try{
     return await transaction(async client=>{
+      await lockCoinLedger(client);
       const result=await client.query(`${eligibleAdminOwnerCte} INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,coins,active,password_recovery_ciphertext)
         SELECT id,$3,lower($4),$5,'ADMIN',$6,$7,$8,$9,$10,$11,$12,$13 FROM eligible_owner
         WHERE id=$2
         RETURNING id,owner_id,username,email,role,name,mobile,company,website,address,coins,active,created_at,updated_at`,
-        [actorId,actorId,input.username.trim(),input.email.trim(),passwordHash,input.name.trim(),input.mobile||null,input.company||null,input.website||null,input.address||null,input.coins,input.active,sealPassword(input.password)]);
+        [actorId,actorId,input.username.trim(),input.email.trim(),passwordHash,input.name.trim(),input.mobile||null,input.company||null,input.website||null,input.address||null,0,input.active,sealPassword(input.password)]);
       if(!result.rows[0])throw new AppError(403,'INVALID_OWNER','Owner is outside your authorized hierarchy');
-      if(input.coins>0)await client.query(`INSERT INTO coin_transactions(distributor_id,counterparty_id,created_by,amount,transaction_type)
-        VALUES($1,$2,$3,$4,'DISTRIBUTED')`,[actorId,result.rows[0].id,actorId,input.coins]);
+      if(input.coins>0){await moveCoins(client,actorId,result.rows[0].id,input.coins);result.rows[0].coins=input.coins.toFixed(2)}
       return result.rows[0];
     });
   }catch(error){
@@ -74,7 +75,7 @@ export const setAdminActive=(actorId:string,id:string,active:boolean)=>query(`${
   RETURNING u.id,u.active,u.updated_at`,[actorId,id,active]);
 
 export const findAdmin=(actorId:string,id:string)=>query(`${adminScopeCte}
-  SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.owner_id,
+  SELECT u.id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,${spendableSql('u')} AS coins,u.active,u.can_view_packet_health,u.owner_id,
     owner.name AS owner_name,owner.email AS owner_email,u.created_at,u.updated_at
   FROM users u JOIN admin_scope scope ON scope.id=u.id LEFT JOIN users owner ON owner.id=u.owner_id
   WHERE u.id=$2`,[actorId,id]);
@@ -82,7 +83,8 @@ export const findAdmin=(actorId:string,id:string)=>query(`${adminScopeCte}
 export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
   try{
     return await transaction(async client=>{
-      const current=await client.query<{coins:string;owner_id:string}>(`${adminScopeCte} SELECT u.coins,u.owner_id FROM users u JOIN admin_scope scope ON scope.id=u.id WHERE u.id=$2 FOR UPDATE OF u`,[actorId,id]);
+      await lockCoinLedger(client);
+      const current=await client.query<{coins:string;owner_id:string}>(`${adminScopeCte} SELECT ${spendableSql('u')} AS coins,u.owner_id FROM users u JOIN admin_scope scope ON scope.id=u.id WHERE u.id=$2 FOR UPDATE OF u`,[actorId,id]);
       if(!current.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
       const values:unknown[]=[actorId,id],assignments:string[]=[];
       const add=(column:string,value:unknown)=>{values.push(value);assignments.push(`${column}=$${values.length}`)};
@@ -93,16 +95,16 @@ export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
       if(input.company!==undefined)add('company',input.company||null);
       if(input.website!==undefined)add('website',input.website||null);
       if(input.address!==undefined)add('address',input.address||null);
-      if(input.coins!==undefined)add('coins',input.coins);
+
       if(input.canViewPacketHealth!==undefined){const actor=await client.query('SELECT role FROM users WHERE id=$1',[actorId]);if(actor.rows[0]?.role!=='SUPER_ADMIN')throw new AppError(403,'FORBIDDEN','Only the super-admin can change packet-health access');add('can_view_packet_health',input.canViewPacketHealth)}
       if(input.active!==undefined)add('active',input.active);
       if(input.password!==undefined){add('password_hash',await bcrypt.hash(input.password,12));add('password_recovery_ciphertext',sealPassword(input.password))}
+      if(!assignments.length&&input.coins!==undefined)add('coins',input.coins);
       if(!assignments.length)throw new AppError(400,'EMPTY_UPDATE','At least one admin field is required');
-      const result=await client.query(`${adminScopeCte} UPDATE users u SET ${assignments.join(',')},updated_at=now() FROM admin_scope scope WHERE u.id=$2 AND u.id=scope.id RETURNING u.id,u.owner_id,u.username,u.email,u.role,u.name,u.mobile,u.company,u.website,u.address,u.coins,u.active,u.can_view_packet_health,u.created_at,u.updated_at`,values);
+      const result=await client.query(`${adminScopeCte} UPDATE users u SET ${assignments.join(',')},updated_at=now() FROM admin_scope scope WHERE u.id=$2 AND u.id=scope.id RETURNING u.id,u.owner_id,u.username,u.email,u.role,u.name,u.mobile,u.company,u.website,u.address,${spendableSql('u')} AS coins,u.active,u.can_view_packet_health,u.created_at,u.updated_at`,values);
       if(!result.rows[0])throw new AppError(404,'ADMIN_NOT_FOUND','Admin not found');
       if(input.password!==undefined)await client.query('UPDATE refresh_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[id]);
-      if(input.coins!==undefined){const delta=input.coins-Number(current.rows[0].coins);if(delta!==0)await client.query(`INSERT INTO coin_transactions(distributor_id,counterparty_id,created_by,amount,transaction_type)
-        VALUES($1,$2,$3,$4,$5)`,[result.rows[0].owner_id,id,actorId,Math.abs(delta),delta>0?'DISTRIBUTED':'RECLAIMED'])}
+      if(input.coins!==undefined){const delta=Math.round((input.coins-Number(current.rows[0].coins))*100)/100;if(delta!==0)await moveCoins(client,actorId,id,Math.abs(delta),delta>0?'DISTRIBUTED':'RECLAIMED');result.rows[0].coins=input.coins.toFixed(2)}
       return result.rows[0];
     });
   }catch(error){if(error&&typeof error==='object'&&'code'in error&&(error as {code:string}).code==='23505')throw new AppError(409,'ADMIN_EXISTS','Username or email already exists');throw error}

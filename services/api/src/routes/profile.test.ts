@@ -19,7 +19,8 @@ beforeAll(async()=>{
  process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';
  process.env.JWT_SECRET=secret;process.env.JWT_REFRESH_SECRET=secret+'-refresh';process.env.INTERNAL_TRACKER_SECRET=secret+'-internal';
  state.db=new PGlite();
- await state.db.exec('CREATE TABLE users(id uuid PRIMARY KEY,email text,name text,username text,mobile text,coins numeric,active boolean,updated_at timestamptz DEFAULT now())');
+ await state.db.exec("CREATE TABLE users(id uuid PRIMARY KEY,email text,name text,username text,mobile text,coins numeric,role text DEFAULT 'SUPER_ADMIN',active boolean,updated_at timestamptz DEFAULT now())");
+ await state.db.exec('CREATE TABLE coin_batches(owner_id uuid,remaining numeric,expires_at timestamptz)');
  await state.db.exec(await readFile(new URL('../../../../database/migrations/011_user_avatars.sql',import.meta.url),'utf8'));
  await state.db.exec(await readFile(new URL('../../../../database/migrations/014_packet_health_permission.sql',import.meta.url),'utf8'));
  const {api}=await import('./api.js');const {errorHandler}=await import('../lib/errors.js');

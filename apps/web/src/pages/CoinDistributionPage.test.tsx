@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CoinDistributionPage} from './CoinDistributionPage';
@@ -15,7 +15,7 @@ it('renders the coin ledger and applies the admin and date filters to the backen
  const controller={open:true,setOpen:vi.fn(),toggle:vi.fn(),close:mocks.close};
  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PageFilterContext.Provider value={controller}><CoinDistributionPage/></PageFilterContext.Provider></QueryClientProvider>);
  expect(await screen.findByText('root')).toBeVisible();
- expect(screen.getAllByRole('columnheader').map(cell=>cell.textContent?.replace('↕',''))).toEqual(['SN','Username','Counter Party','Amount','Type','Transaction Time']);
+ expect(within(screen.getAllByRole('table').at(-1)!).getAllByRole('columnheader').map(cell=>cell.textContent?.replace('↕',''))).toEqual(['SN','Username','Counter Party','Amount','Type','Transaction Time']);
  expect(screen.getByText('Distributed')).toBeVisible();
  expect(screen.getByRole('button',{name:'PDF'})).toBeEnabled();expect(screen.getByRole('button',{name:'Excel'})).toBeEnabled();
  fireEvent.click(screen.getByRole('combobox',{name:'Admin'}));fireEvent.click(await screen.findByRole('option',{name:'regional'}));
@@ -31,6 +31,6 @@ it('keeps the report columns visible when there are no transactions',async()=>{
  const controller={open:true,setOpen:vi.fn(),toggle:vi.fn(),close:mocks.close};
  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PageFilterContext.Provider value={controller}><CoinDistributionPage/></PageFilterContext.Provider></QueryClientProvider>);
  expect(await screen.findByText('No data available in table')).toBeVisible();
- expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+ expect(within(screen.getAllByRole('table').at(-1)!).getAllByRole('columnheader')).toHaveLength(6);
  expect(screen.getByText('Showing 0 to 0 of 0 entries')).toBeVisible();
 });

@@ -18,7 +18,7 @@ beforeAll(async()=>{
   process.env.ACCOUNT_PASSWORD_ENCRYPTION_KEY='a'.repeat(64);
   process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';process.env.JWT_SECRET=secret;process.env.JWT_REFRESH_SECRET=secret+'-refresh';process.env.INTERNAL_TRACKER_SECRET=secret+'-internal';process.env.EXPECTED_PACKET_INTERVAL_SECONDS='10';process.env.NO_SIGNAL_TIMEOUT_MINUTES='30';
   state.db=new PGlite();
-  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql']){
+  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql']){
     let sql=await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g,'').replace(/geography\(Point, 4326\)/g,'point').replace(/CREATE INDEX locations_position_gist[^;]+;/g,'');await state.db.exec(sql);
   }
   await state.db.exec(`CREATE DOMAIN geometry AS point; CREATE FUNCTION ST_Distance(geometry,geometry) RETURNS double precision LANGUAGE SQL AS 'SELECT 0::double precision';`);
@@ -28,6 +28,7 @@ beforeAll(async()=>{
 afterAll(async()=>state.db?.close());
 beforeEach(async()=>{
   await state.db!.exec('TRUNCATE users,devices CASCADE');
+  await state.db!.exec('INSERT INTO issuance_settings DEFAULT VALUES');
   for(const [id,role,owner,email] of [[root,'SUPER_ADMIN',null,'root'],[a,'ADMIN',root,'admin-a'],[b,'ADMIN',a,'admin-b'],[client,'CLIENT',b,'client-b'],[other,'ADMIN',root,'other-admin'],[otherClient,'CLIENT',other,'other-client']])await state.db!.query('INSERT INTO users(id,role,owner_id,email,password_hash,name) VALUES($1,$2,$3,$4,$5,$4)',[id,role,owner,`${email}@test.local`,passwordHash]);
   await state.db!.query("INSERT INTO vehicles(id,vehicle_number,owner_id) VALUES($1,'DEEP-01',$2),($3,'SIBLING-02',$4)",[vehicle,client,otherVehicle,otherClient]);
   await state.db!.query("INSERT INTO devices(id,imei,protocol,identity_value,owner_id,sim_number,last_seen_at) VALUES($1,'GPS-12345','GT06','GPS-12345',$2,'9876543210',now()-interval '5 seconds'),($3,'GPS-99999','GT06','GPS-99999',$4,'9998887776',now()-interval '1 hour')",[device,client,otherDevice,otherClient]);
@@ -170,4 +171,53 @@ it('shows ordinary admins only their direct child admins and keeps super-admin v
  expect(visible.body.data.map((row:{id:string})=>row.id)).toEqual([b]);
  await request(app).get(`/api/v1/admins/${other}`).set(auth(a,'ADMIN')).expect(404);
  expect((await request(app).get('/api/v1/admins').set(auth()).expect(200)).body.data).toHaveLength(3);
+});
+
+const saleBody=(counterpartyId:string,coinsGranted=10)=>({counterpartyId,coinsGranted,amountInr:100,paymentReference:'UPI-TEST',note:'Cash collected externally'});
+it('records root sales atomically without a depletable root balance',async()=>{
+ for(let i=0;i<3;i++)await request(app).post('/api/v1/coin-sales').set(auth()).send(saleBody(a)).expect(201);
+ expect((await state.db!.query<Record<string, unknown>>('SELECT coins FROM users WHERE id=$1',[a])).rows[0].coins).toBe('30.00');
+ for(const table of ['coin_sales','coin_transactions','coin_batches'])expect(Number((await state.db!.query<Record<string, unknown>>(`SELECT count(*) count FROM ${table}`)).rows[0].count)).toBe(3);
+ expect((await state.db!.query<Record<string, unknown>>('SELECT coins FROM users WHERE id=$1',[root])).rows[0].coins).toBe('0.00');
+ const batch=(await state.db!.query<Record<string, unknown>>("SELECT expires_at=granted_at+interval '1 year' valid FROM coin_batches LIMIT 1")).rows[0];expect(batch.valid).toBe(true);
+});
+it('spends live admin batches FIFO and excludes expired coins',async()=>{
+ await state.db!.query<Record<string, unknown>>(`INSERT INTO coin_batches(owner_id,amount,remaining,granted_at,expires_at) VALUES($1,8,8,now()-interval '2 months',now()+interval '10 months'),($1,10,10,now()-interval '1 month',now()+interval '11 months'),($1,100,100,now()-interval '2 years',now()-interval '1 year')`,[b]);
+ await request(app).post('/api/v1/coin-sales').set(auth(b,'ADMIN')).send(saleBody(client,12)).expect(201);
+ expect((await state.db!.query<Record<string, unknown>>('SELECT remaining FROM coin_batches WHERE owner_id=$1 ORDER BY granted_at',[b])).rows.map(row=>row.remaining)).toEqual(['100.00','0.00','6.00']);
+ const rejected=await request(app).post('/api/v1/coin-sales').set(auth(b,'ADMIN')).send(saleBody(client,7)).expect(409);expect(rejected.body.error.code).toBe('INSUFFICIENT_COINS');
+ expect(Number((await state.db!.query<Record<string, unknown>>('SELECT count(*) count FROM coin_sales')).rows[0].count)).toBe(1);
+ const flow=await request(app).get('/api/v1/coin-flow').set(auth()).query({start:new Date(Date.now()-86400000).toISOString(),end:new Date(Date.now()+86400000).toISOString()}).expect(200);
+ expect(flow.body.data.accounts).toContainEqual(expect.objectContaining({id:b,balance:'6.00'}));expect(flow.body.data.accounts).toContainEqual(expect.objectContaining({id:client,balance:'12.00'}));
+ expect(flow.body.data.sales[0]).toMatchObject({distributor_id:b,counterparty_id:client});expect(flow.body.data.revenue).toBe('100.00');
+});
+it('rejects foreign and self counterparties without any ledger writes',async()=>{
+ for(const id of [otherClient,b])await request(app).post('/api/v1/coin-sales').set(auth(b,'ADMIN')).send(saleBody(id)).expect(403);
+ await request(app).post('/api/v1/coin-sales').set(auth(client,'CLIENT')).send(saleBody(b)).expect(403);
+ expect(Number((await state.db!.query<Record<string, unknown>>('SELECT count(*) count FROM coin_transactions')).rows[0].count)).toBe(0);
+});
+it('enforces the optional monthly cap on grants, sales, and admin initial coins',async()=>{
+ await request(app).patch('/api/v1/issuance-settings').set(auth()).send({monthlyTarget:15,enforceHardCap:true}).expect(200);
+ await request(app).post('/api/v1/coin-grants').set(auth()).send({counterpartyId:a,amount:10}).expect(201);
+ const failed=await request(app).post('/api/v1/coin-sales').set(auth()).send(saleBody(a,6)).expect(409);expect(JSON.stringify(failed.body)).toContain('15.00');
+ await request(app).post('/api/v1/admins').set(auth()).send({username:'cap.admin',password:'test-password',name:'Cap Admin',email:'cap@test.local',coins:6,active:true}).expect(409);
+ expect((await state.db!.query<Record<string, unknown>>("SELECT id FROM users WHERE username='cap.admin'")).rows).toHaveLength(0);
+ await request(app).patch('/api/v1/admins/'+a).set(auth()).send({coins:16}).expect(409);
+ await request(app).patch('/api/v1/issuance-settings').set(auth(b,'ADMIN')).send({monthlyTarget:20,enforceHardCap:false}).expect(403);
+ await request(app).patch('/api/v1/issuance-settings').set(auth()).send({monthlyTarget:0,enforceHardCap:false}).expect(200);
+ await request(app).post('/api/v1/coin-grants').set(auth()).send({counterpartyId:a,amount:100}).expect(201);
+});
+it('restricts admin sales to their own collections and retains root cross-tree audit visibility',async()=>{
+ await request(app).post('/api/v1/coin-grants').set(auth()).send({counterpartyId:b,amount:20}).expect(201);
+ await request(app).post('/api/v1/coin-sales').set(auth(b,'ADMIN')).send(saleBody(client,5)).expect(201);
+ await request(app).post('/api/v1/coin-sales').set(auth()).send(saleBody(other,5)).expect(201);
+ const params={start:new Date(Date.now()-86400000).toISOString(),end:new Date(Date.now()+86400000).toISOString()};
+ const own=await request(app).get('/api/v1/coin-flow').set(auth(b,'ADMIN')).query({...params,distributorId:root}).expect(200);expect(own.body.data.sales).toHaveLength(1);expect(own.body.data.sales[0].distributor_id).toBe(b);expect(own.body.data.issuance).toBeNull();
+ const all=await request(app).get('/api/v1/reports/coin-distribution').set(auth()).query(params).expect(200);expect(all.body.data).toContainEqual(expect.objectContaining({counterParty:'client-b@test.local',username:'admin-b@test.local',amount:'5.00'}));
+});
+it('expires client balances and rejects amounts with extra decimal places',async()=>{
+ await state.db!.query<Record<string, unknown>>("INSERT INTO coin_batches(owner_id,amount,remaining,granted_at,expires_at) VALUES($1,20,20,now()-interval '2 years',now()-interval '1 year')",[client]);
+ const params={start:new Date(Date.now()-86400000).toISOString(),end:new Date(Date.now()+86400000).toISOString()};
+ const flow=await request(app).get('/api/v1/coin-flow').set(auth()).query(params).expect(200);expect(flow.body.data.accounts).toContainEqual(expect.objectContaining({id:client,balance:'0'}));
+ await request(app).post('/api/v1/coin-sales').set(auth()).send({...saleBody(a),amountInr:1.001}).expect(400);
 });
