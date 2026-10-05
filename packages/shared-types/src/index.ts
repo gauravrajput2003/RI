@@ -14,3 +14,4 @@ export interface DeviceIdentity { identityType: string; identityValue: string; p
 export interface NormalizedDeviceStatus { deviceId:string|null; protocol:DeviceProtocol; serverReceivedAt:Date; lastHeartbeatAt:Date|null; state:DeviceState; metadata:Record<string,unknown>; }
 
 export * from './geofences.js';
+export * from './permissions.js';

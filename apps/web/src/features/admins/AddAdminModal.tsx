@@ -7,11 +7,14 @@ import {Modal} from '../../components/ui/Modal';
 import {Button} from '../../components/ui/Button';
 import {claims} from '../../lib/auth';
 import {PasswordRecoveryPanel} from './PasswordRecoveryPanel';
+import {usePermissions} from '../../lib/permissions';
+import {PERMISSIONS} from '../../../../../packages/shared-types/src/permissions';
 
 const initial={username:'',password:'',name:'',mobile:'',email:'',company:'',website:'',address:'',coins:'0',active:true,canViewPacketHealth:false};
 type AdminForm=typeof initial;
 
 export function AddAdminModal({open,admin=null,onClose,onSaved,readOnly=false,recoveredPassword}:{recoveredPassword?:string|null;readOnly?:boolean;open:boolean;admin?:Admin|null;onClose:()=>void;onSaved?:(message:string)=>void}){
+  const {hasPermission}=usePermissions();
   const [form,setForm]=useState<AdminForm>(initial),[showPassword,setShowPassword]=useState(false);
   const cache=useQueryClient();
   useEffect(()=>{
@@ -25,8 +28,8 @@ export function AddAdminModal({open,admin=null,onClose,onSaved,readOnly=false,re
   const mutation=useMutation({
     mutationFn:async()=>{
       if(readOnly)return;
-      const {password,canViewPacketHealth,...details}=form;
-      const payload={...details,coins:Number(form.coins),...(admin&&claims()?.role==='SUPER_ADMIN'?{canViewPacketHealth}:{})};
+      const {password,canViewPacketHealth,coins,...details}=form;
+      const payload={...details,...(hasPermission(PERMISSIONS.coinDistributionAdd)?{coins:Number(coins)}:{}),...(admin&&claims()?.role==='SUPER_ADMIN'?{canViewPacketHealth}:{})};
       if(admin)await api.patch('/admins/'+admin.id,{...payload,...(password?{password}:{})});
       else await api.post('/admins',{...payload,password});
     },
@@ -49,7 +52,7 @@ export function AddAdminModal({open,admin=null,onClose,onSaved,readOnly=false,re
       <label>Company<input maxLength={160} value={form.company} onChange={e=>field('company',e.target.value)} placeholder="Company"/></label>
       <label>Website<input type="url" value={form.website} onChange={e=>field('website',e.target.value)} placeholder="https://example.com"/></label>
       <label className="wide">Address<input maxLength={500} value={form.address} onChange={e=>field('address',e.target.value)} placeholder="Business address"/></label>
-      <label>Coins<input required type="number" min="0" step="0.01" value={form.coins} onChange={e=>field('coins',e.target.value)}/></label>
+      <label>Coins<input disabled={!hasPermission(PERMISSIONS.coinDistributionAdd)} required type="number" min="0" step="0.01" value={form.coins} onChange={e=>field('coins',e.target.value)}/></label>
       <label className="checkbox"><input type="checkbox" checked={form.active} onChange={e=>field('active',e.target.checked)}/>Active</label>
       {(claims()?.role==='SUPER_ADMIN'||readOnly)&&admin&&<label className="checkbox"><input type="checkbox" checked={form.canViewPacketHealth} onChange={e=>field('canViewPacketHealth',e.target.checked)}/>Can view packet health</label>}
       </fieldset>{readOnly&&admin&&<PasswordRecoveryPanel key={admin.id} id={admin.id} kind="admin" initialPassword={recoveredPassword}/>}

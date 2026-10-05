@@ -1,0 +1,12 @@
+.client-vehicle-modal{width:min(660px,100%)}
+.admin-form.client-vehicle-content{grid-template-columns:minmax(0,1fr);gap:14px}
+.client-vehicle-content dl{display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,2fr);gap:12px 18px;margin:0}
+.client-vehicle-content dt{font-weight:700;color:#52677b}
+.client-vehicle-content dd{margin:0;overflow-wrap:anywhere}
+.client-vehicle-content label{margin-bottom:0}
+.client-vehicle-content p{margin:0;line-height:1.5}
+.client-vehicle-content textarea{width:100%;min-height:90px;padding:12px;border:1px solid #ced9e2;border-radius:7px;font:inherit;resize:vertical}
+.client-vehicle-content .client-tracker-confirm{display:flex;flex-direction:row;align-items:flex-start;padding:12px;background:#edf5fa;border:1px solid #ced9e2;border-radius:7px;line-height:1.5}
+.client-vehicle-content .client-tracker-confirm input{width:18px;height:18px;flex:0 0 18px;margin-top:2px}
+.client-vehicle-content .modal-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:0;padding-top:14px;border-top:1px solid #e0e7ec}
+@media(max-width:480px){.client-vehicle-content dl{grid-template-columns:minmax(0,1fr)}.client-vehicle-content dd{margin-bottom:8px}.client-vehicle-content .modal-actions button{flex:1}}

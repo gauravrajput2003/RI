@@ -6,6 +6,7 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {AppShell} from './AppShell';
 import {PageFilterDrawer} from '../features/shell/PageFilterDrawer';
 const mocks=vi.hoisted(()=>({role:'ADMIN',allowed:false}));
+vi.mock('../lib/permissions',()=>({usePermissions:()=>({role:mocks.role,ready:true,hasPermission:(key:string)=>key!=='packet_health.view'||mocks.role==='SUPER_ADMIN'||mocks.allowed})}));
 vi.mock('../lib/auth',()=>({claims:()=>({id:'actor',role:mocks.role}),getTokens:()=>null,setTokens:vi.fn()}));
 beforeEach(()=>{mocks.role='ADMIN';mocks.allowed=false});
 vi.mock('socket.io-client',()=>({io:()=>({on:vi.fn(),disconnect:vi.fn()})}));

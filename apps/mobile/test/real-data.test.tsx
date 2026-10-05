@@ -25,6 +25,11 @@ Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
 async function render(component:React.ReactElement){let tree!:ReactTestRenderer;await act(async()=>{tree=create(component)});const result=JSON.stringify(tree.toJSON());await act(async()=>tree.unmount());return result}
 beforeEach(()=>{boundary.demoMode=false;boundary.vehicles.data={data:[]};boundary.vehicles.isLoading=false;boundary.vehicles.isError=false;boundary.subscriptions.data=[];boundary.subscriptions.isLoading=false;boundary.subscriptions.isError=false});
 describe('real-mode user-facing data',()=>{
+  it('preserves the assigned web vehicle type when selecting mobile list artwork',()=>{
+    for(const [type,visual] of [['Scooty','scooter'],['Motor bike','bike'],['Truck','truck'],['Bus','bus'],['Car','car'],['Van','van']] as const){
+      expect(vehicleDetails([{id:'real',vehicle_number:'REAL',alias:null,odometer:null,vehicle_type:type,active:true}],false)[0].visual).toBe(visual);
+    }
+  });
   it('keeps an empty fleet empty and never mixes demo fields into real records',async()=>{
     expect(await render(<Vehicles/>)).toContain('No vehicles available');
     const real={id:'real',vehicle_number:'REAL-ONE',alias:null,odometer:null,vehicle_type:null,active:true};

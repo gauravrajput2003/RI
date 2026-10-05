@@ -1,4 +1,6 @@
 import * as resources from '../modules/resources/repository.js';
+import {permissionsApi} from './permissions.js';
+import {enforceApiPermissions} from '../middleware/permissions.js';
 import {webApi} from './web.js';
 import {reportsApi} from './reports.js';
 import {diagnosticsApi} from './diagnostics.js';
@@ -9,6 +11,8 @@ const asyncRoute=(fn:(req:AuthRequest,res:import('express').Response)=>Promise<v
 export const api: RouterType=Router();
 api.post('/auth/login',asyncRoute(async(req,res)=>{const b=z.object({identifier:z.string().trim().min(1).max(254).optional(),email:z.string().email().optional(),password:z.string().min(8)}).refine(value=>Boolean(value.identifier||value.email)).parse(req.body);res.json({success:true,data:await login(b.identifier??b.email!,b.password)})})); api.post('/auth/refresh',asyncRoute(async(req,res)=>{const b=z.object({refreshToken:z.string().min(1)}).parse(req.body);res.json({success:true,data:await refresh(b.refreshToken)})})); api.post('/auth/logout',asyncRoute(async(req,res)=>{const b=z.object({refreshToken:z.string().min(1)}).parse(req.body);await logout(b.refreshToken);res.status(204).end()}));
 api.use(authenticate);
+api.use(enforceApiPermissions);
+api.use(permissionsApi);
 api.use('/web',diagnosticsApi);
 api.use('/geofences',geofencesApi);
 api.use(alertsApi);

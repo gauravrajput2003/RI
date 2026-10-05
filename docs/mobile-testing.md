@@ -1,37 +1,24 @@
 # Testing the mobile app and web preview
 
-## Login credentials
+## Shared web and mobile accounts
 
-An explicitly requested, database-free **development demo** is now enabled in D:/RI/apps/mobile/.env with EXPO_PUBLIC_DEMO_MODE=true. Sign in with **gaurav@gmail.com / 123456**. Restart Expo with --clear and reopen the app after enabling/changing this flag.
+Mobile now uses the real backend by default. The local `apps/mobile/.env` has `EXPO_PUBLIC_DEMO_MODE=false` and points API and Socket.IO to this PC's current Wi-Fi address, `192.168.110.175:3000`. Keep the phone on the same Wi-Fi. Update both URLs if the PC's address changes; Android emulators can use `10.0.2.2`, and local browser previews can use `localhost`.
 
-The demo uses local sample vehicles and a clearly labeled simulated GPS stream. It makes no backend HTTP/Socket.IO connections, writes no demo credentials to SecureStore, and resets on reload. Dashboard, list/search, vehicle details, native map selection/follow, and logout can be explored. Browser maps show the existing native-map availability notice. Reports/notifications/other unsupported backend features are not invented. Native map tiles may still require internet; a custom Android development build still needs its Maps key.
+The web and mobile apps must point to the same API/database. An admin creates an active client on the web with a username and password, then creates/assigns vehicles to that client. Mobile accepts that username (or email) and the same password. It calls `/api/v1/auth/login` with `identifier` and `/api/v1/vehicles` using the returned token. The API scopes the inventory to the logged-in account. An empty account shows no vehicles; it does not fall back to sample data.
 
-Demo mode requires both the explicit flag and a development runtime. Production app configuration/runtime reject it. Before integrating a real backend, set EXPO_PUBLIC_DEMO_MODE=false (or remove it), configure real API/socket URLs, restart Expo, and use a real provisioned account. The server's authentication routes were not modified and will not accept these demo credentials automatically.
+The mobile dashboard refreshes the fleet every 30 seconds while active and online, when returning to the foreground, and on pull-to-refresh. Web additions and vehicle type changes therefore appear without signing in again. GPS updates use the existing authenticated Socket.IO connection.
 
-There is no seeded **real backend** account in this repository. The real login endpoint verifies an active row in the backend users table using bcrypt. QR scanning launches the frontend; it does not create an account, start the API, or start a database.
+Both apps use the PNG files in `apps/web/public/assets/vehicle-icons/vehicles` for bikes, scooters, cars, buses, and trucks. Mobile bundles these exact files through static imports, so images remain available offline. Vehicle type and tracker state choose the artwork; vans retain a generic icon until van artwork is supplied.
 
-At the time of this check, http://127.0.0.1:3000/health/live refused connections on the development PC. No database was started and no account was inserted/reset during this fix. Use an account provisioned by the operator of your existing development backend. If there is no development backend yet, that setup needs explicit approval before proceeding under the current no-database-infrastructure constraint.
+The API must be running and reachable from the phone. Browser previews also require their Expo origin in `CORS_ORIGINS`. Production requires HTTPS API and socket URLs. There are no new seeded accounts; use a client created through the web admin interface.
 
-The automated tests use fixtures, not real login credentials. Do not try the browser-fixture email/password in the running application.
-
-## Phone connectivity
-
-The default 10.0.2.2 address is only for an Android emulator, not a physical phone. For a phone on the same Wi-Fi as your development PC, put the PC's LAN address in D:/RI/apps/mobile/.env. During this check the PC's Wi-Fi address was 192.168.50.175; confirm it has not changed:
-
-```dotenv
-EXPO_PUBLIC_API_URL=http://192.168.50.175:3000/api/v1
-EXPO_PUBLIC_SOCKET_URL=http://192.168.50.175:3000
-```
-
-These addresses work only after the API is running, listening on an accessible interface, and reachable through the development PC's firewall. For browser testing on the PC, localhost can also be used. The API must allow the browser's Expo origin in CORS_ORIGINS. Release builds require real HTTPS URLs. Never put passwords, JWTs or server secrets in EXPO_PUBLIC variables.
-
-After changing environment or Tailwind configuration, stop your Expo process and restart it from D:/RI:
+Restart Expo after changing the environment:
 
 ```powershell
 .\scripts\pnpm.ps1 --filter @fleet/mobile run start --clear
 ```
 
-Reload the browser or reopen the QR link on the phone. Clearing Metro's cache is important for replacing the old media-mode CSS. The explicitly enabled local demo requires no migrations, Docker or database setup; it is separate from real backend authentication.
+Demo mode remains available as an explicit development option using `EXPO_PUBLIC_DEMO_MODE=true`; it uses isolated sample data rather than web-created clients.
 
 ## Web compatibility correction
 

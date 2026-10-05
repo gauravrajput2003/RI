@@ -18,7 +18,7 @@ export async function deviceLookup(actorId:string,search:string,page:number,page
       (owner.id IS NULL AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='SUPER_ADMIN')))
       AND ($2='%%' OR d.imei ILIKE $2 OR COALESCE(d.sim_number,'') ILIKE $2 OR COALESCE(v.vehicle_number,'') ILIKE $2)
     ORDER BY d.imei,d.id LIMIT $3 OFFSET $4`,[actorId,`%${search}%`,pageSize,(page-1)*pageSize]);
-  return {rows:result.rows.map(({total_count,...row})=>row),total:Number(result.rows[0]?.total_count??0)};
+  return {rows:result.rows.map(row=>{const copy={...row};delete copy.total_count;return copy}),total:Number(result.rows[0]?.total_count??0)};
 }
 
 export async function packetHealth(actorId:string,search:string,page:number,pageSize:number){

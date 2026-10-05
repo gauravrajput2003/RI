@@ -3,6 +3,8 @@ import {Link} from 'react-router-dom';
 import {ChevronDown,ChevronUp,Clock3,Gauge,MapPin,MoreVertical,Navigation,PauseCircle,Radio,Route,Timer,TrendingUp,X} from 'lucide-react';
 import type {FleetVehicle} from '../../types';
 import {coordinates,dateTime,speed} from '../../lib/format';
+import {PermissionAction} from '../permissions/PermissionAction';
+import {PERMISSIONS} from '../../../../../packages/shared-types/src/permissions';
 
 const duration=(value:number|null)=>value==null?'Unavailable':`${Math.floor(value/3600).toString().padStart(2,'0')}:${Math.floor(value%3600/60).toString().padStart(2,'0')}`;
 const distance=(value:number|null)=>value==null?'Unavailable':`${Number(value).toFixed(2)} Km`;
@@ -18,7 +20,7 @@ export function SelectedVehicleSummary({vehicle,onClose}:{vehicle:FleetVehicle;o
   <button type="button" className="summary-expand-toggle" aria-label={expanded?'Collapse vehicle details':'Expand vehicle details'} aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?<ChevronDown/>:<ChevronUp/>}</button>
   <header className="summary-title">
    <strong>{vehicle.vehicle_number}</strong>
-   <div className="summary-actions"><Link className="summary-action" to={`/dashboard/playback?vehicleId=${encodeURIComponent(vehicle.id)}`}>History</Link><button type="button" className="summary-action" onClick={()=>setMore(value=>!value)} aria-expanded={more}>More<MoreVertical/></button><button type="button" className="summary-close" onClick={onClose} aria-label="Clear selected vehicle"><X/></button></div>
+   <div className="summary-actions"><PermissionAction permission={PERMISSIONS.playbackView}><Link className="summary-action" to={`/dashboard/playback?vehicleId=${encodeURIComponent(vehicle.id)}`}>History</Link></PermissionAction><button type="button" className="summary-action" onClick={()=>setMore(value=>!value)} aria-expanded={more}>More<MoreVertical/></button><button type="button" className="summary-close" onClick={onClose} aria-label="Clear selected vehicle"><X/></button></div>
   </header>
   <div className="summary-metric-row summary-primary">
    <Metric icon={<Gauge/>} label="Speed" value={speed(vehicle.speed)} tone="orange"/>

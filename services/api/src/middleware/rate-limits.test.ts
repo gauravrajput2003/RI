@@ -15,11 +15,14 @@ beforeAll(async () => {
 });
 describe('existing limiter placement; no database started', () => {
   it('login and refresh share auth protection; telemetry and health bypass API limits', async () => {
+    // Permission polling must neither consume nor be blocked by the credential-attempt budget.
+    for (let i = 0; i < 25; i++) await request(app).get('/api/v1/auth/permissions').expect(200);
     for (let i = 0; i < 20; i++) await request(app).post(i % 2 ? '/api/v1/auth/refresh' : '/api/v1/auth/login').expect(200);
     const result = await request(app).post('/api/v1/auth/login').expect(429);
     expect(result.headers['retry-after']).toBeDefined();
     expect(result.body.error.code).toBe('RATE_LIMITED');
     await request(app).post('/api/v1/auth/refresh').expect(429);
+    await request(app).get('/api/v1/auth/permissions').expect(200);
     await request(app).post('/internal/v1/telemetry/location').expect(202);
     await request(app).get('/health/live').expect(200);
   });

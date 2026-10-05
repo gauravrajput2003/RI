@@ -24,7 +24,8 @@ export function createDemoAdapter(): AxiosAdapter {
     if (path.startsWith('/api/v1')) path = path.slice('/api/v1'.length);
     const method = request.method?.toLowerCase();
     if (method === 'post' && path === '/auth/login') {
-      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const identifier = body.identifier ?? body.email;
+      const email = typeof identifier === 'string' ? identifier.trim().toLowerCase() : '';
       if ([demoCredentials.email.toLowerCase(), 'debugwithgaurav@gmail.com'].includes(email) && body.password === demoCredentials.password) {
         return reply({ success: true, data: { ...demoTokens } });
       }

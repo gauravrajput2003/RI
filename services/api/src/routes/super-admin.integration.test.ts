@@ -18,7 +18,7 @@ beforeAll(async()=>{
   process.env.ACCOUNT_PASSWORD_ENCRYPTION_KEY='a'.repeat(64);
   process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';process.env.JWT_SECRET=secret;process.env.JWT_REFRESH_SECRET=secret+'-refresh';process.env.INTERNAL_TRACKER_SECRET=secret+'-internal';process.env.EXPECTED_PACKET_INTERVAL_SECONDS='10';process.env.NO_SIGNAL_TIMEOUT_MINUTES='30';
   state.db=new PGlite();
-  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql']){
+  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql']){
     let sql=await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g,'').replace(/geography\(Point, 4326\)/g,'point').replace(/CREATE INDEX locations_position_gist[^;]+;/g,'');await state.db.exec(sql);
   }
   await state.db.exec(`CREATE DOMAIN geometry AS point; CREATE FUNCTION ST_Distance(geometry,geometry) RETURNS double precision LANGUAGE SQL AS 'SELECT 0::double precision';`);
@@ -34,6 +34,26 @@ beforeEach(async()=>{
   await state.db!.query("INSERT INTO devices(id,imei,protocol,identity_value,owner_id,sim_number,last_seen_at) VALUES($1,'GPS-12345','GT06','GPS-12345',$2,'9876543210',now()-interval '5 seconds'),($3,'GPS-99999','GT06','GPS-99999',$4,'9998887776',now()-interval '1 hour')",[device,client,otherDevice,otherClient]);
   await state.db!.query("INSERT INTO vehicle_device_assignments(vehicle_id,device_id,assigned_at) VALUES($1,$2,'2026-09-01'),($3,$4,'2026-09-01')",[vehicle,device,otherVehicle,otherDevice]);
   for(const [v,d] of [[vehicle,device],[otherVehicle,otherDevice]])await state.db!.query("INSERT INTO locations(vehicle_id,device_id,tracker_timestamp,server_received_at,speed,ignition,gps_valid,protocol) VALUES($1,$2,'2026-09-17T00:00:00Z','2026-09-17T00:00:00Z',20,true,false,'GT06'),($1,$2,'2026-09-17T00:00:10Z','2026-09-17T00:00:10Z',0,false,false,'GT06')",[v,d]);
+});
+it('lets a web-created client sign in on mobile and see exactly its web-assigned bikes',async()=>{
+ const created=await request(app).post('/api/v1/clients').set(auth(b,'ADMIN'))
+   .send({ownerId:b,username:'mobile.client',password:'mobile-password',email:'mobile-client@test.local',name:'Mobile client',inactiveTimeoutSeconds:600}).expect(201);
+ const clientId=created.body.data.id;
+ await request(app).post('/api/v1/auth/login').send({identifier:'mobile.client',password:'incorrect-password'}).expect(401);
+ const login=await request(app).post('/api/v1/auth/login').send({identifier:'mobile.client',password:'mobile-password'}).expect(200);
+ const mobileAuth={Authorization:`Bearer ${login.body.data.accessToken}`};
+ expect((await request(app).get('/api/v1/vehicles').set(mobileAuth).expect(200)).body.data).toEqual([]);
+ const bike=await request(app).post('/api/v1/fleet-vehicles').set(auth(b,'ADMIN'))
+   .send({...payload(),clientId,deviceImei:'MOBILE-BIKE-01',vehicleNumber:'MOBILE-BIKE',vehicleType:'Bike'}).expect(201);
+ const mobile=await request(app).get('/api/v1/vehicles').set(mobileAuth).expect(200);
+ expect(mobile.body.data).toEqual([expect.objectContaining({id:bike.body.data.id,vehicle_number:'MOBILE-BIKE',vehicle_type:'Bike'})]);
+ const web=await request(app).get('/api/v1/fleet-vehicles').set(mobileAuth).expect(200);
+ expect(web.body.data.map((row:{id:string})=>row.id)).toEqual(mobile.body.data.map((row:{id:string})=>row.id));
+ await request(app).get(`/api/v1/vehicles/${otherVehicle}`).set(mobileAuth).expect(404);
+ await request(app).put(`/api/v1/fleet-vehicles/${bike.body.data.id}`).set(auth(b,'ADMIN'))
+   .send({...payload(),clientId,deviceImei:'MOBILE-BIKE-01',vehicleNumber:'MOBILE-BIKE-EDITED',vehicleType:'Scooty'}).expect(200);
+ expect((await request(app).get('/api/v1/vehicles').set(mobileAuth).expect(200)).body.data)
+   .toEqual([expect.objectContaining({id:bike.body.data.id,vehicle_number:'MOBILE-BIKE-EDITED',vehicle_type:'Scooty'})]);
 });
 it('enforces one root, mandatory owners, valid parent roles, and cycle prevention',async()=>{
   await expect(state.db!.query("INSERT INTO users(email,password_hash,role) VALUES('second-root@test.local','x','SUPER_ADMIN')")).rejects.toThrow();
@@ -64,6 +84,7 @@ it.each(['DEEP-01','GPS-12345','9876543210'])('looks up the entire current devic
   await request(app).get('/api/v1/web/device-lookup').set(auth(a,'ADMIN')).expect(403);
 });
 it('honors packet-health grants, revocations, and sibling isolation',async()=>{
+  await request(app).patch(`/api/v1/admins/${a}`).set(auth()).send({canViewPacketHealth:false}).expect(200);
   await request(app).get('/api/v1/web/packet-health').set(auth(a,'ADMIN')).expect(403);
   await request(app).patch(`/api/v1/admins/${b}`).set(auth(a,'ADMIN')).send({canViewPacketHealth:true}).expect(403);
   await request(app).patch(`/api/v1/admins/${a}`).set(auth()).send({canViewPacketHealth:true}).expect(200);
@@ -174,6 +195,106 @@ it('shows ordinary admins only their direct child admins and keeps super-admin v
 });
 
 const saleBody=(counterpartyId:string,coinsGranted=10)=>({counterpartyId,coinsGranted,amountInr:100,paymentReference:'UPI-TEST',note:'Cash collected externally'});
+it('limits client device lists and vehicle details to safe fields and exact ownership',async()=>{
+ const own=await request(app).get('/api/v1/web/client-devices').set(auth(client,'CLIENT')).expect(200);
+ expect(own.body.data).toEqual([expect.objectContaining({id:device,vehicle_id:vehicle,vehicle_number:'DEEP-01'})]);
+ const detail=await request(app).get(`/api/v1/web/client-vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(200);
+ expect(detail.body.data).toMatchObject({id:vehicle,device_id:device});
+ const list=await request(app).get('/api/v1/fleet-vehicles').set(auth(client,'CLIENT')).expect(200);
+ for(const row of [...own.body.data,detail.body.data,...list.body.data])for(const field of ['imei','protocol','capabilities','coins','billing_start','owner_id','admin_id','alias','relay_configured'])expect(row).not.toHaveProperty(field);
+ await request(app).get(`/api/v1/web/client-vehicles/${otherVehicle}`).set(auth(client,'CLIENT')).expect(404);
+ await request(app).get('/api/v1/web/client-devices').set(auth(b,'ADMIN')).expect(403);
+});
+it('returns 404 for both sides of cross-client reassignment and for foreign SIM edits',async()=>{
+ for(const [target,tracker] of [[vehicle,otherDevice],[otherVehicle,device]]){
+  await request(app).patch(`/api/v1/web/client-vehicles/${target}/device`).set(auth(client,'CLIENT')).send({deviceId:tracker}).expect(404);
+ }
+ await request(app).patch(`/api/v1/web/client-vehicles/${vehicle}/device`).set(auth(client,'CLIENT')).send({deviceId:device,moveFromVehicleId:otherVehicle}).expect(404);
+ await request(app).patch(`/api/v1/web/client-devices/${otherDevice}/sim`).set(auth(client,'CLIENT')).send({simNumber:'123',simInfo:'changed'}).expect(404);
+ expect((await state.db!.query<Record<string,unknown>>('SELECT sim_number FROM devices WHERE id=$1',[otherDevice])).rows[0].sim_number).toBe('9998887776');
+ expect((await state.db!.query<Record<string,unknown>>('SELECT device_id FROM vehicle_device_assignments WHERE vehicle_id=$1 AND unassigned_at IS NULL',[vehicle])).rows).toEqual([{device_id:device}]);
+});
+it('strictly rejects registration and admin fields through client endpoints',async()=>{
+ for(const field of [{protocol:'GT06'},{imei:'GPS-12345'},{capabilities:{}},{coins:99},{ownerId:otherClient}]){
+  await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({simNumber:'changed',...field}).expect(400);
+  await request(app).patch(`/api/v1/web/client-vehicles/${vehicle}/device`).set(auth(client,'CLIENT')).send({deviceId:device,...field}).expect(400);
+ }
+ await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({}).expect(400);
+ await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({simOperator:'Invalid'}).expect(400);
+ await request(app).post('/api/v1/fleet-vehicles').set(auth(client,'CLIENT')).send(payload()).expect(403);
+ await request(app).put(`/api/v1/fleet-vehicles/${vehicle}`).set(auth(client,'CLIENT')).send(payload()).expect(403);
+ expect((await state.db!.query<Record<string,unknown>>('SELECT sim_number FROM devices WHERE id=$1',[device])).rows[0].sim_number).toBe('9876543210');
+});
+it('edits SIM metadata partially on owned devices without changing registration or vehicle settings',async()=>{
+ const before=(await state.db!.query<Record<string,unknown>>('SELECT * FROM vehicles WHERE id=$1',[vehicle])).rows[0];
+ await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({simNumber:' 1234567 ',simOperator:'Airtel',simInfo:' SIM serial new '}).expect(200);
+ const partial=await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({simInfo:''}).expect(200);
+ expect(partial.body.data).toMatchObject({sim_number:'1234567',sim_operator:'Airtel',sim_info:null});
+ expect((await state.db!.query<Record<string,unknown>>('SELECT imei,protocol,owner_id,capabilities FROM devices WHERE id=$1',[device])).rows[0]).toMatchObject({imei:'GPS-12345',protocol:'GT06',owner_id:client,capabilities:{}});
+ expect((await state.db!.query<Record<string,unknown>>('SELECT * FROM vehicles WHERE id=$1',[vehicle])).rows[0]).toEqual(before);
+ const detail=await request(app).get(`/api/v1/web/client-vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(200);
+ expect(detail.body.data).toMatchObject({sim_number:'1234567',sim_operator:'Airtel',sim_info:null});
+});
+it('requires explicit move confirmation and preserves history while new locations follow the tracker',async()=>{
+ const target=randomUUID(),replacement=randomUUID();
+ await state.db!.query<Record<string,unknown>>("INSERT INTO vehicles(id,vehicle_number,owner_id) VALUES($1,'TARGET-03',$2)",[target,client]);
+ await state.db!.query<Record<string,unknown>>("INSERT INTO devices(id,imei,protocol,identity_value,owner_id,sim_info) VALUES($1,'REPLACEMENT','GT06','REPLACEMENT',$2,'replacement SIM')",[replacement,client]);
+ await state.db!.query<Record<string,unknown>>("INSERT INTO vehicle_device_assignments(vehicle_id,device_id,assigned_at) VALUES($1,$2,'2026-09-01')",[target,replacement]);
+ await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({simInfo:'travels with tracker'}).expect(200);
+ const path=`/api/v1/web/client-vehicles/${target}/device`;
+ const rejected=await request(app).patch(path).set(auth(client,'CLIENT')).send({deviceId:device}).expect(409);
+ expect(rejected.body.error.code).toBe('DEVICE_ASSIGNED');
+ expect((await state.db!.query<Record<string,unknown>>('SELECT count(*)::int count FROM vehicle_device_assignments WHERE unassigned_at IS NULL')).rows[0].count).toBe(3);
+ await request(app).patch(path).set(auth(client,'CLIENT')).send({deviceId:device,moveFromVehicleId:vehicle}).expect(200);
+ const assignments=await state.db!.query<{vehicle_id:string;device_id:string;unassigned_at:Date|null}>('SELECT vehicle_id,device_id,unassigned_at FROM vehicle_device_assignments WHERE device_id IN ($1,$2)',[device,replacement]);
+ expect(assignments.rows).toHaveLength(3);
+ expect(assignments.rows.filter(row=>row.unassigned_at===null)).toEqual([{vehicle_id:target,device_id:device,unassigned_at:null}]);
+ expect((await state.db!.query<Record<string,unknown>>('SELECT count(*)::int count FROM locations WHERE vehicle_id=$1',[vehicle])).rows[0].count).toBe(2);
+ // A newly assigned vehicle must not display the device's previous coordinates.
+ const fresh=await request(app).get(`/api/v1/web/client-vehicles/${target}`).set(auth(client,'CLIENT')).expect(200);
+ expect(fresh.body.data).toMatchObject({speed:null,server_received_at:null,sim_info:'travels with tracker'});
+ await state.db!.query<Record<string,unknown>>(`INSERT INTO locations(device_id,vehicle_id,tracker_timestamp,server_received_at,latitude,longitude,speed,gps_valid,protocol)
+   SELECT $1,vehicle_id,clock_timestamp(),clock_timestamp(),28.8,76.5,45,true,'GT06' FROM vehicle_device_assignments WHERE device_id=$1 AND unassigned_at IS NULL`,[device]);
+ const updated=await request(app).get(`/api/v1/web/client-vehicles/${target}`).set(auth(client,'CLIENT')).expect(200);
+ expect(updated.body.data.speed).toBe(45);
+ const old=await request(app).get(`/api/v1/web/client-vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(200);
+ expect(old.body.data).toMatchObject({device_id:null,speed:null,server_received_at:null,sim_info:null});
+ const location=await request(app).get(`/api/v1/vehicles/${target}/latest-location`).set(auth(client,'CLIENT')).expect(200);
+ expect(location.body.data).toMatchObject({latitude:28.8,longitude:76.5,speed:45});
+ await request(app).get(`/api/v1/vehicles/${vehicle}/latest-location`).set(auth(client,'CLIENT')).expect(404);
+ expect((await request(app).get(`/api/v1/vehicles/${vehicle}/history?from=2026-01-01&to=2027-01-01`).set(auth(client,'CLIENT')).expect(200)).body.data).toHaveLength(2);
+ // Selecting the same device preserves the existing assignment window.
+ await request(app).patch(path).set(auth(client,'CLIENT')).send({deviceId:device}).expect(200);
+ expect((await state.db!.query<Record<string,unknown>>('SELECT count(*)::int count FROM vehicle_device_assignments WHERE device_id=$1',[device])).rows[0].count).toBe(2);
+ const choices=await request(app).get('/api/v1/web/client-devices').set(auth(client,'CLIENT')).expect(200);
+ expect(choices.body.data).toContainEqual(expect.objectContaining({id:replacement,vehicle_id:null,vehicle_number:null,sim_info:'replacement SIM'}));
+});
+it('rejects stale move confirmations and supports an unassigned owned tracker',async()=>{
+ const target=randomUUID();await state.db!.query<Record<string,unknown>>("INSERT INTO vehicles(id,vehicle_number,owner_id) VALUES($1,'TARGET',$2)",[target,client]);
+ await state.db!.query<Record<string,unknown>>('UPDATE vehicle_device_assignments SET unassigned_at=clock_timestamp() WHERE device_id=$1',[device]);
+ const path=`/api/v1/web/client-vehicles/${target}/device`;
+ const stale=await request(app).patch(path).set(auth(client,'CLIENT')).send({deviceId:device,moveFromVehicleId:vehicle}).expect(409);
+ expect(stale.body.error.code).toBe('ASSIGNMENT_CHANGED');
+ await request(app).patch(path).set(auth(client,'CLIENT')).send({deviceId:device}).expect(200);
+});
+it('admin replacement uses the same assignment helper and retains device and vehicle history',async()=>{
+ await request(app).put(`/api/v1/fleet-vehicles/${vehicle}`).set(auth()).send({...payload(),deviceImei:'NEW-TRACKER'}).expect(200);
+ const assignments=await state.db!.query<{device_id:string;unassigned_at:Date|null}>('SELECT device_id,unassigned_at FROM vehicle_device_assignments WHERE vehicle_id=$1',[vehicle]);
+ expect(assignments.rows).toHaveLength(2);
+ expect(assignments.rows.find(row=>row.device_id===device)?.unassigned_at).not.toBeNull();
+ expect((await state.db!.query<Record<string,unknown>>('SELECT count(*)::int count FROM locations WHERE vehicle_id=$1',[vehicle])).rows[0].count).toBe(2);
+ const adminDetail=await request(app).get(`/api/v1/fleet-vehicles/${vehicle}`).set(auth()).expect(200);
+ expect(adminDetail.body.data).toMatchObject({imei:'NEW-TRACKER',sim_info:'SIM serial',speed:null});
+});
+it('backfills existing SIM information to devices idempotently',async()=>{
+ await state.db!.query<Record<string,unknown>>("UPDATE vehicles SET sim_info='legacy SIM' WHERE id=$1",[vehicle]);
+ const migration=await readFile(new URL('../../../../database/migrations/017_device_sim_info.sql',import.meta.url),'utf8');
+ await state.db!.exec(migration);
+ expect((await state.db!.query<Record<string,unknown>>('SELECT sim_info FROM devices WHERE id=$1',[device])).rows[0].sim_info).toBe('legacy SIM');
+ await request(app).patch(`/api/v1/web/client-devices/${device}/sim`).set(auth(client,'CLIENT')).send({simInfo:'updated SIM'}).expect(200);
+ await state.db!.exec(migration);
+ expect((await state.db!.query<Record<string,unknown>>('SELECT sim_info FROM devices WHERE id=$1',[device])).rows[0].sim_info).toBe('updated SIM');
+});
 it('records root sales atomically without a depletable root balance',async()=>{
  for(let i=0;i<3;i++)await request(app).post('/api/v1/coin-sales').set(auth()).send(saleBody(a)).expect(201);
  expect((await state.db!.query<Record<string, unknown>>('SELECT coins FROM users WHERE id=$1',[a])).rows[0].coins).toBe('30.00');

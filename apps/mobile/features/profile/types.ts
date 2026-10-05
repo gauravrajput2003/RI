@@ -1,3 +1,5 @@
+import type { VehicleVisualType } from '../../../../packages/shared-utils/src/index';
+
 export interface UserProfile {
   name: string;
   email: string;
@@ -17,7 +19,7 @@ export interface VehicleCardDetail {
   remark: string;
   subscriptionStart: string;
   subscriptionDue: string;
-  visual: 'scooter' | 'car' | 'bike';
+  visual: VehicleVisualType;
 }
 
 export interface SubscriptionRecord {

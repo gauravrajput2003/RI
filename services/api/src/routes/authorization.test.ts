@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -260,6 +260,7 @@ describe('resource authorization with both customers persisted', () => {
       .set('Authorization',`Bearer ${token(a,'ADMIN')}`).expect(400);
   });
   it('captures the authenticated creator as owner and ignores forged owner IDs', async () => {
+    await state.db!.query("UPDATE users SET role='ADMIN' WHERE id=$1",[b]);
     await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
     const payload={username:'ops.admin',password:'strong-password',name:'Operations Admin',email:'ops@test.local',coins:10,active:true};
     const created=await request(app).post('/api/v1/admins').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).send(payload).expect(201);
@@ -310,6 +311,7 @@ describe('resource authorization with both customers persisted', () => {
     expect(childList.body.data.map((row:{id:string})=>row.id)).toEqual([grandchild.id]);
   });
   it('manages clients only beneath authorized admins without exposing credentials', async () => {
+    await state.db!.query("UPDATE users SET role='ADMIN' WHERE id=$1",[b]);
     await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
     await state.db!.query("UPDATE users SET role='ADMIN',name='Foreign Admin' WHERE id=$1",[b]);
     const adminPayload={ownerId:a,username:'client.owner',password:'strong-password',name:'Client Owner',email:'owner@test.local',coins:0,active:true};
@@ -341,6 +343,7 @@ describe('resource authorization with both customers persisted', () => {
     await request(app).get(`/api/v1/clients/${created.body.data.id}`).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(404);
   });
   it('creates and reassigns managed vehicles only through authorized Admin, Client, and Device relationships', async()=>{
+    await state.db!.query("UPDATE users SET role='ADMIN' WHERE id=$1",[b]);
     await state.db!.query("UPDATE users SET role='SUPER_ADMIN',name='Root' WHERE id=$1",[a]);
     const adminId=randomUUID(),clientId=randomUUID(),foreignAdmin=randomUUID(),foreignClient=randomUUID(),device1=randomUUID(),device2=randomUUID();
     await state.db!.query("INSERT INTO users(id,email,password_hash,role,owner_id,name) VALUES($1,'manager@test.local',$2,'ADMIN',$3,'Manager'),($4,'foreign-manager@test.local',$2,'ADMIN',$5,'Foreign Manager')",[adminId,passwordHash,a,foreignAdmin,b]);

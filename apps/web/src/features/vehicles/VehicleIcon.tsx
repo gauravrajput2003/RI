@@ -1,5 +1,5 @@
 import {Bike,BusFront,CarFront,Truck} from 'lucide-react';
-import {vehicleAppearance,type VehicleVisualIcon,type VehicleVisualState,type VehicleVisualType} from '../../../../../packages/shared-utils/src/index';
+import {vehicleAppearance,vehicleRasterAsset,type VehicleVisualIcon,type VehicleVisualState} from '../../../../../packages/shared-utils/src/index';
 
 const icons:Record<VehicleVisualIcon,typeof CarFront>={
   'two-wheeler':Bike,
@@ -8,21 +8,9 @@ const icons:Record<VehicleVisualIcon,typeof CarFront>={
   'airport-shuttle':BusFront,
 };
 
-const rasterVehicleTypes = new Set<VehicleVisualType>(['bike','car','scooter','bus','truck']);
-const rasterState:Record<string,'running'|'stopped'|'idle'|'unreachable'>={
-  running:'running',
-  overspeed:'running',
-  stopped:'stopped',
-  idle:'idle',
-  unreachable:'unreachable',
-  new:'unreachable',
-  inactive:'unreachable',
-};
-
 export function vehicleIconAssetPath(type?:string|null,state?:VehicleVisualState){
-  const appearance=vehicleAppearance(type,state);
-  if(!rasterVehicleTypes.has(appearance.type))return null;
-  return `/assets/vehicle-icons/vehicles/${appearance.type}/${rasterState[appearance.key]}.png`;
+  const asset=vehicleRasterAsset(type,state);
+  return asset ? `/assets/vehicle-icons/vehicles/${asset.type}/${asset.state}.png` : null;
 }
 
 export function VehicleIcon({type,state,size='md',className=''}:{type?:string|null;state?:VehicleVisualState;size?:'sm'|'md'|'lg';className?:string}){

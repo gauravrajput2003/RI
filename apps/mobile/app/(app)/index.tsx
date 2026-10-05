@@ -46,7 +46,8 @@ export default function Dashboard() {
     <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{fleetFilters.map((item, index) => <Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label + ' vehicles'} accessibilityState={{ selected: filter === item.label }} onPress={() => setFilter(item.label)} style={[styles.filter, { borderColor: item.color, backgroundColor: filter === item.label ? item.color : '#fff' }]}><Text style={[styles.count, { color: filter === item.label ? '#fff' : item.color }]}>{counts[index]}</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.filterLabel, { color: filter === item.label ? '#fff' : item.color }]}>{item.label}</Text></Pressable>)}</ScrollView></View>
     {query.isLoading && !query.data ? <Loading /> : query.isError && !query.data ? <ErrorState message="Unable to load vehicles" retry={() => query.refetch()} /> :
       <FlatList data={rows} keyExtractor={vehicle => vehicle.id} renderItem={renderRow} initialNumToRender={5} maxToRenderPerBatch={5} windowSize={5} contentContainerStyle={styles.cards}
-        ListEmptyComponent={<Text style={styles.empty}>No vehicles match this filter.</Text>}
+        refreshing={query.isRefetching} onRefresh={() => { void query.refetch(); }}
+        ListEmptyComponent={<Text style={styles.empty}>{vehicles.length ? 'No vehicles match this filter.' : 'No vehicles assigned to your account yet.'}</Text>}
         ListFooterComponent={query.hasNextPage ? <Pressable accessibilityRole="button" disabled={query.isFetchingNextPage} onPress={() => { void query.fetchNextPage(); }} style={styles.more}><Text>Load more vehicles</Text></Pressable> : null} />}
     <BikeActions vehicle={selected?.vehicle_number ?? null} onClose={() => setSelected(null)} onAction={action} />
     <ShareSheet vehicleNumber={shareVehicle} onClose={() => setShareVehicle(null)} />

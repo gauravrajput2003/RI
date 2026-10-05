@@ -4,8 +4,8 @@ import { z } from 'zod';
 const tokens = z.object({ accessToken: z.string().min(1), refreshToken: z.string().min(1) });
 export function createAuthActions(client: AxiosInstance, auth: ReturnType<typeof createAuthStore>) {
   return {
-    async login(email: string, password: string) {
-      const { data } = await client.post('/auth/login', { email, password });
+    async login(identifier: string, password: string) {
+      const { data } = await client.post('/auth/login', { identifier: identifier.trim(), password });
       await auth.getState().setTokens(tokens.parse(data.data));
     },
     async logout() {

@@ -7,7 +7,7 @@ const authorizers = new WeakMap<Server, VehicleAuthorizer>();
 export function configureSockets(io:Server,authorizer:VehicleAuthorizer,authenticate:Authenticator=socketPrincipal){
   authorizers.set(io, authorizer);
   const rooms=createRoomAuthorizer(authorizer);
-  io.use((socket,next)=>{try{socket.data.principal=authenticate(socket);next()}catch{next(new Error('UNAUTHORIZED'))}});
+  io.use((socket,next)=>{try{const principal=authenticate(socket);socket.data.principal=principal;if(authorizer.isActiveUser){void authorizer.isActiveUser(principal.id).then(active=>next(active?undefined:new Error('UNAUTHORIZED'))).catch(()=>next(new Error('UNAUTHORIZED')))}else next()}catch{next(new Error('UNAUTHORIZED'))}});
   io.on('connection',async socket=>{
     const principal=socket.data.principal as SocketPrincipal;
     socket.on('vehicle:subscribe',async(vehicleId:unknown,done?: (result:{ok:boolean})=>void)=>{
@@ -40,7 +40,7 @@ export async function publishVehicleNotification(io:Server,vehicleId:string,payl
   const authorizer=authorizers.get(io);if(!authorizer)return;
   for(const socket of await io.in(`vehicle:${vehicleId}`).fetchSockets()){
     const principal=socket.data.principal as SocketPrincipal|undefined;
-    try{if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId))socket.emit('notification:new',payload);else await socket.leave(`vehicle:${vehicleId}`)}catch{await socket.leave(`vehicle:${vehicleId}`)}
+    try{if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId)){if(!authorizer.canReceiveNotifications||await authorizer.canReceiveNotifications(principal.id))socket.emit('notification:new',payload)}else await socket.leave(`vehicle:${vehicleId}`)}catch{await socket.leave(`vehicle:${vehicleId}`)}
   }
 }
-export function publishUserNotification(io:Server,userId:string,payload:Record<string,unknown>):void{io.to(`user:${userId}`).emit('notification:new',payload)}
+export async function publishUserNotification(io:Server,userId:string,payload:Record<string,unknown>):Promise<void>{const authorizer=authorizers.get(io);if(!authorizer)return;if(authorizer.canReceiveNotifications&&!await authorizer.canReceiveNotifications(userId))return;io.to(`user:${userId}`).emit('notification:new',payload)}

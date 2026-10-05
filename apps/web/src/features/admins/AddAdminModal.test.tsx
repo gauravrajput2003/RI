@@ -9,7 +9,7 @@ mocks.get.mockResolvedValue({data:{data:[]}});
 vi.mock('../../lib/auth',()=>({claims:()=>({role:'SUPER_ADMIN'})}));
 vi.mock('../../services/api/client',()=>({api:{get:mocks.get,post:mocks.post,patch:mocks.patch},errorMessage:()=> 'error'}));
 afterEach(()=>{cleanup();mocks.patch.mockClear();mocks.post.mockClear()});
-it('requires username, password, name, and valid email before submitting',async()=>{const {container}=render(<QueryClientProvider client={new QueryClient()}><AddAdminModal open onClose={()=>undefined}/></QueryClientProvider>);expect(screen.queryByRole('combobox',{name:'Owner'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Save admin'}));expect(mocks.post).not.toHaveBeenCalled();expect(screen.getByLabelText('Username')).toBeRequired();expect(screen.getByLabelText('Password')).toHaveAttribute('minLength','8');expect(screen.getByLabelText('Email')).toHaveAttribute('type','email')});
+it('requires username, password, name, and valid email before submitting',async()=>{render(<QueryClientProvider client={new QueryClient()}><AddAdminModal open onClose={()=>undefined}/></QueryClientProvider>);expect(screen.queryByRole('combobox',{name:'Owner'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Save admin'}));expect(mocks.post).not.toHaveBeenCalled();expect(screen.getByLabelText('Username')).toBeRequired();expect(screen.getByLabelText('Password')).toHaveAttribute('minLength','8');expect(screen.getByLabelText('Email')).toHaveAttribute('type','email')});
 it('saves admin edits without changing the password and accepts an explicit replacement',async()=>{
   const admin={id:'admin-id',owner_id:'owner-id',owner_name:'Owner',owner_email:'owner@test.local',username:'admin.user',name:'Admin User',mobile:'9876543210',email:'admin@test.local',company:'Fleet',website:null,address:null,coins:'2.00',active:true} as Admin;
   mocks.patch.mockResolvedValue({data:{data:{}}});
@@ -28,14 +28,14 @@ it('saves admin edits without changing the password and accepts an explicit repl
 
 it('previews admin data without editable controls, passwords, or a save action',()=>{
  const admin={id:'admin-id',owner_id:'owner-id',owner_name:'Owner',username:'admin.user',name:'Admin User',email:'admin@test.local',coins:2,active:true,can_view_packet_health:true} as Admin;
- const {container}=render(<QueryClientProvider client={new QueryClient()}><AddAdminModal open readOnly recoveredPassword={null} admin={admin} onClose={()=>undefined}/></QueryClientProvider>);
+ render(<QueryClientProvider client={new QueryClient()}><AddAdminModal open readOnly recoveredPassword={null} admin={admin} onClose={()=>undefined}/></QueryClientProvider>);
  expect(screen.getByRole('dialog')).toHaveTextContent('Preview admin');
  expect(screen.getByLabelText('Name')).toBeDisabled();
  expect(screen.getByLabelText('Can view packet health')).toBeChecked();
  expect(screen.queryByRole('button',{name:'Save changes'})).not.toBeInTheDocument();
  expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
  expect(screen.getByLabelText('Super-admin password')).toBeInTheDocument();
- fireEvent.submit(container.querySelector('form')!);
+ fireEvent.submit(screen.getByLabelText('Name').closest('form')!);
  expect(mocks.patch).not.toHaveBeenCalled();
 });
 

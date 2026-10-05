@@ -9,12 +9,22 @@ describe('real auth store and Axios interceptors', () => {
     const storage = memoryStorage(); const auth = createAuthStore(storage);
     const client = createApiClient('https://api.test', auth, async request => {
       expect(request.url).toBe('/auth/login');
+      expect(JSON.parse(request.data)).toEqual({ identifier: 'driver@example.com', password: 'password' });
       expect(request.headers.get('Authorization')).toBeUndefined();
       return response(request, { data: tokenA });
     });
     await createAuthActions(client, auth).login('driver@example.com', 'password');
     expect(auth.getState().tokens).toEqual(tokenA);
     expect(storage.setItem).toHaveBeenCalledOnce();
+  });
+  it('sends a web-created username through the identifier field', async () => {
+    const auth = makeAuth();
+    const client = createApiClient('https://api.test', auth, async request => {
+      expect(JSON.parse(request.data)).toEqual({ identifier: 'fleet.client', password: 'password' });
+      return response(request, { data: tokenA });
+    });
+    await createAuthActions(client, auth).login('  fleet.client  ', 'password');
+    expect(auth.getState().tokens).toEqual(tokenA);
   });
   it('rejects login failure without refresh or saved credentials', async () => {
     const auth = makeAuth(); const adapter = vi.fn(async request => { throw unauthorized(request); });

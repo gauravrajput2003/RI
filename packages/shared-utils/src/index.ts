@@ -50,3 +50,13 @@ export function vehicleAppearance(type?: string | null, state?: VehicleVisualSta
   const normalizedType = normalizeVehicleType(type);
   return {type: normalizedType, ...vehicleTypeSpecs[normalizedType], ...vehicleStateAppearance(state)};
 }
+
+/** Both clients use the same uploaded artwork and tracker-state mapping. */
+export function vehicleRasterAsset(type?: string | null, state?: VehicleVisualState) {
+  const appearance = vehicleAppearance(type, state);
+  if (appearance.type === 'van') return null;
+  const imageState = appearance.key === 'overspeed' ? 'running'
+    : appearance.key === 'new' || appearance.key === 'inactive' ? 'unreachable'
+    : appearance.key;
+  return { type: appearance.type, state: imageState };
+}

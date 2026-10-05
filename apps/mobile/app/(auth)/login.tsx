@@ -14,7 +14,7 @@ import loginBackground from '../../assets/login-background.png';
 import flag from '../../assets/indianflag.png';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
@@ -26,12 +26,12 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const copy = translations[language];
   const submit = async () => {
-    if (submitting.current || !email.trim() || !password) return;
+    if (submitting.current || !identifier.trim() || !password) return;
     submitting.current = true;
     setError(undefined);
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      await login(identifier.trim(), password);
       router.replace('/(app)');
     } catch (cause) { setError(apiError(cause)); }
     finally { submitting.current = false; setBusy(false); }
@@ -51,7 +51,7 @@ export default function Login() {
         <View style={styles.content}>
           <Image source={logo} resizeMode="contain" accessibilityLabel="RI" style={styles.logo} />
           <Text style={styles.label}>{copy.username}</Text>
-          <TextInput accessibilityLabel={copy.username} autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" placeholder={copy.usernamePlaceholder} placeholderTextColor="#929292" value={email} onChangeText={setEmail} style={styles.input} returnKeyType="next" onSubmitEditing={() => passwordInput.current?.focus()} submitBehavior="submit" />
+          <TextInput accessibilityLabel={copy.username} autoCapitalize="none" autoCorrect={false} autoComplete="username" placeholder={copy.usernamePlaceholder} placeholderTextColor="#929292" value={identifier} onChangeText={setIdentifier} style={styles.input} returnKeyType="next" onSubmitEditing={() => passwordInput.current?.focus()} submitBehavior="submit" />
           <Text style={[styles.label, styles.passwordLabel]}>{copy.password}</Text>
           <View style={styles.passwordRow}>
             <TextInput ref={passwordInput} accessibilityLabel={copy.password} autoCapitalize="none" autoCorrect={false} autoComplete="password" placeholder={copy.passwordPlaceholder} placeholderTextColor="#929292" secureTextEntry={!visible} value={password} onChangeText={setPassword} style={[styles.input, styles.passwordInput]} returnKeyType="go" onSubmitEditing={() => void submit()} />
@@ -60,7 +60,7 @@ export default function Login() {
             </Pressable>
           </View>
           {error ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel={copy.login} accessibilityState={{ disabled: busy || !email.trim() || !password, busy }} disabled={busy || !email.trim() || !password} onPress={() => void submit()} android_ripple={{ color: '#c90606' }} style={[styles.loginButton, busy && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={copy.login} accessibilityState={{ disabled: busy || !identifier.trim() || !password, busy }} disabled={busy || !identifier.trim() || !password} onPress={() => void submit()} android_ripple={{ color: '#c90606' }} style={[styles.loginButton, busy && styles.pressed]}>
             <Text style={styles.loginText}>{busy ? copy.signingIn : copy.login}</Text>
           </Pressable>
           <View style={styles.support}>

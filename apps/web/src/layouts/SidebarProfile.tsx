@@ -3,6 +3,8 @@ import {useMutation,useQueryClient} from '@tanstack/react-query';
 import {Camera,Copy,Mail,Phone} from 'lucide-react';
 import {api,errorMessage} from '../services/api/client';
 import type {AccountSummary,Envelope,Role} from '../types';
+import {usePermissions} from '../lib/permissions';
+import {PERMISSIONS} from '../../../../packages/shared-types/src/permissions';
 
 const allowed=['image/jpeg','image/png','image/webp'];
 const maxBytes=2*1024*1024;
@@ -11,6 +13,7 @@ const roleLabels:Record<Role,string>={SUPER_ADMIN:'Super admin',ADMIN:'Admin',CL
 function imageData(file:File){return new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read image'));reader.readAsDataURL(file)})}
 
 export function SidebarProfile({account,userId,role}:{account:AccountSummary|undefined;userId:string|undefined;role?:Role}){
+ const {hasPermission}=usePermissions();
  const input=useRef<HTMLInputElement>(null),cache=useQueryClient(),[issue,setIssue]=useState('');
  const upload=useMutation({mutationFn:async(file:File)=>{if(!allowed.includes(file.type))throw new Error('Choose a JPEG, PNG, or WebP image');if(file.size>maxBytes)throw new Error('Profile photo must be 2 MB or smaller');const dataUri=await imageData(file);return(await api.post<Envelope<{avatarUrl:string}>>('/account-avatar',{dataUri})).data.data},onSuccess:data=>{cache.setQueryData<AccountSummary>(['account-summary',userId],current=>current?{...current,avatarUrl:data.avatarUrl}:current);setIssue('')},onError:error=>setIssue(error instanceof Error&&!('response' in error)?error.message:errorMessage(error))});
  const name=account?.name?.trim()||account?.username||account?.email||'Loading profile…';
@@ -20,7 +23,7 @@ export function SidebarProfile({account,userId,role}:{account:AccountSummary|und
   <div className="profile-card">
    <span className="profile-eyebrow">My profile</span>
    <div className="profile-heading">
-    <button type="button" className="avatar-edit" aria-label="Edit profile photo" title="Edit profile photo" disabled={upload.isPending} onClick={()=>input.current?.click()}>
+    <button type="button" className="avatar-edit" aria-label="Edit profile photo" title="Edit profile photo" disabled={upload.isPending||!hasPermission(PERMISSIONS.profileEdit)} onClick={()=>input.current?.click()}>
      {account?.avatarUrl?<img src={account.avatarUrl} alt="Your profile"/>:<span>{initials}</span>}
      <Camera className="avatar-camera"/>
     </button>

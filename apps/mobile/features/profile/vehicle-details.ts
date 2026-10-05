@@ -1,6 +1,7 @@
 import type { Vehicle } from '../../types/models';
 import type { VehicleCardDetail } from './types';
 import { demoVehicleDetails } from '../demo/data';
+import { normalizeVehicleType } from '../../../../packages/shared-utils/src/index';
 
 export function vehicleDetails(vehicles: Vehicle[] | undefined, demoMode: boolean): VehicleCardDetail[] {
   if (demoMode) return demoVehicleDetails;
@@ -11,6 +12,6 @@ export function vehicleDetails(vehicles: Vehicle[] | undefined, demoMode: boolea
     // The fleet list contract does not include these fields or per-vehicle subscriptions.
     overspeed: null, mileage: null, odometer: vehicle.odometer,
     alias: vehicle.alias ?? '', remark: '', subscriptionStart: 'Unavailable', subscriptionDue: 'Unavailable',
-    visual: vehicle.vehicle_type?.toLowerCase().includes('scooter') ? 'scooter' : vehicle.vehicle_type?.toLowerCase().includes('car') ? 'car' : 'bike',
+    visual: normalizeVehicleType(vehicle.vehicle_type),
   }));
 }

@@ -18,7 +18,7 @@ let created = false;
 let originalFleet: unknown;
 const tables = ['users','groups','devices','vehicles','vehicle_device_assignments','vehicle_groups',
   'device_status','locations','events','subscriptions','refresh_tokens','schema_migrations','geofences','geofence_vehicle_assignments',
-  'alert_configurations','alert_configuration_events','notification_history','alert_vehicle_event_state','alert_geofence_state','alert_subscription_event_state','announcements','announcement_dismissals','announcement_recipients','coin_transactions'].sort();
+  'alert_configurations','alert_configuration_events','notification_history','alert_vehicle_event_state','alert_geofence_state','alert_subscription_event_state','announcements','announcement_dismissals','announcement_recipients','coin_transactions','password_access_audit','coin_sales','coin_batches','issuance_settings','permissions','admin_permissions','permission_change_audit'].sort();
 
 async function snapshot() {
   return {
@@ -88,7 +88,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   const resolved=fileURLToPath(new URL('../../../database/migrations/',import.meta.url));
   expect(await realpath(resolved)).toBe(await realpath(fileURLToPath(new URL('../../../database/migrations',import.meta.url))));
   const names=(await readdir(resolved)).filter(name=>name.endsWith('.sql')).sort();
-  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql','011_announcement_images.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql']);
+  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql','011_announcement_images.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql']);
   console.info('MIGRATION TARGET',JSON.stringify({database,runner:fileURLToPath(runner),directory:resolved,names}));
   const migrate = async (cwd:string) => {
     const output=await exec(process.execPath,['--import','tsx',fileURLToPath(runner)],{
@@ -110,7 +110,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   // Assert all application primary keys and declared foreign-key relationships.
   const primary = Object.fromEntries(first.constraints.filter(row=>row.contype==='p' && tables.includes(row.table_name))
     .map(row=>[row.table_name,row.definition]));
-  const compositePrimary:Record<string,string>={vehicle_groups:'PRIMARY KEY (vehicle_id, group_id)',device_status:'PRIMARY KEY (device_id)',schema_migrations:'PRIMARY KEY (name)',alert_configuration_events:'PRIMARY KEY (alert_id, event_type)',alert_vehicle_event_state:'PRIMARY KEY (vehicle_id, event_type)',alert_geofence_state:'PRIMARY KEY (geofence_id, vehicle_id)',alert_subscription_event_state:'PRIMARY KEY (subscription_id, event_type)',announcement_dismissals:'PRIMARY KEY (announcement_id, user_id)',announcement_recipients:'PRIMARY KEY (announcement_id, user_id)'};
+  const compositePrimary:Record<string,string>={permissions:'PRIMARY KEY (key)',admin_permissions:'PRIMARY KEY (admin_id, permission_key)',vehicle_groups:'PRIMARY KEY (vehicle_id, group_id)',device_status:'PRIMARY KEY (device_id)',schema_migrations:'PRIMARY KEY (name)',alert_configuration_events:'PRIMARY KEY (alert_id, event_type)',alert_vehicle_event_state:'PRIMARY KEY (vehicle_id, event_type)',alert_geofence_state:'PRIMARY KEY (geofence_id, vehicle_id)',alert_subscription_event_state:'PRIMARY KEY (subscription_id, event_type)',announcement_dismissals:'PRIMARY KEY (announcement_id, user_id)',announcement_recipients:'PRIMARY KEY (announcement_id, user_id)'};
   for (const table of tables) expect(primary[table]).toBe(compositePrimary[table]??'PRIMARY KEY (id)');
   const expectedForeign:Record<string,string[]> = {
     users:['FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT'],
@@ -133,7 +133,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
     definition:'CHECK (((unassigned_at IS NULL) OR (unassigned_at > assigned_at)))'}));
 
   const notNull:Record<string,string[]> = {
-    users:['id','email','password_hash','role','active','coins','inactive_timeout_seconds','created_at','updated_at','can_view_packet_health'],
+    users:['id','email','password_hash','role','active','coins','inactive_timeout_seconds','created_at','updated_at','can_view_packet_health','permissions_version'],
     groups:['id','name','owner_id','created_at','updated_at'],
     devices:['id','imei','protocol','active','created_at','updated_at','identity_type','identity_value','capabilities'],
     vehicles:['id','vehicle_number','active','owner_id','created_at','updated_at','coins','auto_renewal','door_configured','relay_configured','buzzer_configured','ignition_wiring','ac_power_plus','parking_alarm_on_ignition'],

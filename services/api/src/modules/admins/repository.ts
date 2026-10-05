@@ -4,6 +4,7 @@ import {sealPassword} from '../auth/password-recovery.js';
 import { query,transaction } from '../../db/pool.js';
 import { AppError } from '../../lib/errors.js';
 import { userScopeCte } from '../authorization/scope.js';
+import {PERMISSIONS} from '@fleet/shared-types';
 const withoutTotal=(row:Record<string,unknown>)=>{const copy={...row};delete copy.total_count;return copy};
 
 const adminScopeCte=`${userScopeCte}, actor AS (
@@ -35,7 +36,7 @@ export async function listAdmins(actorId:string,search:string,page:number,pageSi
     FROM users u JOIN admin_scope scope ON scope.id=u.id
     LEFT JOIN users owner ON owner.id=u.owner_id LEFT JOIN vehicles v ON v.owner_id=u.id
     LEFT JOIN vehicle_device_assignments assignment ON assignment.vehicle_id=v.id AND assignment.unassigned_at IS NULL
-    WHERE u.id<>$1 AND u.role='ADMIN' AND ($2='%%' OR COALESCE(u.username,'') ILIKE $2 OR u.email ILIKE $2 OR COALESCE(u.name,'') ILIKE $2 OR COALESCE(u.company,'') ILIKE $2)
+    WHERE u.id<>$1 AND u.role='ADMIN' AND ($2='%%' OR COALESCE(u.username,'') ILIKE $2 OR u.email ILIKE $2 OR COALESCE(u.name,'') ILIKE $2 OR COALESCE(u.mobile,'') ILIKE $2 OR COALESCE(u.company,'') ILIKE $2)
     GROUP BY u.id,owner.name,owner.email ORDER BY u.created_at DESC,u.id LIMIT $3 OFFSET $4`,
     [actorId,`%${search}%`,pageSize,(page-1)*pageSize]);
   return {rows:result.rows.map(withoutTotal),total:Number(result.rows[0]?.total_count??0)};
@@ -96,7 +97,16 @@ export async function updateAdmin(actorId:string,id:string,input:AdminUpdate){
       if(input.website!==undefined)add('website',input.website||null);
       if(input.address!==undefined)add('address',input.address||null);
 
-      if(input.canViewPacketHealth!==undefined){const actor=await client.query('SELECT role FROM users WHERE id=$1',[actorId]);if(actor.rows[0]?.role!=='SUPER_ADMIN')throw new AppError(403,'FORBIDDEN','Only the super-admin can change packet-health access');add('can_view_packet_health',input.canViewPacketHealth)}
+      if(input.canViewPacketHealth!==undefined){
+        const actor=await client.query('SELECT role FROM users WHERE id=$1',[actorId]);
+        if(actor.rows[0]?.role!=='SUPER_ADMIN')throw new AppError(403,'FORBIDDEN','Only the super-admin can change packet-health access');
+        const before=(await client.query<{permission_key:string}>('SELECT permission_key FROM admin_permissions WHERE admin_id=$1 AND allowed=true ORDER BY permission_key',[id])).rows.map(row=>row.permission_key);
+        await client.query('INSERT INTO admin_permissions(admin_id,permission_key,allowed) VALUES($1,$2,$3) ON CONFLICT(admin_id,permission_key) DO UPDATE SET allowed=EXCLUDED.allowed,updated_at=now()',[id,PERMISSIONS.packetHealthView,input.canViewPacketHealth]);
+        const after=input.canViewPacketHealth?[...new Set([...before,PERMISSIONS.packetHealthView])].sort():before.filter(key=>key!==PERMISSIONS.packetHealthView);
+        await client.query('INSERT INTO permission_change_audit(actor_id,admin_id,old_permissions,new_permissions) VALUES($1,$2,$3::jsonb,$4::jsonb)',[actorId,id,JSON.stringify(before),JSON.stringify(after)]);
+        assignments.push('permissions_version=permissions_version+1');
+        add('can_view_packet_health',input.canViewPacketHealth);
+      }
       if(input.active!==undefined)add('active',input.active);
       if(input.password!==undefined){add('password_hash',await bcrypt.hash(input.password,12));add('password_recovery_ciphertext',sealPassword(input.password))}
       if(!assignments.length&&input.coins!==undefined)add('coins',input.coins);
