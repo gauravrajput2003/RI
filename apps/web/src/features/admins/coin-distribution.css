@@ -1,0 +1,73 @@
+.coin-distribution-page.page{padding:24px;min-width:0;max-width:1600px;margin:0 auto}
+.coin-page-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
+.coin-page-heading h1{margin:0;font-size:1.6rem;font-weight:750;letter-spacing:-.03em}
+.coin-page-heading p{margin:6px 0;color:#62788b;font-size:.9rem}
+.coin-page-heading small{color:#62788b;font-size:.75rem;overflow-wrap:anywhere}
+.coin-distribution-page .coin-management{padding:0;display:grid;gap:20px}
+.coin-distribution-page .coin-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:14px}
+.coin-distribution-page .coin-overview>div{padding:18px 20px;gap:8px;background:white;border:1px solid #dce6ed;border-radius:12px;border-top:3px solid #1687a9}
+.coin-distribution-page .coin-overview span{font-size:.8rem;color:#536c80;font-weight:600}
+.coin-distribution-page .coin-overview strong{font-size:1.7rem;line-height:1.2;overflow-wrap:anywhere}
+.coin-distribution-page .coin-overview small{font-size:.72rem;color:#62788b}
+.coin-distribution-page .coin-workspace{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);align-items:start;gap:20px}
+.coin-distribution-page .coin-panel{min-width:0;background:white;border:1px solid #dce6ed;border-radius:12px;overflow:hidden;box-shadow:0 3px 12px #123b5e04}
+.coin-distribution-page .coin-panel-heading{padding:20px 22px;border-bottom:1px solid #e7eef3}
+.coin-distribution-page h2{font-size:1rem;font-weight:750;margin:0;line-height:1.4}
+.coin-distribution-page .coin-panel-heading p,.coin-distribution-page .coin-tree p{font-size:.8rem;line-height:1.5;color:#62788b;margin:6px 0 0}
+.coin-distribution-page .coin-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:22px}
+.coin-distribution-page .coin-field-wide{grid-column:1/-1}
+.coin-distribution-page .coin-panel label{display:flex;flex-direction:column;gap:7px;margin:0;font-weight:600;font-size:.8rem;min-width:0}
+.coin-distribution-page .coin-panel input,.coin-distribution-page .coin-panel select{min-width:0;width:100%;height:44px;padding:10px 12px;border:1px solid #cbdbe6;border-radius:7px;background:white;color:#17324c;font:inherit;font-size:.875rem}
+.coin-distribution-page input::placeholder{color:#8293a1;font-weight:400}
+.coin-distribution-page input:focus-visible,.coin-distribution-page select:focus-visible,.coin-distribution-page button:focus-visible,.coin-distribution-page summary:focus-visible{outline:3px solid #0b85ac45;outline-offset:2px;border-color:#0b85ac}
+.coin-distribution-page input[aria-invalid=true]{border-color:#c43e35}
+.coin-distribution-page .coin-form-footer{padding:16px 22px;border-top:1px solid #e7eef3;display:flex;justify-content:space-between;align-items:center;gap:16px;background:#f8fbfd}
+.coin-distribution-page .coin-form-footer span{font-size:.75rem;color:#62788b;line-height:1.5}
+.coin-distribution-page .button,.coin-distribution-page .secondary-button{min-height:44px;flex-shrink:0;font-size:.8rem;box-shadow:none}
+.coin-distribution-page .coin-side-panels{display:grid;gap:16px;min-width:0}
+.coin-distribution-page .coin-tree{margin:0;padding:20px}
+.coin-distribution-page .coin-tree summary{font-size:.95rem;font-weight:750;cursor:pointer}
+.coin-distribution-page .coin-tree>ul{padding:0;margin:14px 0 0;max-height:320px;overflow:auto}
+.coin-distribution-page .coin-tree ul{list-style:none}
+.coin-distribution-page .coin-tree ul ul{padding-left:12px;border-left:2px solid #e4eef4;margin-top:8px}
+.coin-distribution-page .coin-tree li{margin:0;padding:9px 0;border-top:1px solid #edf2f6;font-size:.85rem;overflow-wrap:anywhere}
+.coin-distribution-page .coin-tree li>span{display:block}
+.coin-distribution-page .coin-tree li>strong{display:block;margin:5px 0 0;font-size:.85rem;color:#087795}
+.coin-distribution-page .coin-tree small{font-size:.7rem}
+.coin-distribution-page .coin-settings{padding:20px;display:grid;gap:14px}
+.coin-distribution-page .coin-settings .checkbox{flex-direction:row;align-items:center;gap:8px;font-weight:500}
+.coin-distribution-page .coin-settings .checkbox input{width:18px;height:18px;min-height:18px;padding:0}
+.coin-distribution-page .coin-settings button{justify-self:start}
+.coin-distribution-page .form-error,.coin-distribution-page .form-success{margin:0;padding:14px 18px;border-radius:8px;font-size:.85rem;line-height:1.5}
+.coin-distribution-page .coin-payment-form>.form-error{margin:0 22px 16px}
+.coin-distribution-page .coin-audit{margin-top:20px}
+.coin-distribution-page .table-scroll{flex:initial;width:100%;overflow:auto}
+.coin-distribution-page .table-scroll table{min-width:780px;table-layout:auto;white-space:normal}
+.coin-distribution-page th{height:auto;padding:13px 16px;background:#f2f7fa;color:#294b64;text-align:left;border:0;border-bottom:1px solid #dce6ed;font-size:.73rem;font-weight:700}
+.coin-distribution-page td{height:auto;padding:14px 16px;text-align:left;overflow-wrap:anywhere;font-size:.8rem;line-height:1.5}
+.coin-distribution-page .table-sort{color:inherit}
+.coin-distribution-page .table-empty-cell{padding:32px 16px;height:auto;text-align:center;color:#62788b}
+.coin-distribution-page .pagination{height:auto;min-height:62px;padding:12px 18px;margin:0;flex-wrap:wrap;gap:10px}
+.coin-distribution-page .pagination>span{display:block;margin-right:auto}
+.coin-distribution-page .pagination>div{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.coin-distribution-page .pagination button{min-height:40px}
+.coin-distribution-page .panel-toolbar{height:auto;min-height:76px;flex-wrap:wrap;padding:16px 22px;gap:12px}
+.coin-distribution-page .search-box{height:auto;max-width:420px;min-width:0;font-size:.8rem;flex:1 1 200px}
+.coin-distribution-page .search-box input{flex:1;min-width:0;height:44px;border-radius:7px;font-size:.875rem}
+.coin-distribution-page .toolbar-actions{flex-wrap:wrap}
+.coin-distribution-page .toolbar-actions .export-button{min-height:44px;height:44px}
+.coin-distribution-page .export-button img{width:24px;height:24px}
+@media(max-width:1199px){.coin-distribution-page .coin-workspace{grid-template-columns:minmax(0,1fr)}.coin-distribution-page .coin-side-panels{grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr))}}
+@media(max-width:639px){
+ .coin-distribution-page.page{padding:16px 12px}.coin-page-heading{align-items:start;gap:10px;margin-bottom:16px}.coin-page-heading h1{font-size:1.3rem}.coin-page-heading p{font-size:.8rem}
+ .coin-distribution-page .coin-overview{gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.coin-distribution-page .coin-overview>div{padding:14px 12px}.coin-distribution-page .coin-overview strong{font-size:1.3rem}
+ .coin-distribution-page .coin-panel-heading,.coin-distribution-page .coin-tree,.coin-distribution-page .coin-settings{padding:16px}.coin-distribution-page .coin-field-grid{padding:16px;gap:16px;grid-template-columns:minmax(0,1fr)}
+ .coin-distribution-page .coin-form-footer{padding:16px;flex-direction:column;align-items:stretch}.coin-distribution-page .coin-form-footer button{width:100%}
+ .coin-distribution-page .coin-panel input,.coin-distribution-page .coin-panel select{font-size:16px}.coin-distribution-page .coin-payment-form>.form-error{margin:0 16px 16px}
+ .coin-distribution-page .panel-toolbar{padding:16px}.coin-distribution-page .search-box{flex-basis:100%;max-width:none}.coin-distribution-page .toolbar-actions{margin-left:0}
+ .coin-distribution-page .table-scroll table{min-width:0;display:block}.coin-distribution-page thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%)}
+ .coin-distribution-page tbody{display:block}.coin-distribution-page tbody tr{display:block;padding:12px 16px;border-bottom:1px solid #dce6ed}.coin-distribution-page td{display:grid;grid-template-columns:minmax(90px,.8fr) minmax(0,1.2fr);gap:12px;padding:6px 0;border:0;text-align:right}
+ .coin-distribution-page td::before{content:attr(data-label);font-size:.75rem;font-weight:600;color:#62788b;text-align:left}.coin-distribution-page td .coin-type{justify-self:end}
+ .coin-distribution-page td.table-empty-cell{display:block;text-align:center;padding:18px 0}.coin-distribution-page td.table-empty-cell::before{content:none}
+ .coin-distribution-page .pagination{justify-content:flex-start;padding:14px 16px}.coin-distribution-page .pagination>span{flex-basis:100%}.coin-distribution-page .pagination>div{gap:8px}
+}

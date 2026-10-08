@@ -201,7 +201,7 @@ it('limits client device lists and vehicle details to safe fields and exact owne
  const detail=await request(app).get(`/api/v1/web/client-vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(200);
  expect(detail.body.data).toMatchObject({id:vehicle,device_id:device});
  const list=await request(app).get('/api/v1/fleet-vehicles').set(auth(client,'CLIENT')).expect(200);
- for(const row of [...own.body.data,detail.body.data,...list.body.data])for(const field of ['imei','protocol','capabilities','coins','billing_start','owner_id','admin_id','alias','relay_configured'])expect(row).not.toHaveProperty(field);
+ for(const row of [...own.body.data,detail.body.data,...list.body.data])for(const field of ['imei','protocol','capabilities','coins','billing_start','owner_id','admin_id','relay_configured'])expect(row).not.toHaveProperty(field);
  await request(app).get(`/api/v1/web/client-vehicles/${otherVehicle}`).set(auth(client,'CLIENT')).expect(404);
  await request(app).get('/api/v1/web/client-devices').set(auth(b,'ADMIN')).expect(403);
 });

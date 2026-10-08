@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome6 } from '@expo/vector-icons';
+import { VehicleActions } from '../../components/fleet/VehicleActions';
+import { ShareSheet } from '../../components/fleet/ShareSheet';
+import { useAccount } from '../../services/api/mobile';
+import { capabilities } from '../../features/account/capabilities';
+import { useLiveVehicleStore } from '../../store/liveVehicleStore';
 import { router } from 'expo-router';
 import { VehicleVisual } from '../../components/fleet/VehicleVisual';
 import { vehicleDetails } from '../../features/profile/vehicle-details';
@@ -12,10 +17,13 @@ import type { VehicleCardDetail } from '../../features/profile/types';
 export default function VehiclesScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const account=useAccount(),caps=capabilities(account.data);
+  const [selected,setSelected]=useState<VehicleCardDetail|null>(null),[share,setShare]=useState<VehicleCardDetail|null>(null);
 
   const query = useVehicles();
 
-  const vehicles = useMemo(() => vehicleDetails(query.data?.data, config.demoMode), [query.data]);
+  const live=useLiveVehicleStore(state=>state.byVehicleId);
+  const vehicles = useMemo(() => vehicleDetails(query.data?.data.map(vehicle=>({...vehicle,latestLocation:live[vehicle.id]??vehicle.latestLocation})), config.demoMode), [query.data,live]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -28,7 +36,7 @@ export default function VehiclesScreen() {
   }, [vehicles, search]);
 
   const renderCard = ({ item }: { item: VehicleCardDetail }) => (
-    <View style={styles.card}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${item.vehicle_number}`} onPress={()=>setSelected(item)} style={styles.card}>
       <View style={styles.cardHeader}>
         <VehicleVisual visual={item.visual} />
         <View style={styles.headerRight}>
@@ -82,7 +90,7 @@ export default function VehiclesScreen() {
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 
   return (
@@ -128,7 +136,11 @@ export default function VehiclesScreen() {
         renderItem={renderCard}
         contentContainerStyle={styles.list}
         ListEmptyComponent={<Text style={styles.empty}>{search.trim() ? 'No vehicles match your search.' : 'No vehicles available.'}</Text>}
+        ListFooterComponent={query.hasNextPage?<Pressable accessibilityRole="button" disabled={query.isFetchingNextPage} onPress={()=>void query.fetchNextPage()} style={{padding:16,alignItems:'center'}}><Text>Load more vehicles</Text></Pressable>:null}
       />}
+      {caps.addVehicle?<Pressable accessibilityRole="button" accessibilityLabel="Add Vehicle" onPress={()=>router.push('/(app)/add-vehicle')} style={{position:'absolute',bottom:28,right:20,minWidth:52,minHeight:52,alignItems:'center',justifyContent:'center',backgroundColor:'#fff',borderRadius:28,elevation:4}}><FontAwesome6 name="circle-plus" size={48} color="#ee0509"/></Pressable>:null}
+      <VehicleActions vehicle={selected} onClose={()=>setSelected(null)} onShare={()=>{setShare(selected);setSelected(null)}}/>
+      <ShareSheet vehicleNumber={share?.vehicle_number??null} vehicleId={share?.id} onClose={()=>setShare(null)}/>
     </View>
   );
 }

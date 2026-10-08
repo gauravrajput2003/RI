@@ -227,11 +227,10 @@ describe('resource authorization with both customers persisted', () => {
       await request(app)[method]('/api/v1'+path).send({}).expect(401);
     }
   });
-  it.each([[a,va,b], [b,vb,a]])('sets creation ownership and permits own updates/deletion for %s', async (user, own, other) => {
-    const response = await request(app).post('/api/v1/vehicles').set('Authorization',`Bearer ${token(user)}`)
-      .send({vehicleNumber:'new',owner_id:other,user_id:other}).expect(201);
-    expect(response.body.data.owner_id).toBe(user);
-    await get(other, `/vehicles/${response.body.data.id}`).expect(404);
+  it.each([[a,va,b], [b,vb,a]])('rejects client vehicle creation while preserving scoped updates/deletion for %s', async (user, own, other) => {
+    await request(app).post('/api/v1/vehicles').set('Authorization',`Bearer ${token(user)}`)
+      .send({vehicleNumber:'new',owner_id:other,user_id:other}).expect(403);
+    expect((await state.db!.query("SELECT id FROM vehicles WHERE vehicle_number='new'")).rows).toHaveLength(0);
     await request(app).patch(`/api/v1/vehicles/${own}`).set('Authorization',`Bearer ${token(user)}`).send({alias:'mine',owner_id:other}).expect(200);
     expect((await get(user, `/vehicles/${own}`).expect(200)).body.data.alias).toBe('mine');
     await get(other, `/vehicles/${own}`).expect(404);

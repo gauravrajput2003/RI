@@ -1,0 +1,24 @@
+import { useState } from 'react';
+import { Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Access, Screen, Field, Options, Button, form } from '../../components/MobileForm';
+import { api } from '../../services/api/client';
+import { useAccount, mobileMessage, requireOnline } from '../../services/api/mobile';
+export default function AddVehicle(){return <Access capability="addVehicle"><AddForm/></Access>}
+type Option={id:string;name?:string;username?:string;email:string};
+const labels=(items:Option[]|undefined)=>(items??[]).map(item=>({id:item.id,label:item.name||item.username||item.email}));
+const choices=(values:string[])=>values.map(value=>({id:value,label:value}));
+function AddForm(){
+ const account=useAccount(),cache=useQueryClient();
+ const [selectedAdmin,setAdmin]=useState(''),[clientId,setClient]=useState(''),[deviceImei,setImei]=useState(''),[simNumber,setSim]=useState(''),[deviceProtocol,setProtocol]=useState('GT06'),[simOperator,setOperator]=useState('Jio');
+ const [vehicleNumber,setNumber]=useState(''),[vehicleType,setType]=useState('bike'),[alias,setAlias]=useState(''),[mileage,setMileage]=useState(''),[limit,setLimit]=useState(''),[coins,setCoins]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const adminId=account.data?.role==='ADMIN'?account.data.id:selectedAdmin;
+ const admins=useQuery({queryKey:['mobile-vehicle-admins'],enabled:account.data?.role==='SUPER_ADMIN',queryFn:async()=>(await api.get<{data:Option[]}>('/vehicle-admin-options')).data.data});
+ const clients=useQuery({queryKey:['mobile-vehicle-clients',adminId],enabled:Boolean(adminId),queryFn:async()=>(await api.get<{data:Option[]}>('/vehicle-client-options',{params:{adminId}})).data.data});
+ async function submit(){if(busy)return;setError('');setBusy(true);try{requireOnline();if(!clientId||!adminId||!deviceImei.trim()||!vehicleNumber.trim())throw new Error('Select a client and enter IMEI and vehicle number.');if(!mileage||!limit||!Number.isFinite(Number(mileage))||Number(mileage)<0||!Number.isFinite(Number(limit))||Number(limit)<=0)throw new Error('Enter valid mileage and overspeed values.');if(coins&&(!Number.isFinite(Number(coins))||Number(coins)<0))throw new Error('Enter a valid coin amount.');await api.post('/fleet-vehicles',{adminId,clientId,deviceImei:deviceImei.trim(),deviceProtocol,simNumber,simOperator,vehicleNumber:vehicleNumber.trim(),vehicleType,mileage:Number(mileage),overspeedLimit:Number(limit),coins:Number(coins||0),alias,active:true});await cache.invalidateQueries({queryKey:['vehicles']});await cache.invalidateQueries({queryKey:['mobile-account']});router.replace('/(app)/vehicles')}catch(e){setError(mobileMessage(e))}finally{setBusy(false)}}
+ return <Screen backTo="vehicles" title="Add Vehicle"><Text style={form.heading}>Client Details</Text><View style={form.card}>{account.data?.role==='SUPER_ADMIN'?<Options label="Admin" value={selectedAdmin} options={labels(admins.data)} onChange={id=>{setAdmin(id);setClient('')}}/>:null}<Options label="Client" value={clientId} options={labels(clients.data)} onChange={setClient}/>{clients.isFetching?<Text>Loading clients…</Text>:null}{clients.isError?<Button label="Retry clients" onPress={()=>void clients.refetch()}/>:null}<Field label="Coin" placeholder="Coins to assign" keyboardType="numeric" value={coins} onChangeText={setCoins}/><Text style={form.muted}>Available balance: {account.isFetching?'Loading…':account.data?.coins??'Unavailable'}</Text></View>
+ <Text style={form.heading}>Device Information</Text><View style={form.card}><Field label="IMEI Number" placeholder="Enter IMEI Number" value={deviceImei} onChangeText={setImei} maxLength={32}/><Field label="SIM Number" placeholder="Enter SIM Number" value={simNumber} onChangeText={setSim} maxLength={32}/><Options label="Device Type" value={deviceProtocol} options={choices(['GT06','W15'])} onChange={setProtocol}/><Options label="SIM Operator" value={simOperator} options={choices(['Jio','Airtel','VI'])} onChange={setOperator}/></View>
+ <Text style={form.heading}>Vehicle Information</Text><View style={form.card}><Field label="Vehicle Number" value={vehicleNumber} onChangeText={setNumber} maxLength={80}/><Options label="Vehicle Type" value={vehicleType} options={choices(['bike','scooter','car','bus','truck','van'])} onChange={setType}/><Field label="Alias" value={alias} onChangeText={setAlias} maxLength={120}/><Field label="Mileage" value={mileage} onChangeText={setMileage} keyboardType="numeric"/><Field label="Overspeed" value={limit} onChangeText={setLimit} keyboardType="numeric"/></View>
+ {error?<Text accessibilityRole="alert" style={form.error}>{error}</Text>:null}<Button label={busy?'Creating…':'Create Vehicle'} disabled={busy} onPress={()=>void submit()}/></Screen>;
+}

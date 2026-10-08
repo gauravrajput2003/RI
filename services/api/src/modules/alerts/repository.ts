@@ -65,3 +65,38 @@ export async function discardAnnouncementImage(actor:string,publicId:string){
 }
 export async function activeAnnouncements(actor:string){return query(`WITH RECURSIVE principal_chain AS (SELECT id,owner_id,role FROM users WHERE id=$1 UNION ALL SELECT u.id,u.owner_id,u.role FROM users u JOIN principal_chain p ON u.id=p.owner_id) SELECT ${announcementFields} FROM announcements a JOIN users creator ON creator.id=a.created_by WHERE a.archived_at IS NULL AND a.active AND now() BETWEEN a.starts_at AND a.ends_at AND a.owner_id IN (SELECT id FROM principal_chain) AND ((a.target_type IN ('ADMIN','CLIENT') AND EXISTS(SELECT 1 FROM announcement_recipients ar WHERE ar.announcement_id=a.id AND ar.user_id=$1)) OR (a.target_type='ALL_CLIENTS' AND (SELECT role FROM principal_chain WHERE id=$1)='CLIENT')) AND (NOT a.dont_show_again OR NOT EXISTS(SELECT 1 FROM announcement_dismissals d WHERE d.announcement_id=a.id AND d.user_id=$1)) ORDER BY a.starts_at DESC`,[actor])}
 export async function dismissAnnouncement(actor:string,id:string){const visible=await activeAnnouncements(actor);if(!visible.rows.some(row=>row.id===id))throw new AppError(404,'ANNOUNCEMENT_NOT_FOUND','Announcement not found');await query('INSERT INTO announcement_dismissals(announcement_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[id,actor])}
+
+// Recipient reads never use the management/creator scope as a substitute for targeting.
+const recipientAnnouncementsCte=`WITH RECURSIVE principal_chain AS (
+ SELECT id,owner_id,role FROM users WHERE id=$1 AND active
+ UNION SELECT u.id,u.owner_id,u.role FROM users u JOIN principal_chain p ON u.id=p.owner_id
+), received AS (
+ SELECT a.id,a.title,a.body_html AS "bodyHtml",a.message_type AS "messageType",a.image_url AS "imageUrl",
+ a.starts_at AS "startsAt",a.ends_at AS "endsAt",a.created_at AS "createdAt",a.updated_at AS "updatedAt",
+ a.dont_show_again AS "dontShowAgain",r.read_at AS "readAt",
+ (r.read_at IS NULL OR r.read_at<a.updated_at) AND (d.dismissed_at IS NULL OR d.dismissed_at<a.updated_at) AS unread,
+ d.dismissed_at IS NOT NULL AND d.dismissed_at>=a.updated_at AS dismissed
+ FROM announcements a
+ LEFT JOIN announcement_reads r ON r.announcement_id=a.id AND r.user_id=$1
+ LEFT JOIN announcement_dismissals d ON d.announcement_id=a.id AND d.user_id=$1
+ WHERE a.archived_at IS NULL AND a.active AND now() BETWEEN a.starts_at AND a.ends_at
+ AND a.owner_id IN (SELECT id FROM principal_chain)
+ AND (EXISTS(SELECT 1 FROM announcement_recipients ar WHERE ar.announcement_id=a.id AND ar.user_id=$1)
+ OR (a.target_type='ALL_CLIENTS' AND (SELECT role FROM principal_chain WHERE id=$1)='CLIENT'))
+)`;
+export async function myAnnouncements(actor:string){
+ const result=await query(`${recipientAnnouncementsCte} SELECT * FROM received ORDER BY "startsAt" DESC,id`,[actor]);
+ return {rows:result.rows,unreadCount:result.rows.filter(row=>row.unread).length};
+}
+export async function readReceivedAnnouncement(actor:string,id:string){
+ const result=await query(`${recipientAnnouncementsCte} INSERT INTO announcement_reads(announcement_id,user_id)
+ SELECT id,$1 FROM received WHERE id=$2
+ ON CONFLICT(announcement_id,user_id) DO UPDATE SET read_at=now() RETURNING announcement_id`,[actor,id]);
+ if(!result.rowCount)throw new AppError(404,'ANNOUNCEMENT_NOT_FOUND','Announcement not found');
+}
+export async function dismissReceivedAnnouncement(actor:string,id:string){
+ const result=await query(`${recipientAnnouncementsCte} INSERT INTO announcement_dismissals(announcement_id,user_id)
+ SELECT id,$1 FROM received WHERE id=$2
+ ON CONFLICT(announcement_id,user_id) DO UPDATE SET dismissed_at=now() RETURNING announcement_id`,[actor,id]);
+ if(!result.rowCount)throw new AppError(404,'ANNOUNCEMENT_NOT_FOUND','Announcement not found');
+}

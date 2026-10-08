@@ -14,9 +14,10 @@ const native = vi.hoisted(() => {
     sockets: [] as { handlers: Map<string, (...args: unknown[]) => void>; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] };
 });
 vi.mock('expo-secure-store', () => ({ getItemAsync: async (key: string) => native.secure.get(key) ?? null, setItemAsync: async (key: string, value: string) => { native.secure.set(key, value); }, deleteItemAsync: async (key: string) => { native.secure.delete(key); } }));
+vi.mock('expo-constants', () => ({ default: { expoConfig: { hostUri: 'localhost:8081' } } }));
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: { getItem: async (key: string) => native.disk.get(key) ?? null, setItem: async (key: string, value: string) => { native.disk.set(key, value); }, removeItem: async (key: string) => { native.disk.delete(key); } } }));
 vi.mock('@react-native-community/netinfo', () => ({ default: { addEventListener: (callback: typeof native.network) => { native.network = callback; return native.stopNetwork; } } }));
-vi.mock('react-native', () => ({ AppState: { currentState: 'active', addEventListener: (_event: string, callback: typeof native.app) => { native.app = callback; return { remove: native.stopApp }; } } }));
+vi.mock('react-native', () => ({ Platform: { OS: 'android' }, AppState: { currentState: 'active', addEventListener: (_event: string, callback: typeof native.app) => { native.app = callback; return { remove: native.stopApp }; } } }));
 vi.mock('socket.io-client', () => ({ io: () => {
   const handlers = new Map<string, (...args: unknown[]) => void>();
   const socket = { handlers, auth: {}, connect: vi.fn(), disconnect: vi.fn(), on: (event: string, callback: (...args: unknown[]) => void) => handlers.set(event, callback), removeAllListeners: () => handlers.clear() };

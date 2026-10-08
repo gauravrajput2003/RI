@@ -29,6 +29,8 @@ export const vehicleSchema = z.object({
   id: z.string(), vehicle_number: z.string(), alias: z.string().nullable().default(null),
   vehicle_type: z.string().nullable().default(null), odometer: numeric.nullable().default(null),
   active: z.boolean(), protocol: z.string().optional(),
+  remark:z.string().nullable().optional(),mileage:nullableNumber,overspeed_limit:nullableNumber,
+  billing_start:z.string().nullable().optional(),billing_due:z.string().nullable().optional(),
 });
 export function normalizeVehicles(input: unknown): Vehicle[] {
   return z.array(vehicleSchema).parse(input);
@@ -37,5 +39,4 @@ export function normalizeHistory(input: unknown): Location[] {
   if (!Array.isArray(input)) return [];
   return input.map(normalizeLocation).filter((loc): loc is Location => loc !== null);
 }
-
 

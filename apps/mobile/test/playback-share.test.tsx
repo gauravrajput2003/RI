@@ -35,6 +35,7 @@ vi.mock('@expo/vector-icons', () => ({
   Feather: 'Feather',
   Ionicons: 'Ionicons',
 }));
+vi.mock('../services/api/mobile',()=>({createVehicleShare:vi.fn(async()=>({url:'https://tracking.test/session/opaque',expiresAt:'2026-10-07T12:00:00Z'})),mobileMessage:(error:Error)=>error.message}));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -43,11 +44,11 @@ describe('ShareSheet', () => {
     vi.clearAllMocks();
   });
 
-  it('renders all duration options and calls Share.share with clear disclaimer', async () => {
+  it('selects a duration, generates a session, then opens the native share sheet', async () => {
     let tree!: ReactTestRenderer;
     const onClose = vi.fn();
     await act(async () => {
-      tree = create(<ShareSheet vehicleNumber="HR12AY6674" onClose={onClose} />);
+      tree = create(<ShareSheet vehicleNumber="HR12AY6674" vehicleId="vehicle-1" onClose={onClose} />);
     });
 
     const buttons = tree.root
@@ -55,23 +56,23 @@ describe('ShareSheet', () => {
       .filter(p => p.props.accessibilityLabel?.startsWith('Share for '));
     expect(buttons.length).toBe(shareDurations.length);
 
-    // Tap first option (15 Minutes)
+    // Selecting a duration must not share before confirmation.
     await act(async () => {
       await buttons[0].props.onPress();
     });
+    expect(Share.share).not.toHaveBeenCalled();
+    await act(async()=>{await tree.root.findAllByType('Pressable' as React.ElementType).find(p=>p.props.accessibilityLabel==='Confirm sharing')!.props.onPress()});
 
     expect(Share.share).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Vehicle HR12AY6674 Share',
+        title: 'HR12AY6674',
         message: expect.stringContaining('HR12AY6674'),
       })
     );
 
-    // Verify it plainly states that live tracking link is unavailable (does not fabricate a fake link)
+    // The generated URL comes from the share service, never authentication tokens.
     const callArg = (vi.mocked(Share.share).mock.calls[0][0] as ShareContent).message;
-    expect(callArg).toContain('unavailable');
-    expect(callArg).not.toContain('http://');
-    expect(callArg).not.toContain('https://');
+    expect(callArg).toContain('https://tracking.test/session/opaque');
     expect(onClose).toHaveBeenCalled();
 
     await act(async () => tree.unmount());
@@ -112,4 +113,3 @@ describe('Demo History & Playback API Integration', () => {
     await act(async () => tree.unmount());
   });
 });
-

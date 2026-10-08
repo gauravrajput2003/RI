@@ -1,83 +1,12 @@
-import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Sheet } from './Sheet';
-
-export const shareDurations = [
-  { label: '15 Minutes', duration: '15 minutes' },
-  { label: '30 Minutes', duration: '30 minutes' },
-  { label: '1 Hour', duration: '1 hour' },
-  { label: '4 Hours', duration: '4 hours' },
-  { label: '1 Day', duration: '1 day' },
-] as const;
-
-export function ShareSheet({ vehicleNumber, onClose }: { vehicleNumber: string | null; onClose(): void }) {
-  const onSelect = async (duration: string) => {
-    onClose();
-    if (!vehicleNumber) return;
-    try {
-      await Share.share({
-        title: `Vehicle ${vehicleNumber} Share`,
-        message: `Sharing vehicle ${vehicleNumber} tracking for ${duration}. Note: Live tracking link is currently unavailable as the share-token service is not configured.`,
-      });
-    } catch {
-      // Handled if share sheet is dismissed or unsupported
-    }
-  };
-
-  return (
-    <Sheet visible={Boolean(vehicleNumber)} onClose={onClose} title="Share Vehicle">
-      <View style={styles.container}>
-        <Text style={styles.subtitle}>Select duration to share tracking for {vehicleNumber}:</Text>
-        {shareDurations.map(item => (
-          <Pressable
-            key={item.label}
-            accessibilityRole="button"
-            accessibilityLabel={`Share for ${item.label}`}
-            onPress={() => void onSelect(item.duration)}
-            style={styles.row}
-          >
-            <View style={styles.iconCircle}>
-              <MaterialCommunityIcons name="clock-outline" size={20} color="#0f766e" />
-            </View>
-            <Text style={styles.label}>{item.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </Sheet>
-  );
+import { useState } from 'react';
+import { Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { createVehicleShare, mobileMessage } from '../../services/api/mobile';
+export const shareDurations=[{label:'5 Minutes',minutes:5},{label:'30 Minutes',minutes:30},{label:'1 Hour',minutes:60},{label:'12 Hours',minutes:720},{label:'1 Day',minutes:1440},{label:'7 Days',minutes:10080},{label:'30 Days',minutes:43200}] as const;
+export function ShareSheet({vehicleNumber,vehicleId,onClose}:{vehicleNumber:string|null;vehicleId?:string|null;onClose():void}){
+ const [minutes,setMinutes]=useState<number|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function confirm(){if(busy||minutes===null)return;setBusy(true);setError('');try{if(!vehicleId)throw new Error('Select a vehicle from your live fleet.');const result=await createVehicleShare(vehicleId,minutes);await Share.share({title:vehicleNumber??'Vehicle tracking',message:`${vehicleNumber} · Live tracking until ${new Date(result.expiresAt).toLocaleString()}\n${result.url}`});onClose();setMinutes(null)}catch(e){setError(mobileMessage(e))}finally{setBusy(false)}}
+ function close(){if(busy)return;setMinutes(null);setError('');onClose()}
+ return <Modal transparent visible={Boolean(vehicleNumber)} animationType="fade" onRequestClose={close}><View style={styles.overlay}><View accessibilityViewIsModal style={styles.dialog}><View style={styles.header}><Text style={styles.title}>{vehicleNumber}</Text></View><View style={styles.body}><Text style={styles.hint}>ⓘ Share vehicle location for time</Text>{shareDurations.map(item=><Pressable key={item.minutes} accessibilityRole="radio" accessibilityLabel={`Share for ${item.label}`} accessibilityState={{checked:minutes===item.minutes}} disabled={busy} onPress={()=>setMinutes(item.minutes)} style={styles.option}><Feather name={minutes===item.minutes?'check-circle':'circle'} size={21} color="#555"/><Text style={styles.label}>{item.label}</Text></Pressable>)}{error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}</View><View style={styles.footer}><Pressable accessibilityRole="button" accessibilityLabel="Confirm sharing" disabled={busy||minutes===null} onPress={()=>void confirm()} style={{padding:12,opacity:busy||minutes===null?0.4:1}}><Feather name="check-circle" size={29} color="#1dcc20"/></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Cancel sharing" disabled={busy} onPress={close} style={{padding:12}}><Feather name="x-circle" size={29} color="#ee0509"/></Pressable></View>{busy?<Text style={styles.loading}>Creating sharing session…</Text>:null}</View></View></Modal>;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 8,
-    gap: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#f8fafc',
-    marginBottom: 6,
-    gap: 12,
-  },
-  iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#e6f4f1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1e293b',
-  },
-});
+const styles=StyleSheet.create({overlay:{flex:1,backgroundColor:'#0008',justifyContent:'center',alignItems:'center',padding:24},dialog:{width:'100%',maxWidth:360,backgroundColor:'#fff'},header:{backgroundColor:'#ee0509',padding:16,alignItems:'center'},title:{color:'#fff',fontWeight:'700',fontSize:18},body:{padding:14},hint:{color:'#e69b00',fontSize:14,fontStyle:'italic',marginBottom:8},option:{flexDirection:'row',alignItems:'center',gap:9,minHeight:39,paddingVertical:8},label:{fontSize:15,color:'#111'},footer:{flexDirection:'row',justifyContent:'center',gap:12,borderTopWidth:1,borderColor:'#eee',padding:2},error:{color:'#b91c1c',marginTop:10},loading:{textAlign:'center',padding:8,color:'#666'}});

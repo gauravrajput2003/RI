@@ -1,0 +1,34 @@
+import React from 'react';
+import {act,create,type ReactTestRenderer} from 'react-test-renderer';
+import {beforeEach,expect,it,vi} from 'vitest';
+import Contact from '../app/(app)/contact';
+import defaultLogo from '../assets/loginlogo.png';
+const state=vi.hoisted(()=>({data:{name:'Parent Admin',phone:'9876543210',email:'parent@test.local',logoUrl:'https://example.test/parent.png'} as {name:string;phone:string|null;email:string|null;logoUrl:string|null}|null,open:vi.fn(),push:vi.fn()}));
+vi.mock('../services/api/mobile',()=>({useSupportContact:()=>({data:state.data,isLoading:false,isError:false}),mobileMessage:()=> 'Unavailable'}));
+vi.mock('../components/MobileForm',()=>({Screen:({children}:{children:React.ReactNode})=><>{children}</>}));
+vi.mock('../components/StateViews',()=>({ErrorState:'ErrorState',Loading:'Loading'}));
+vi.mock('expo-router',()=>({router:{replace:state.push}}));
+vi.mock('@expo/vector-icons',()=>({Feather:'Icon'}));
+vi.mock('react-native',()=>({Image:'Image',Pressable:'Pressable',Text:'Text',View:'View',StyleSheet:{create:(styles:unknown)=>styles},Linking:{openURL:state.open}}));
+Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+beforeEach(()=>{state.data={name:'Parent Admin',phone:'9876543210',email:'parent@test.local',logoUrl:'https://example.test/parent.png'};state.open.mockReset();state.open.mockResolvedValue(undefined)});
+it('uses the direct parent details for call and email actions',async()=>{
+ let tree!:ReactTestRenderer;await act(async()=>{tree=create(<Contact/>)});
+ expect(JSON.stringify(tree.toJSON())).toContain('Parent Admin');
+ await act(async()=>tree.root.findByProps({accessibilityLabel:'Call Now'}).props.onPress());
+ expect(state.open).toHaveBeenCalledWith('tel:9876543210');
+ await act(async()=>tree.root.findByProps({accessibilityLabel:'Email parent@test.local'}).props.onPress());
+ expect(state.open).toHaveBeenCalledWith('mailto:parent%40test.local');
+ await act(async()=>tree.root.findByProps({accessibilityLabel:'Support logo'}).props.onError());
+ expect(tree.root.findByProps({accessibilityLabel:'Support logo'}).props.source).toEqual(defaultLogo);
+ expect(JSON.stringify(tree.toJSON())).toContain('parent@test.local');
+ await act(async()=>tree.unmount());
+});
+it('uses only the default logo when parent details are missing and disables calling',async()=>{
+ state.data={name:'Parent Admin',phone:null,email:null,logoUrl:null};
+ let tree!:ReactTestRenderer;await act(async()=>{tree=create(<Contact/>)});
+ expect(tree.root.findByProps({accessibilityLabel:'Support logo'}).props.source).toEqual(defaultLogo);
+ expect(tree.root.findByProps({accessibilityLabel:'Call Now'}).props.disabled).toBe(true);
+ expect(JSON.stringify(tree.toJSON())).toContain('Not provided');
+ expect(state.open).not.toHaveBeenCalled();await act(async()=>tree.unmount());
+});

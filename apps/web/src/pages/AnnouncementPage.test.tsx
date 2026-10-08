@@ -28,3 +28,26 @@ it('opens an existing image announcement with its image and previews it',async()
  expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
  expect(screen.getAllByRole('img',{name:'Service notice'}).length).toBeGreaterThan(0);
 });
+
+it('preserves the message DOM and caret while typing and saves the latest body',async()=>{
+ mocks.patch.mockResolvedValue({data:{data:row}});
+ renderPage();fireEvent.click(await screen.findByText('Service notice'));
+ const editor=screen.getByLabelText('Message Body');
+ expect(editor.innerHTML).toBe(row.bodyHtml);
+ editor.textContent='Testing';
+ const text=editor.firstChild!;
+ const selection=window.getSelection()!;
+ selection.collapse(text,4);
+ fireEvent.input(editor);
+ expect(editor.firstChild).toBe(text);
+ expect(selection.anchorNode).toBe(text);
+ expect(selection.anchorOffset).toBe(4);
+ // A subsequent character must retain the same editable text node too.
+ text.textContent='Testing announcement';
+ selection.collapse(text,20);
+ fireEvent.input(editor);
+ expect(editor.firstChild).toBe(text);
+ expect(selection.anchorOffset).toBe(20);
+ fireEvent.click(screen.getByRole('button',{name:'Save'}));
+ await vi.waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('/announcements/notice-1',expect.objectContaining({bodyHtml:'Testing announcement'})));
+});

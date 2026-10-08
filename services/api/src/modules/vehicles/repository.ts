@@ -3,7 +3,7 @@ import {activityQuery, vehicleActivityJoin} from './activity.js';
 import {userScopeCte} from '../authorization/scope.js';
 export const listVehicles=(owner:string,limit:number,cursor?:string)=>activityQuery(`
   ${userScopeCte}
-  SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.odometer,v.active,v.created_at,activity.*
+  SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.odometer,v.active,v.created_at,v.remark,v.mileage,v.overspeed_limit,v.billing_start,v.billing_due,activity.*
   FROM vehicles v ${vehicleActivityJoin}
   JOIN user_scope scope ON scope.id=v.owner_id
   WHERE ($2::uuid IS NULL OR v.id>$2) ORDER BY v.id LIMIT $3`,[owner,cursor??null,limit]);

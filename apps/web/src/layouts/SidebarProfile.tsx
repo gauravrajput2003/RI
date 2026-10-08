@@ -16,7 +16,7 @@ export function SidebarProfile({account,userId,role}:{account:AccountSummary|und
  const {hasPermission}=usePermissions();
  const input=useRef<HTMLInputElement>(null),cache=useQueryClient(),[issue,setIssue]=useState('');
  const upload=useMutation({mutationFn:async(file:File)=>{if(!allowed.includes(file.type))throw new Error('Choose a JPEG, PNG, or WebP image');if(file.size>maxBytes)throw new Error('Profile photo must be 2 MB or smaller');const dataUri=await imageData(file);return(await api.post<Envelope<{avatarUrl:string}>>('/account-avatar',{dataUri})).data.data},onSuccess:data=>{cache.setQueryData<AccountSummary>(['account-summary',userId],current=>current?{...current,avatarUrl:data.avatarUrl}:current);setIssue('')},onError:error=>setIssue(error instanceof Error&&!('response' in error)?error.message:errorMessage(error))});
- const name=account?.name?.trim()||account?.username||account?.email||'Loading profile…';
+ const name=role==='SUPER_ADMIN'?'RI':account?.name?.trim()||account?.username||account?.email||'Loading profile…';
  const initials=name.split(/\s+/).slice(0,2).map(part=>part[0]?.toUpperCase()).join('')||'RI';
  const copy=(value:string)=>{void navigator.clipboard?.writeText(value)};
  return <section className="profile" aria-label="Your profile">

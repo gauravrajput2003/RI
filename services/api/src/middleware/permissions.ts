@@ -51,6 +51,9 @@ export async function enforceApiPermissions(req:AuthRequest,_res:Response,next:N
     const path=req.path.replace(/\/+$/,'')||'/';
     // Bootstrap always works; management endpoints retain their SUPER_ADMIN role guard.
     if(path==='/auth/permissions'||path.startsWith('/super-admin/permissions')){next();return}
+    // Reading explicitly received notices is independent of announcement-management grants.
+    if((['GET','HEAD'].includes(req.method)&&path==='/announcements/my')||
+       (req.method==='POST'&&/^\/announcements\/[^/]+\/(?:read|hide-popup)$/.test(path))){next();return}
     const permissions=await effectivePermissions(req.user.id,'ADMIN');
     const required=apiPermissionRequirement(req.method,path);
     if(!required?.length||!required.some(key=>hasEffectivePermission(permissions,key)))throw new AppError(403,'FORBIDDEN','You do not have permission to perform this operation.');

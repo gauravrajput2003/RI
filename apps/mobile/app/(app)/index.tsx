@@ -15,6 +15,8 @@ import { config } from '../../constants/config';
 import { stateForVehicle } from '../../features/vehicles/status';
 import { Loading, ErrorState } from '../../components/StateViews';
 import type { Vehicle } from '../../types/models';
+import {useQueryClient} from '@tanstack/react-query';
+import {announcementInboxKey} from '../../services/api/announcements';
 const DashboardRow = memo(function DashboardRow({ vehicle, select }: { vehicle: Vehicle; select(vehicle: Vehicle): void }) {
   useLatestLocation(vehicle.id);
   const live = useLiveVehicleStore(state => state.byVehicleId[vehicle.id]);
@@ -22,10 +24,11 @@ const DashboardRow = memo(function DashboardRow({ vehicle, select }: { vehicle: 
   return <BikeCard vehicle={vehicle} live={live} extra={config.demoMode ? demoCardExtras[vehicle.id] : undefined} onPress={open} />;
 });
 export default function Dashboard() {
+  const cache=useQueryClient();
   const query = useVehicles(); const vehicles = useMemo(() => query.data?.data ?? [], [query.data]);
   const [filter, setFilter] = useState<FleetFilter>('All'); const [search, setSearch] = useState(''); const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Vehicle | null>(null); const [message, setMessage] = useState<string | null>(null);
-  const [shareVehicle, setShareVehicle] = useState<string | null>(null);
+  const [shareVehicle, setShareVehicle] = useState<Vehicle | null>(null);
   const ids = useLiveVehicleStore(useShallow(state => visibleVehicles(vehicles, state.byVehicleId, filter, search).map(vehicle => vehicle.id)));
   const counts = useLiveVehicleStore(useShallow(state => fleetFilters.map(item => vehicles.filter(vehicle => matchesFilter(state.byVehicleId[vehicle.id], item.label, stateForVehicle(vehicle, state.byVehicleId[vehicle.id]))).length)));
   const byId = useMemo(() => new Map(vehicles.map(vehicle => [vehicle.id, vehicle])), [vehicles]);
@@ -37,7 +40,9 @@ export default function Dashboard() {
     const vehicle = selected; setSelected(null);
     if (name === 'Live Map') { useVehicleStore.getState().setSelected(vehicle.id); router.push('/(app)/map'); }
     else if (name === 'Play Back') { router.push({ pathname: '/(app)/playback' as never, params: { vehicleId: vehicle.id, vehicleNumber: vehicle.vehicle_number } }); }
-    else if (name === 'Share') { setShareVehicle(vehicle.vehicle_number); }
+    else if (name === 'Share') { setShareVehicle(vehicle); }
+    else if (name === 'Edit') router.push({pathname:'/(app)/edit-vehicle',params:{vehicleId:vehicle.id}});
+    else if (name === 'Notification') router.push({pathname:'/(app)/notifications',params:{vehicleId:vehicle.id}});
     else if (name === 'Report') router.push({ pathname: '/(app)/reports', params: { vehicleNumber: vehicle.vehicle_number, vehicleId: vehicle.id } });
     else setMessage((config.demoMode ? 'Demo preview: ' : '') + name + ' for ' + vehicle.vehicle_number + ' is not connected yet. No command was sent and no data was shared.');
   };
@@ -46,11 +51,11 @@ export default function Dashboard() {
     <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>{fleetFilters.map((item, index) => <Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label + ' vehicles'} accessibilityState={{ selected: filter === item.label }} onPress={() => setFilter(item.label)} style={[styles.filter, { borderColor: item.color, backgroundColor: filter === item.label ? item.color : '#fff' }]}><Text style={[styles.count, { color: filter === item.label ? '#fff' : item.color }]}>{counts[index]}</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.filterLabel, { color: filter === item.label ? '#fff' : item.color }]}>{item.label}</Text></Pressable>)}</ScrollView></View>
     {query.isLoading && !query.data ? <Loading /> : query.isError && !query.data ? <ErrorState message="Unable to load vehicles" retry={() => query.refetch()} /> :
       <FlatList data={rows} keyExtractor={vehicle => vehicle.id} renderItem={renderRow} initialNumToRender={5} maxToRenderPerBatch={5} windowSize={5} contentContainerStyle={styles.cards}
-        refreshing={query.isRefetching} onRefresh={() => { void query.refetch(); }}
+        refreshing={query.isRefetching} onRefresh={() => { void query.refetch(); void cache.invalidateQueries({queryKey:announcementInboxKey}); }}
         ListEmptyComponent={<Text style={styles.empty}>{vehicles.length ? 'No vehicles match this filter.' : 'No vehicles assigned to your account yet.'}</Text>}
         ListFooterComponent={query.hasNextPage ? <Pressable accessibilityRole="button" disabled={query.isFetchingNextPage} onPress={() => { void query.fetchNextPage(); }} style={styles.more}><Text>Load more vehicles</Text></Pressable> : null} />}
     <BikeActions vehicle={selected?.vehicle_number ?? null} onClose={() => setSelected(null)} onAction={action} />
-    <ShareSheet vehicleNumber={shareVehicle} onClose={() => setShareVehicle(null)} />
+    <ShareSheet vehicleNumber={shareVehicle?.vehicle_number??null} vehicleId={shareVehicle?.id} onClose={() => setShareVehicle(null)} />
     <NoticeSheet message={message} onClose={() => setMessage(null)} />
   </View>;
 }

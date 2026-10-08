@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';import {randomUUID} from 'node:crypto';import {PGlite} from '@electric-sql/pglite';import {afterAll,beforeAll,describe,expect,it,vi} from 'vitest';import express from 'express';import request from 'supertest';import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 const state=vi.hoisted(()=>({db:undefined as PGlite|undefined}));
 vi.mock('../db/pool.js',()=>({query:async(sql:string,values?:unknown[])=>{const result=await state.db!.query(sql,values);return{rows:result.rows,rowCount:result.affectedRows||result.rows.length}},transaction:async(work:(client:{query:(sql:string,values?:unknown[])=>Promise<unknown>})=>Promise<unknown>)=>work({query:async(sql:string,values?:unknown[])=>{const result=await state.db!.query(sql,values);return{rows:result.rows,rowCount:result.affectedRows||result.rows.length}}})}));
 const secret='alerts-integration-secret-at-least-32-characters',admin=randomUUID(),other=randomUUID(),client=randomUUID(),vehicle=randomUUID(),otherVehicle=randomUUID();let app:express.Express;
@@ -22,5 +23,85 @@ describe('image announcements',()=>{
   expect(replaced.body.data.imagePublicId).toBe(nextId);
   const text=await auth('patch',`/announcements/${created.body.data.id}`).send({...base,messageType:'TEXT',bodyHtml:'<p>Back to text</p>',imageUrl:null,imagePublicId:null}).expect(200);
   expect(text.body.data).toMatchObject({messageType:'TEXT',imageUrl:null,imagePublicId:null});
+ });
+});
+
+describe('web records delivered to the authenticated mobile recipient',()=>{
+ const root=randomUUID(),child=randomUUID(),childC=randomUUID(),childD=randomUUID(),siblingClient=randomUUID(),foreignClient=randomUUID();
+ const tokens=new Map<string,string>();
+ const recipient=(id:string)=>request(app).get('/api/v1/announcements/my').set('Authorization',`Bearer ${tokens.get(id)}`);
+ const window={startsAt:new Date(Date.now()-60_000).toISOString(),endsAt:new Date(Date.now()+3_600_000).toISOString()};
+ const payload=(targetType:string,adminIds:string[],clientIds:string[]=[])=>({targetType,adminIds,clientIds,messageType:'TEXT',title:'Web to mobile',bodyHtml:'<p>One authoritative record</p>',...window,active:true,dontShowAgain:true});
+ beforeAll(async()=>{
+  await state.db!.exec(await readFile(new URL('../../../../database/migrations/015_account_password_recovery.sql',import.meta.url),'utf8'));
+  await state.db!.exec(await readFile(new URL('../../../../database/migrations/020_announcement_reads.sql',import.meta.url),'utf8'));
+  const hash=await bcrypt.hash('announcement-test-password',4);
+  await state.db!.query("INSERT INTO users(id,email,username,password_hash,role,name) VALUES($1,'root@notices.test','notice.root',$2,'SUPER_ADMIN','Root')",[root,hash]);
+  await state.db!.query('UPDATE users SET owner_id=$1,password_hash=$2 WHERE id IN ($3,$4)',[root,hash,admin,other]);
+  await state.db!.query('UPDATE users SET password_hash=$1 WHERE id=$2',[hash,client]);
+  for(const [id,parent,role] of [[child,admin,'ADMIN'],[childC,admin,'ADMIN'],[childD,admin,'ADMIN'],[siblingClient,admin,'CLIENT'],[foreignClient,other,'CLIENT']]){
+   await state.db!.query('INSERT INTO users(id,email,username,password_hash,role,owner_id) VALUES($1,$2,$3,$4,$5,$6)',[id,`${id}@notices.test`,id,hash,role,parent]);
+  }
+  for(const id of [root,admin,other,client,child,childC,childD,siblingClient,foreignClient]){
+   const email=(await state.db!.query<{email:string}>('SELECT email FROM users WHERE id=$1',[id])).rows[0].email;
+   const login=await request(app).post('/api/v1/auth/login').send({identifier:email,password:'announcement-test-password'}).expect(200);
+   tokens.set(id,login.body.data.accessToken);
+  }
+ },30000);
+ const create=async(actor:string,body:ReturnType<typeof payload>)=>(await request(app).post('/api/v1/announcements').set('Authorization',`Bearer ${tokens.get(actor)}`).send(body).expect(201)).body.data.id as string;
+ it.each([
+  ['A: Super Admin web to Client app',root,'CLIENT',[admin],[client],client],
+  ['B: Super Admin web to Admin app',root,'ADMIN',[admin],[],admin],
+  ['C: Admin web to its Client app',admin,'CLIENT',[admin],[client],client],
+  ['D: Admin web to its child Admin app',admin,'ADMIN',[child,childC,childD],[],child],
+ ] as const)('%s',async(_name,creator,type,admins,clients,target)=>{
+  const id=await create(creator,payload(type,[...admins],[...clients]));
+  const record=(await state.db!.query<{created_by:string;active:boolean}>('SELECT created_by,active FROM announcements WHERE id=$1',[id])).rows[0];
+  expect(record).toMatchObject({created_by:creator,active:true});
+  expect((await state.db!.query<{user_id:string}>('SELECT user_id FROM announcement_recipients WHERE announcement_id=$1',[id])).rows.map(r=>r.user_id).sort()).toEqual([...(type==='ADMIN'?admins:clients)].sort());
+  const result=(await recipient(target).expect(200)).body;
+  expect(result.data).toContainEqual(expect.objectContaining({id,title:'Web to mobile',unread:true}));
+  expect(result.unreadCount).toBe(result.data.filter((r:{unread:boolean})=>r.unread).length);
+  const managed=await request(app).get(`/api/v1/announcements/${id}`).set('Authorization',`Bearer ${tokens.get(creator)}`).expect(200);
+  expect(managed.body.data.id).toBe(id);
+  for(const unrelated of [other,foreignClient,siblingClient])expect((await recipient(unrelated).expect(200)).body.data.map((r:{id:string})=>r.id)).not.toContain(id);
+  if(type==='CLIENT')expect((await recipient(admin).expect(200)).body.data.map((r:{id:string})=>r.id)).not.toContain(id);
+  if(type==='ADMIN')for(const selected of admins)expect((await recipient(selected).expect(200)).body.data.map((r:{id:string})=>r.id)).toContain(id);
+ });
+ it('rejects sibling branches and cannot choose another recipient with query parameters',async()=>{
+  await request(app).post('/api/v1/announcements').set('Authorization',`Bearer ${tokens.get(admin)}`).send(payload('CLIENT',[other],[foreignClient])).expect(403);
+  await request(app).post('/api/v1/announcements').set('Authorization',`Bearer ${tokens.get(admin)}`).send(payload('ADMIN',[other])).expect(403);
+  const id=await create(root,payload('CLIENT',[admin],[client]));
+  const spoof=await recipient(siblingClient).query({clientId:client,userId:client}).expect(200);
+  expect(spoof.body.data.map((r:{id:string})=>r.id)).not.toContain(id);
+  await request(app).post(`/api/v1/announcements/${id}/read`).set('Authorization',`Bearer ${tokens.get(siblingClient)}`).expect(404);
+  await request(app).post(`/api/v1/announcements/${id}/hide-popup`).set('Authorization',`Bearer ${tokens.get(siblingClient)}`).expect(404);
+ });
+ it('persists per-recipient read and popup dismissal without removing the inbox record',async()=>{
+  const id=await create(root,payload('ADMIN',[child,childC]));
+  await request(app).post(`/api/v1/announcements/${id}/read`).set('Authorization',`Bearer ${tokens.get(child)}`).expect(204);
+  await request(app).post(`/api/v1/announcements/${id}/hide-popup`).set('Authorization',`Bearer ${tokens.get(child)}`).expect(204);
+  expect((await recipient(child).expect(200)).body.data).toContainEqual(expect.objectContaining({id,unread:false,dismissed:true}));
+  expect((await recipient(childC).expect(200)).body.data).toContainEqual(expect.objectContaining({id,unread:true,dismissed:false}));
+ });
+ it('filters inactive, future, expired and archived notices on the server',async()=>{
+  const ids=[];
+  ids.push(await create(root,{...payload('CLIENT',[admin],[client]),active:false}));
+  ids.push(await create(root,{...payload('CLIENT',[admin],[client]),startsAt:new Date(Date.now()+60_000).toISOString()}));
+  ids.push(await create(root,{...payload('CLIENT',[admin],[client]),startsAt:new Date(Date.now()-120_000).toISOString(),endsAt:new Date(Date.now()-60_000).toISOString()}));
+  const archived=await create(root,payload('CLIENT',[admin],[client]));ids.push(archived);
+  await request(app).delete(`/api/v1/announcements/${archived}`).set('Authorization',`Bearer ${tokens.get(root)}`).expect(204);
+  const visible=(await recipient(client).expect(200)).body.data.map((r:{id:string})=>r.id);
+  for(const id of ids)expect(visible).not.toContain(id);
+  await request(app).get('/api/v1/announcements/my').expect(401);
+  await request(app).post('/api/v1/announcements').set('Authorization',`Bearer ${tokens.get(client)}`).send(payload('ADMIN',[child])).expect(403);
+ });
+ it('keeps recipient reading independent of revoked announcement-management grants',async()=>{
+  const id=await create(root,payload('ADMIN',[childD]));
+  await state.db!.query('UPDATE admin_permissions SET allowed=false WHERE admin_id=$1',[childD]);
+  expect((await recipient(childD).expect(200)).body.data).toContainEqual(expect.objectContaining({id}));
+  await request(app).post(`/api/v1/announcements/${id}/read`).set('Authorization',`Bearer ${tokens.get(childD)}`).expect(204);
+  await request(app).get('/api/v1/announcements').set('Authorization',`Bearer ${tokens.get(childD)}`).expect(403);
+  await request(app).post('/api/v1/announcements').set('Authorization',`Bearer ${tokens.get(childD)}`).send(payload('ADMIN',[childD])).expect(403);
  });
 });

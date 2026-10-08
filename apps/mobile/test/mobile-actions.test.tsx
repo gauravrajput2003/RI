@@ -1,0 +1,25 @@
+import React from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { permissionKeys } from '../../../packages/shared-types/src/permissions';
+import type { MobileAccount } from '../features/account/capabilities';
+import Profile from '../app/(app)/profile';
+import { Access } from '../components/MobileForm';
+import { VehicleActions } from '../components/fleet/VehicleActions';
+const state=vi.hoisted(()=>({account:undefined as MobileAccount|undefined,loading:false,error:false}));
+vi.mock('../services/api/mobile',()=>({useAccount:()=>({data:state.account,isLoading:state.loading,isError:state.error,refetch:vi.fn()}),requireOnline:vi.fn(),mobileMessage:()=>''}));
+vi.mock('../services/api/auth',()=>({logout:vi.fn()}));
+vi.mock('../services/api/client',()=>({api:{post:vi.fn()}}));
+vi.mock('../store/authStore',()=>({useAuthStore:{getState:()=>({setTokens:vi.fn()})}}));
+vi.mock('../constants/config',()=>({config:{demoMode:false}}));
+vi.mock('expo-router',()=>({router:{push:vi.fn(),replace:vi.fn(),back:vi.fn()}}));
+vi.mock('@expo/vector-icons',()=>({Feather:'Icon',FontAwesome6:'Icon',MaterialCommunityIcons:'Icon'}));
+vi.mock('../components/fleet/Sheet',()=>({Sheet:({visible,children}:{visible:boolean;children:React.ReactNode})=>visible?<>{children}</>:null,NoticeSheet:()=>null}));
+vi.mock('react-native',()=>({View:'View',Text:'Text',Pressable:'Pressable',ScrollView:'ScrollView',TextInput:'TextInput',KeyboardAvoidingView:'KeyboardAvoidingView',ActivityIndicator:'ActivityIndicator',Platform:{OS:'android'},StyleSheet:{create:(s:unknown)=>s}}));
+Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+beforeEach(()=>{state.account={id:'same-id',role:'CLIENT',name:'Same name',email:'same@example.com',username:'same',mobile:null,avatarUrl:null,coins:'12.50',permissions:permissionKeys};state.loading=false;state.error=false});
+async function render(element:React.ReactElement){let tree!:ReactTestRenderer;await act(async()=>{tree=create(element)});return {tree,text:JSON.stringify(tree.toJSON()),close:async()=>act(async()=>tree.unmount())}}
+it('renders Client profile from the backend role without Add Vehicle or Announcement',async()=>{const r=await render(<Profile/>);expect(r.text).toContain('Same name');expect(r.text).toContain('12.50');expect(r.text).not.toContain('Add Vehicle');expect(r.text).not.toContain('Announcement');expect(r.text).not.toContain('Add Admin');await r.close()});
+it('renders Admin Add Vehicle and Announcement using actual grants',async()=>{state.account!.role='ADMIN';let r=await render(<Profile/>);expect(r.text).toContain('Add Vehicle');expect(r.text).toContain('Announcement');expect(r.text).not.toContain('Add Admin');await r.close();state.account!.permissions=[];r=await render(<Profile/>);expect(r.text).not.toContain('Add Vehicle');expect(r.text).not.toContain('Announcement');await r.close()});
+it('denies direct Client navigation to admin-only content',async()=>{for(const capability of ['announcements','addVehicle'] as const){const r=await render(<Access capability={capability}><span>Restricted form</span></Access>);expect(r.text).toContain('Access Denied');expect(r.text).not.toContain('Restricted form');await r.close()}});
+it('retains Client Edit, Share and Notification in the vehicle action sheet',async()=>{const r=await render(<VehicleActions vehicle={{id:'vehicle-id',vehicle_number:'OWN'}} onClose={vi.fn()} onShare={vi.fn()}/>);expect(r.text).toContain('Edit');expect(r.text).toContain('Share');expect(r.text).toContain('Notification');expect(r.text).toContain('file-pen');expect(r.text).toContain('share-nodes');expect(r.text).toContain('bell-slash');await r.close()});

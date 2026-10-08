@@ -13,6 +13,7 @@ import * as vehicleManagement from '../modules/vehicles/management.js';
 import {query,transaction} from '../db/pool.js';
 import {userScopeCte} from '../modules/authorization/scope.js';
 import {uploadAvatar,deleteAvatar} from '../modules/profile/cloudinary.js';
+import {vehicleDetailsBody,updateVehicleDetails} from '../modules/vehicles/edit-details.js';
 
 const asyncRoute=(fn:(req:AuthRequest,res:Response)=>Promise<void>)=>(req:AuthRequest,res:Response,next:NextFunction)=>fn(req,res).catch(next);
 const paging=z.object({page:z.coerce.number().int().min(1).default(1),pageSize:z.coerce.number().int().min(1).max(100).default(25),search:z.string().trim().max(100).default('')});
@@ -108,11 +109,12 @@ webApi.post('/clients/:id/reset-password',authorize('SUPER_ADMIN','ADMIN'),async
 webApi.delete('/clients/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{await clients.deleteClient(req.user!.id,z.string().uuid().parse(req.params.id));res.status(204).end()}));
 
 const vehicleBody=z.object({adminId:z.string().uuid(),clientId:z.string().uuid(),deviceImei:z.string().trim().min(5).max(32).regex(/^[a-zA-Z0-9-]+$/),deviceProtocol:z.enum(['GT06','W15']),simNumber:z.string().trim().max(32).optional().or(z.literal('')),simOperator:z.enum(['Jio','Airtel','VI']),simInfo:optionalText(500),gpsLocation:optionalText(500),vehicleNumber:z.string().trim().min(1).max(80),vehicleType:z.string().trim().min(1).max(80),mileage:z.coerce.number().min(0),overspeedLimit:z.coerce.number().positive(),coins:coinBalance.default(0),billingStart:z.string().date().optional().or(z.literal('')),billingDue:z.string().date().optional().or(z.literal('')),alias:optionalText(120),remark:optionalText(500),active:z.boolean().default(true),autoRenewal:z.boolean().default(false),doorConfigured:z.boolean().default(false),relayConfigured:z.boolean().default(false),buzzerConfigured:z.boolean().default(false),ignitionWiring:z.enum(['UNKNOWN','NOT_CONNECTED','CONNECTED_POWER_PLUS']).default('UNKNOWN'),acPowerPlus:z.boolean().default(false),parkingAlarmOnIgnition:z.boolean().default(false)}).refine(value=>!value.billingStart||!value.billingDue||value.billingDue>=value.billingStart,{message:'Billing due date must be on or after billing start',path:['billingDue']});
-const clientFields=['id','vehicle_number','vehicle_type','fleet_status','speed','tracker_timestamp','server_received_at','status_since_at','today_distance_km','today_running_seconds','overspeed_limit','device_id','sim_number','sim_operator','sim_info'] as const;
+const clientFields=['id','vehicle_number','vehicle_type','alias','remark','mileage','odometer','gps_location','fleet_status','speed','tracker_timestamp','server_received_at','status_since_at','today_distance_km','today_running_seconds','overspeed_limit','device_id','sim_number','sim_operator','sim_info'] as const;
 const clientVisible=(row:Record<string,unknown>)=>Object.fromEntries(clientFields.map(field=>[field,row[field]]));
 const clientSimBody=vehicleBody.innerType().pick({simNumber:true,simOperator:true,simInfo:true}).partial().strict().refine(value=>Object.keys(value).length>0,'At least one SIM field is required');
 webApi.get('/web/client-devices',authorize('CLIENT'),asyncRoute(async(req,res)=>{res.json({success:true,data:(await vehicleManagement.clientDevices(req.user!.id)).rows})}));
 webApi.get('/web/client-vehicles/:id',authorize('CLIENT'),asyncRoute(async(req,res)=>{res.json({success:true,data:clientVisible(await vehicleManagement.clientVehicle(req.user!.id,z.string().uuid().parse(req.params.id)))})}));
+webApi.patch('/web/client-vehicles/:id',authorize('CLIENT'),asyncRoute(async(req,res)=>{res.json({success:true,data:await updateVehicleDetails(req.user!.id,z.string().uuid().parse(req.params.id),vehicleDetailsBody.parse(req.body))})}));
 webApi.patch('/web/client-vehicles/:id/device',authorize('CLIENT'),asyncRoute(async(req,res)=>{
   const body=z.object({deviceId:z.string().uuid(),moveFromVehicleId:z.string().uuid().optional()}).strict().parse(req.body);
   res.json({success:true,data:await vehicleManagement.reassignClientDevice(req.user!.id,z.string().uuid().parse(req.params.id),body.deviceId,body.moveFromVehicleId)});

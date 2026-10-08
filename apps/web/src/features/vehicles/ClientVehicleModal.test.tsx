@@ -12,10 +12,19 @@ const show=()=>render(<QueryClientProvider client={new QueryClient({defaultOptio
 beforeEach(()=>{vi.clearAllMocks();mocks.get.mockImplementation(async(path:string)=>({data:{data:path==='/web/client-devices'?devices:vehicle}}));mocks.patch.mockResolvedValue({data:{success:true}})});
 afterEach(cleanup);
 
+it('lets the client save vehicle details and GPS installation location to the shared record',async()=>{
+ show();fireEvent.click(await screen.findByRole('button',{name:'Edit vehicle'}));
+ for(const [label,value] of [['Vehicle Number','CLIENT-123'],['Mileage','30'],['Overspeed','90'],['Odometer','0'],['Alias','TEST BIKE'],['GPS Location','Under the seat']])fireEvent.change(screen.getByLabelText(label),{target:{value}});
+ fireEvent.change(screen.getByLabelText('Vehicle Type'),{target:{value:'Scooty'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save vehicle'}));
+ await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('/web/client-vehicles/target',{vehicleNumber:'CLIENT-123',vehicleType:'Scooty',mileage:30,overspeedLimit:90,odometer:0,alias:'TEST BIKE',gpsLocation:'Under the seat',remark:''}));
+ await screen.findByRole('button',{name:'Edit vehicle'});
+});
+
 it('shows client details and SIM fields without device registration or admin controls',async()=>{
  show();await screen.findByRole('button',{name:'Change tracker'});
  expect(screen.getByText('1234567')).toBeVisible();
- for(const field of ['IMEI','Device Type','Protocol','Coins','Billing','Admin','Client','Alias','Relay'])expect(screen.queryByText(field,{exact:false})).not.toBeInTheDocument();
+ for(const field of ['IMEI','Device Type','Protocol','Coins','Billing','Admin','Client','Relay'])expect(screen.queryByText(field,{exact:false})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Edit SIM info'}));
  expect(screen.getByLabelText('SIM Number')).toHaveValue('1234567');
  expect(screen.getByLabelText('SIM Operator')).toHaveValue('Jio');

@@ -11,9 +11,14 @@ vi.mock('../constants/config',()=>({config:boundary}));
 vi.mock('../features/vehicles/queries',()=>({useVehicles:()=>boundary.vehicles}));
 vi.mock('@tanstack/react-query',()=>({useQuery:()=>boundary.subscriptions}));
 vi.mock('../services/api/auth',()=>({logout:vi.fn()}));
+vi.mock('../services/api/mobile',()=>({useAccount:()=>({data:undefined,isError:false,isLoading:false}),mobileMessage:()=>'',requireOnline:vi.fn()}));
+vi.mock('../services/api/client',()=>({api:{post:vi.fn()}}));
+vi.mock('../store/authStore',()=>({useAuthStore:{getState:()=>({setTokens:vi.fn()})}}));
+vi.mock('../components/fleet/VehicleActions',()=>({VehicleActions:()=>null}));
+vi.mock('../components/fleet/ShareSheet',()=>({ShareSheet:()=>null}));
 vi.mock('../services/api/subscriptions',()=>({getSubscriptions:vi.fn()}));
 vi.mock('expo-router',()=>({router:{push:vi.fn(),back:vi.fn(),replace:vi.fn()}}));
-vi.mock('@expo/vector-icons',()=>({Feather:'Icon',MaterialCommunityIcons:'Icon'}));
+vi.mock('@expo/vector-icons',()=>({Feather:'Icon',MaterialCommunityIcons:'Icon',FontAwesome6:'Icon'}));
 vi.mock('../components/fleet/VehicleVisual',()=>({VehicleVisual:'VehicleVisual'}));
 vi.mock('../components/fleet/Sheet',()=>({NoticeSheet:()=>null}));
 vi.mock('react-native',async()=>{
