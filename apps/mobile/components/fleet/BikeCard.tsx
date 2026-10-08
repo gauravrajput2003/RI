@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Location, Vehicle } from '../../types/models';
 import type { CardExtras } from '../../features/dashboard/model';
@@ -31,7 +31,8 @@ export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }
       <MaterialCommunityIcons name="battery" size={28} style={{ transform: [{ rotate: '90deg' }] }} color={live?.battery_percent == null ? '#c5c8ca' : '#5a9b5e'} />
       <MaterialCommunityIcons name="signal" size={24} color={live?.gsm_signal == null ? '#c5c8ca' : '#1ab400'} />
     </View>
-    <View style={styles.address}><MaterialCommunityIcons name="sign-direction" size={25} color="#432568" /><Text style={styles.addressText}>{extra?.address ?? 'Address unavailable'}</Text></View>
+    <View style={styles.address}><MaterialCommunityIcons name="sign-direction" size={25} color="#432568" /><Text style={styles.addressText}>{live?.address ?? extra?.address ?? 'Address unavailable'}</Text></View>
+    {live?.address_attribution ? <Text style={[styles.addressText,{paddingHorizontal:12,paddingBottom:8,fontSize:10}]}><Text onPress={()=>void Linking.openURL('https://www.geoapify.com/').catch(()=>{})}>Geoapify</Text> · <Text onPress={()=>void Linking.openURL('https://www.openstreetmap.org/copyright').catch(()=>{})}>© OpenStreetMap contributors</Text></Text> : null}
   </Pressable>;
 });
 const styles = StyleSheet.create({

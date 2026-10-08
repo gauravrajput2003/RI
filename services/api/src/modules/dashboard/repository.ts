@@ -1,4 +1,5 @@
 import {query} from '../../db/pool.js';
+import {enrichAddresses} from '../geocoding/service.js';
 import {env} from '../../config/env.js';
 import {userScopeCte} from '../authorization/scope.js';
 const withoutTotal=(row:Record<string,unknown>)=>{const copy={...row};delete copy.total_count;return copy};
@@ -8,8 +9,8 @@ export type FleetStatus='ALL'|'OVERSPEED'|'RUNNING'|'IDLE'|'STOPPED'|'UNREACHABL
 const fleetCte=`${userScopeCte}, fleet AS (
   SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.active,v.overspeed_limit,v.owner_id,
     owner.email AS owner_email,owner.name AS client_name,owner.username AS client_username,d.id AS device_id,d.last_seen_at,ds.state,
-    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,latest.speed,latest.ignition,
-    latest.address,ds.updated_at AS status_since_at,
+    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,latest.speed,latest.ignition,latest.gps_valid,
+    latest.address,latest.address_attribution,ds.updated_at AS status_since_at,
     today.today_distance_km,today.today_running_seconds,today.today_stopped_seconds,today.today_avg_speed,today.today_max_speed,
     CASE WHEN last_stop.observed_at IS NULL OR latest.observed_at IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM (latest.observed_at-last_stop.observed_at)) END AS duration_from_last_stop_seconds,
     CASE WHEN last_stop.position IS NULL OR latest.position IS NULL THEN NULL ELSE ST_Distance(last_stop.position,latest.position)/1000.0 END AS distance_from_last_stop_km,
@@ -35,8 +36,8 @@ const fleetCte=`${userScopeCte}, fleet AS (
   ) d ON true
   LEFT JOIN device_status ds ON ds.device_id=d.id
   LEFT JOIN LATERAL (
-    SELECT l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.ignition,l.position,
-      COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,NULLIF(l.metadata->>'address','') AS address
+    SELECT l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.ignition,l.gps_valid,l.position,
+      COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,NULLIF(l.metadata->>'address','') AS address,l.metadata->>'address_attribution' AS address_attribution
     FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=d.current_assigned_at
     ORDER BY l.server_received_at DESC LIMIT 1
   ) latest ON true
@@ -74,5 +75,5 @@ export async function dashboardFleet(actorId:string,status:FleetStatus,search:st
   const counts=await query(`${fleetCte} SELECT fleet_status,count(*)::int AS count FROM fleet WHERE ($4::uuid IS NULL OR owner_id=$4) GROUP BY fleet_status`,[...base,clientId??null]);
   const mapped:Record<string,number>={ALL:0,OVERSPEED:0,RUNNING:0,IDLE:0,STOPPED:0,UNREACHABLE:0,NEW:0,INACTIVE:0};
   for(const row of counts.rows){mapped[String(row.fleet_status)]=Number(row.count);mapped.ALL+=Number(row.count)}
-  return{rows:rows.rows.map(withoutTotal),total:Number(rows.rows[0]?.total_count??0),counts:mapped};
+  return{rows:await enrichAddresses(rows.rows.map(withoutTotal)),total:Number(rows.rows[0]?.total_count??0),counts:mapped};
 }

@@ -1,4 +1,5 @@
 import {useState,type ReactNode} from 'react';
+import {AddressAttribution} from './AddressAttribution';
 import {Link} from 'react-router-dom';
 import {ChevronDown,ChevronUp,Clock3,Gauge,MapPin,MoreVertical,Navigation,PauseCircle,Radio,Route,Timer,TrendingUp,X} from 'lucide-react';
 import type {FleetVehicle} from '../../types';
@@ -39,7 +40,7 @@ export function SelectedVehicleSummary({vehicle,onClose}:{vehicle:FleetVehicle;o
     <Metric icon={<PauseCircle/>} label="Duration At Last Stop" value={duration(vehicle.duration_at_last_stop_seconds)} tone="pink"/>
     <Metric icon={<TrendingUp/>} label="Max Speed" value={speed(vehicle.today_max_speed)} tone="red"/>
    </div>
-   <div className="summary-address"><Navigation/><span>Address</span><strong>{vehicle.address||'Unavailable'}</strong></div>
+   <div className="summary-address"><Navigation/><span>Address</span><strong>{vehicle.address||'Unavailable'}<AddressAttribution value={vehicle.address_attribution}/></strong></div>
   </>}
   {more&&<div className="summary-more"><span>Last update</span><strong>{dateTime(vehicle.server_received_at)}</strong><span>Owner</span><strong>{vehicle.owner_email}</strong></div>}
  </section>;

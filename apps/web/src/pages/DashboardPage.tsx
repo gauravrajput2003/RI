@@ -1,3 +1,4 @@
+import {AddressAttribution} from '../features/dashboard/AddressAttribution';
 import {useDeferredValue,useEffect,useMemo,useRef,useState} from 'react';
 import {SearchableSelect} from '../components/ui/SearchableSelect';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
@@ -24,40 +25,12 @@ const filters=[['ALL','All',Car],['OVERSPEED','Overspeed',Gauge],['RUNNING','Run
 type FleetResponse=Envelope<FleetVehicle[]>&{counts:Record<FleetStatus,number>;pagination:{page:number;pageSize:number;total:number}};
 type PanelMode='split'|'table'|'map';
 type ColumnKey='sn'|'status'|'vehicle'|'client'|'speed'|'gps'|'since'|'todayKm'|'todayDuration'|'address';
-type PreviewTelemetry=Pick<FleetVehicle,'latitude'|'longitude'|'speed'|'address'|'server_received_at'|'status_since_at'|'today_distance_km'|'today_running_seconds'|'today_stopped_seconds'|'today_avg_speed'|'today_max_speed'|'distance_from_last_stop_km'|'duration_from_last_stop_seconds'|'duration_at_last_stop_seconds'>;
-
 const operationalColumns:ColumnKey[]=['sn','status','vehicle','speed','gps','since','todayKm','todayDuration','address'];
-const previewTelemetry:PreviewTelemetry[]=[
- {latitude:28.8678,longitude:76.5943,speed:18,address:'Rohtak Jhajjar Rd, Sector-23, Rohtak, Haryana 124021, India',server_received_at:'2026-09-23T03:28:33.000Z',status_since_at:'2026-09-18T07:55:56.000Z',today_distance_km:2,today_running_seconds:2160,today_stopped_seconds:300,today_avg_speed:15,today_max_speed:31,distance_from_last_stop_km:1.2,duration_from_last_stop_seconds:540,duration_at_last_stop_seconds:180},
- {latitude:28.8958,longitude:76.5916,speed:12,address:'Church Road, Company Bagh, Rohtak, Haryana 124001, India',server_received_at:'2026-09-23T03:30:57.000Z',status_since_at:'2026-09-22T16:02:44.000Z',today_distance_km:2.4,today_running_seconds:1680,today_stopped_seconds:480,today_avg_speed:10,today_max_speed:24,distance_from_last_stop_km:.8,duration_from_last_stop_seconds:360,duration_at_last_stop_seconds:240},
-];
 const duration=(value:number|null)=>value==null?'Unavailable':`${Math.floor(value/3600).toString().padStart(2,'0')}:${Math.floor(value%3600/60).toString().padStart(2,'0')}`;
 const km=(value:number|null)=>value==null?'Unavailable':`${Number(value).toFixed(1)} km`;
 
-// Temporary dashboard preview data. Every real API field wins as soon as it is present.
-export function withDashboardPreviewTelemetry(vehicles:FleetVehicle[]):FleetVehicle[]{
- return vehicles.map((vehicle,index)=>{
-  const preview=previewTelemetry[index];
-  if(!preview)return vehicle;
-  return {
-   ...vehicle,
-   latitude:vehicle.latitude??preview.latitude,
-   longitude:vehicle.longitude??preview.longitude,
-   speed:vehicle.speed??preview.speed,
-   address:vehicle.address||preview.address,
-   server_received_at:vehicle.server_received_at??preview.server_received_at,
-   status_since_at:vehicle.status_since_at??preview.status_since_at,
-   today_distance_km:vehicle.today_distance_km??preview.today_distance_km,
-   today_running_seconds:vehicle.today_running_seconds??preview.today_running_seconds,
-   today_stopped_seconds:vehicle.today_stopped_seconds??preview.today_stopped_seconds,
-   today_avg_speed:vehicle.today_avg_speed??preview.today_avg_speed,
-   today_max_speed:vehicle.today_max_speed??preview.today_max_speed,
-   distance_from_last_stop_km:vehicle.distance_from_last_stop_km??preview.distance_from_last_stop_km,
-   duration_from_last_stop_seconds:vehicle.duration_from_last_stop_seconds??preview.duration_from_last_stop_seconds,
-   duration_at_last_stop_seconds:vehicle.duration_at_last_stop_seconds??preview.duration_at_last_stop_seconds,
-  };
- });
-}
+// Live dashboards must never substitute invented coordinates or addresses.
+export function withDashboardPreviewTelemetry(vehicles:FleetVehicle[]):FleetVehicle[]{return vehicles;}
 
 export function DashboardPage(){
  const compact=useCompactLayout();
@@ -83,8 +56,8 @@ export function DashboardPage(){
 
  useEffect(()=>setPage(1),[status,deferred,clientId]);
  const clients=useQuery({queryKey:['dashboard-client-options'],enabled:manager,queryFn:async()=>(await api.get<Envelope<(Owner&{owner_id?:string})[]>>('/client-options')).data.data});
- const query=useQuery({queryKey:['fleet',status,deferred,page,clientId],queryFn:async()=>{const {data}=await api.get<FleetResponse>('/dashboard/vehicles',{params:{status,search:deferred,page,pageSize:25,clientId:clientId||undefined}});return data}});
- useEffect(()=>{const token=getTokens()?.accessToken;if(!token)return;const base=(import.meta.env.VITE_SOCKET_URL||import.meta.env.VITE_API_URL||'http://localhost:3000').replace(/\/api\/v1\/?$/,'');const socket=io(base,{auth:{token},transports:['websocket']});socket.on('vehicle:location',(payload:Partial<FleetVehicle>&{vehicleId?:string})=>{client.setQueriesData<FleetResponse>({queryKey:['fleet']},old=>old?{...old,data:old.data.map(vehicle=>vehicle.id===(payload.vehicleId||payload.id)?{...vehicle,...payload}:vehicle)}:old)});return()=>{socket.disconnect()}},[client]);
+ const query=useQuery({queryKey:['fleet',status,deferred,page,clientId],refetchInterval:15000,queryFn:async()=>{const {data}=await api.get<FleetResponse>('/dashboard/vehicles',{params:{status,search:deferred,page,pageSize:25,clientId:clientId||undefined}});return data}});
+ useEffect(()=>{const token=getTokens()?.accessToken;if(!token)return;const base=(import.meta.env.VITE_SOCKET_URL||import.meta.env.VITE_API_URL||'http://localhost:3000').replace(/\/api\/v1\/?$/,'');const socket=io(base,{auth:{token},transports:['websocket']});socket.on('vehicle:location',(payload:Partial<FleetVehicle>&{vehicleId?:string})=>{client.setQueriesData<FleetResponse>({queryKey:['fleet']},old=>old?{...old,data:old.data.map(vehicle=>vehicle.id===(payload.vehicleId||payload.id)?{...vehicle,...payload,...(!payload.address&&((payload.latitude!=null&&payload.latitude!==vehicle.latitude)||(payload.longitude!=null&&payload.longitude!==vehicle.longitude))?{address:null,address_attribution:null}:{})}:vehicle)}:old)});return()=>{socket.disconnect()}},[client]);
  useEffect(()=>{if(!resizing)return;const move=(event:PointerEvent)=>{const bounds=workspaceRef.current?.getBoundingClientRect();if(!bounds)return;setSplitPercent(Math.max(30,Math.min(70,((event.clientX-bounds.left)/bounds.width)*100)))};const stop=()=>setResizing(false);window.addEventListener('pointermove',move);window.addEventListener('pointerup',stop,{once:true});return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop)}},[resizing]);
 
  const effectiveMode=compact?(panelMode==='map'?'map':'table'):panelMode;
@@ -102,7 +75,7 @@ export function DashboardPage(){
   since:{key:'since',label:'Since',sortValue:row=>row.status_since_at,render:row=>dateTime(row.status_since_at)},
   todayKm:{key:'todayKm',label:'TodayKm',sortValue:row=>row.today_distance_km,render:row=>km(row.today_distance_km)},
   todayDuration:{key:'todayDuration',label:'TodayDu',sortValue:row=>row.today_running_seconds,render:row=>duration(row.today_running_seconds)},
-  address:{key:'address',label:'Address',sortValue:row=>row.address,render:row=>row.address||'Unavailable'},
+  address:{key:'address',label:'Address',sortValue:row=>row.address,render:row=><span>{row.address||'Unavailable'}<AddressAttribution value={row.address_attribution}/></span>},
  }),[page]);
  const columns=(manager?[...operationalColumns.slice(0,3),'client' as ColumnKey,...operationalColumns.slice(3)]:operationalColumns).map(key=>allColumns[key]);
 

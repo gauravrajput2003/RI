@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeLocation, normalizeVehicles } from './normalize';
+it('preserves resolved addresses and provider attribution',()=>{
+  expect(normalizeLocation({server_received_at:'2026-10-08T15:00:00Z',latitude:28,longitude:76,address:'Rohtak',address_attribution:'Geoapify'}))
+    .toMatchObject({address:'Rohtak',address_attribution:'Geoapify'});
+});
 describe('real REST and realtime boundaries', () => {
   it('accepts PostgreSQL numeric strings and nullable unsupported metrics', () => {
     expect(normalizeVehicles([{ id: 'a', vehicle_number: 'A', active: true, odometer: '123.5' }])[0].odometer).toBe(123.5);

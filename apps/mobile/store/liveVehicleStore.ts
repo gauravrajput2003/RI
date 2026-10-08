@@ -14,6 +14,10 @@ export function createLiveVehicleStore() {
       // Partial/status packets must not erase the last usable position and metrics.
       const present = Object.fromEntries(Object.entries(location).filter(([, value]) => value !== null && value !== undefined));
       const next = { ...previous, ...present } as Location;
+      if (previous && !location.address && ((location.latitude != null && location.latitude !== previous.latitude)
+        || (location.longitude != null && location.longitude !== previous.longitude))) {
+        next.address = null; next.address_attribution = null;
+      }
       if (previous && Object.keys(next).every(key => previous[key as keyof Location] === next[key as keyof Location])) return state;
       return { byVehicleId: { ...state.byVehicleId, [id]: next }, updatedAt: { ...state.updatedAt, [id]: received } };
     }),
