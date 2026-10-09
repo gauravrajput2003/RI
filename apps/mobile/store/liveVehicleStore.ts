@@ -12,9 +12,10 @@ export function createLiveVehicleStore() {
       const received = Date.parse(location.server_received_at);
       if (!Number.isFinite(received) || (previous && received < Date.parse(previous.server_received_at))) return state;
       // Partial/status packets must not erase the last usable position and metrics.
-      const present = Object.fromEntries(Object.entries(location).filter(([, value]) => value !== null && value !== undefined));
+      const present = Object.fromEntries(Object.entries(location).filter(([key, value]) => value !== null && value !== undefined
+        && !(location.gps_valid === false && ['latitude','longitude','tracker_timestamp',...(location.address_source?[]:['address','address_attribution'])].includes(key))));
       const next = { ...previous, ...present } as Location;
-      if (previous && !location.address && ((location.latitude != null && location.latitude !== previous.latitude)
+      if (previous && previous.address_source !== 'cell' && previous.address_source !== 'unavailable' && location.gps_valid !== false && !location.address && ((location.latitude != null && location.latitude !== previous.latitude)
         || (location.longitude != null && location.longitude !== previous.longitude))) {
         next.address = null; next.address_attribution = null;
       }

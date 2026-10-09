@@ -32,6 +32,12 @@ const km=(value:number|null)=>value==null?'Unavailable':`${Number(value).toFixed
 // Live dashboards must never substitute invented coordinates or addresses.
 export function withDashboardPreviewTelemetry(vehicles:FleetVehicle[]):FleetVehicle[]{return vehicles;}
 
+export function mergeDashboardTelemetry(vehicle:FleetVehicle,payload:Partial<FleetVehicle>&{gps_valid?:boolean;gpsValid?:boolean}):FleetVehicle {
+ const valid=payload.gps_valid??payload.gpsValid;
+ const usable=valid===false?Object.fromEntries(Object.entries(payload).filter(([key])=>!['latitude','longitude','tracker_timestamp','server_received_at',...(payload.address_source?[]:['address','address_attribution'])].includes(key))):payload;
+ return {...vehicle,...usable,...(valid!==false&&vehicle.address_source!=='cell'&&vehicle.address_source!=='unavailable'&&!payload.address&&((payload.latitude!=null&&payload.latitude!==vehicle.latitude)||(payload.longitude!=null&&payload.longitude!==vehicle.longitude))?{address:null,address_attribution:null}:{})};
+}
+
 export function DashboardPage(){
  const compact=useCompactLayout();
  const role=claims()?.role;
@@ -57,7 +63,7 @@ export function DashboardPage(){
  useEffect(()=>setPage(1),[status,deferred,clientId]);
  const clients=useQuery({queryKey:['dashboard-client-options'],enabled:manager,queryFn:async()=>(await api.get<Envelope<(Owner&{owner_id?:string})[]>>('/client-options')).data.data});
  const query=useQuery({queryKey:['fleet',status,deferred,page,clientId],refetchInterval:15000,queryFn:async()=>{const {data}=await api.get<FleetResponse>('/dashboard/vehicles',{params:{status,search:deferred,page,pageSize:25,clientId:clientId||undefined}});return data}});
- useEffect(()=>{const token=getTokens()?.accessToken;if(!token)return;const base=(import.meta.env.VITE_SOCKET_URL||import.meta.env.VITE_API_URL||'http://localhost:3000').replace(/\/api\/v1\/?$/,'');const socket=io(base,{auth:{token},transports:['websocket']});socket.on('vehicle:location',(payload:Partial<FleetVehicle>&{vehicleId?:string})=>{client.setQueriesData<FleetResponse>({queryKey:['fleet']},old=>old?{...old,data:old.data.map(vehicle=>vehicle.id===(payload.vehicleId||payload.id)?{...vehicle,...payload,...(!payload.address&&((payload.latitude!=null&&payload.latitude!==vehicle.latitude)||(payload.longitude!=null&&payload.longitude!==vehicle.longitude))?{address:null,address_attribution:null}:{})}:vehicle)}:old)});return()=>{socket.disconnect()}},[client]);
+ useEffect(()=>{const token=getTokens()?.accessToken;if(!token)return;const base=(import.meta.env.VITE_SOCKET_URL||import.meta.env.VITE_API_URL||'http://localhost:3000').replace(/\/api\/v1\/?$/,'');const socket=io(base,{auth:{token},transports:['websocket']});socket.on('vehicle:location',(payload:Partial<FleetVehicle>&{vehicleId?:string;gps_valid?:boolean})=>{client.setQueriesData<FleetResponse>({queryKey:['fleet']},old=>old?{...old,data:old.data.map(vehicle=>vehicle.id===(payload.vehicleId||payload.id)?mergeDashboardTelemetry(vehicle,payload):vehicle)}:old)});return()=>{socket.disconnect()}},[client]);
  useEffect(()=>{if(!resizing)return;const move=(event:PointerEvent)=>{const bounds=workspaceRef.current?.getBoundingClientRect();if(!bounds)return;setSplitPercent(Math.max(30,Math.min(70,((event.clientX-bounds.left)/bounds.width)*100)))};const stop=()=>setResizing(false);window.addEventListener('pointermove',move);window.addEventListener('pointerup',stop,{once:true});return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop)}},[resizing]);
 
  const effectiveMode=compact?(panelMode==='map'?'map':'table'):panelMode;

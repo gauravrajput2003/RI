@@ -4,7 +4,7 @@ import {acSessions,haversineKm,localDateKey,pointDate,stateSessions,summarize,un
 import {reportHistory,reportVehicles} from './repository.js';
 export interface ReportQuery {vehicleId?:string;search:string;page:number;pageSize:number;start:Date;end:Date;timeZone:string;sort:string;order:'asc'|'desc'}
 const position=(point:HistoryPoint|null)=>point?.gps_valid&&point.latitude!=null&&point.longitude!=null?{latitude:point.latitude,longitude:point.longitude}:null;
-const pointAddress=(point:HistoryPoint|null)=>{const value=point?.metadata?.address;return typeof value==='string'&&value.trim()?value.trim():null};
+const pointAddress=(point:HistoryPoint|null)=>{const value=point?.metadata?.address;return typeof value==='string'&&value.trim()?value.trim()+(point?.metadata?.address_source==='cell'?' | Cell data: OpenCellID (https://opencellid.org/), CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); area address: Geoapify / OpenStreetMap':''):null};
 const duration=(seconds:number)=>Math.round(seconds);
 function groupBy<K,V>(items:V[],key:(item:V)=>K){const result=new Map<K,V[]>();for(const item of items){const value=key(item);result.set(value,[...(result.get(value)||[]),item])}return result}
 const grouped=(points:HistoryPoint[])=>groupBy(points,point=>point.vehicle_id);

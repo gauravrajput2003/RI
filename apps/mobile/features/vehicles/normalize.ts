@@ -13,7 +13,7 @@ const locationSchema = z.object({
   speed: nullableNumber, course: nullableNumber, ignition: z.boolean().nullable().optional(),
   satellites: nullableNumber, gps_valid: z.boolean().nullable().optional(), battery_percent: nullableNumber,
   gsm_signal: nullableNumber,
-  address:z.string().nullable().optional(),address_attribution:z.string().nullable().optional(),
+  address_source:z.enum(['gps','cell','unavailable']).optional(),tower_status:z.string().optional(),address:z.string().nullable().optional(),address_attribution:z.string().nullable().optional(),
 });
 export function normalizeLocation(input: unknown): Location | null {
   if (!input || typeof input !== 'object') return null;

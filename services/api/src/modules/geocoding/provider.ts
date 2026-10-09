@@ -10,9 +10,10 @@ export function coordinateKey(latitude: unknown, longitude: unknown, valid?: unk
   return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
 }
 
-export async function lookupAddress(latitude: number, longitude: number, key: string, fetcher: typeof fetch = fetch): Promise<AddressResult | null> {
+export async function lookupAddress(latitude: number, longitude: number, key: string, fetcher: typeof fetch = fetch, level?: 'street'): Promise<AddressResult | null> {
   const url = new URL('https://api.geoapify.com/v1/geocode/reverse');
   url.search = new URLSearchParams({lat:String(latitude),lon:String(longitude),format:'json',lang:'en',apiKey:key}).toString();
+  if(level) url.searchParams.set('type',level);
   const response = await fetcher(url, {signal:AbortSignal.timeout(3000)});
   if (!response.ok) throw new Error(`Geocoding provider returned HTTP ${response.status}`);
   const body = await response.json() as {results?: {formatted?: unknown}[]};

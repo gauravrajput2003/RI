@@ -1,6 +1,7 @@
 import {dailyMetricsSql} from '../vehicles/daily-metrics.js';
+import {usableLocationOrder} from '../vehicles/activity.js';
 import {query} from '../../db/pool.js';
-import {enrichAddresses} from '../geocoding/service.js';
+import {displayedAddresses} from '../cellular/service.js';
 import {env} from '../../config/env.js';
 import {userScopeCte} from '../authorization/scope.js';
 const withoutTotal=(row:Record<string,unknown>)=>{const copy={...row};delete copy.total_count;return copy};
@@ -11,7 +12,7 @@ const fleetCte=`${userScopeCte}, fleet AS (
   SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.active,v.overspeed_limit,v.owner_id,
     owner.email AS owner_email,owner.name AS client_name,owner.username AS client_username,d.id AS device_id,d.last_seen_at,ds.state,
     latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,latest.speed) AS speed,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_ignition END,latest.ignition) AS ignition,latest.gps_valid,
-    latest.address,latest.address_attribution,ds.updated_at AS status_since_at,
+    latest.address,latest.address_attribution,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,ds.updated_at AS status_since_at,
     today.today_distance_km,today.today_running_seconds,today.today_stopped_seconds,today.today_avg_speed,today.today_max_speed,
     CASE WHEN last_stop.observed_at IS NULL OR latest.observed_at IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM (latest.observed_at-last_stop.observed_at)) END AS duration_from_last_stop_seconds,
     CASE WHEN last_stop.position IS NULL OR latest.position IS NULL THEN NULL ELSE ST_Distance(last_stop.position,latest.position)/1000.0 END AS distance_from_last_stop_km,
@@ -40,8 +41,14 @@ const fleetCte=`${userScopeCte}, fleet AS (
     SELECT l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.ignition,l.gps_valid,l.position,
       COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,NULLIF(l.metadata->>'address','') AS address,l.metadata->>'address_attribution' AS address_attribution
     FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=d.current_assigned_at
-    ORDER BY l.server_received_at DESC LIMIT 1
+    ORDER BY ${usableLocationOrder} LIMIT 1
   ) latest ON true
+  LEFT JOIN LATERAL (
+    SELECT l.metadata,l.protocol,l.server_received_at FROM locations l
+    WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=d.current_assigned_at
+      AND (l.metadata ? 'cell' OR l.metadata ? 'cellId')
+    ORDER BY l.server_received_at DESC,l.id DESC LIMIT 1
+  ) cell_latest ON true
   LEFT JOIN LATERAL (${dailyMetricsSql}) today ON true
   LEFT JOIN LATERAL (
     SELECT l.position,COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at
@@ -61,5 +68,5 @@ export async function dashboardFleet(actorId:string,status:FleetStatus,search:st
   const counts=await query(`${fleetCte} SELECT fleet_status,count(*)::int AS count FROM fleet WHERE ($4::uuid IS NULL OR owner_id=$4) GROUP BY fleet_status`,[...base,clientId??null]);
   const mapped:Record<string,number>={ALL:0,OVERSPEED:0,RUNNING:0,IDLE:0,STOPPED:0,UNREACHABLE:0,NEW:0,INACTIVE:0};
   for(const row of counts.rows){mapped[String(row.fleet_status)]=Number(row.count);mapped.ALL+=Number(row.count)}
-  return{rows:await enrichAddresses(rows.rows.map(withoutTotal)),total:Number(rows.rows[0]?.total_count??0),counts:mapped};
+  return{rows:await displayedAddresses(rows.rows.map(withoutTotal)),total:Number(rows.rows[0]?.total_count??0),counts:mapped};
 }

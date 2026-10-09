@@ -32,7 +32,7 @@ export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }
       <MaterialCommunityIcons name="signal" size={24} color={live?.gsm_signal == null ? '#c5c8ca' : '#1ab400'} />
     </View>
     <View style={styles.address}><MaterialCommunityIcons name="sign-direction" size={25} color="#432568" /><Text style={styles.addressText}>{live?.address ?? extra?.address ?? 'Address unavailable'}</Text></View>
-    {live?.address_attribution ? <Text style={[styles.addressText,{paddingHorizontal:12,paddingBottom:8,fontSize:10}]}><Text onPress={()=>void Linking.openURL('https://www.geoapify.com/').catch(()=>{})}>Geoapify</Text> · <Text onPress={()=>void Linking.openURL('https://www.openstreetmap.org/copyright').catch(()=>{})}>© OpenStreetMap contributors</Text></Text> : null}
+    {live?.address_attribution ? <Text style={[styles.addressText,{paddingHorizontal:12,paddingBottom:8,fontSize:10}]}>{live.address_attribution.includes('OpenCellID')&&<><Text onPress={()=>void Linking.openURL('https://opencellid.org/').catch(()=>{})}>OpenCellID</Text> · <Text onPress={()=>void Linking.openURL('https://creativecommons.org/licenses/by-sa/4.0/').catch(()=>{})}>CC BY-SA 4.0</Text> · </>}<Text onPress={()=>void Linking.openURL('https://www.geoapify.com/').catch(()=>{})}>Geoapify</Text> · <Text onPress={()=>void Linking.openURL('https://www.openstreetmap.org/copyright').catch(()=>{})}>© OpenStreetMap contributors</Text></Text> : null}
   </Pressable>;
 });
 const styles = StyleSheet.create({

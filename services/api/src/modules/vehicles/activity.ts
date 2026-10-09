@@ -2,6 +2,11 @@ import type { DeviceState } from '@fleet/shared-types';
 import { env } from '../../config/env.js';
 import { query } from '../../db/pool.js';
 
+// Callers retain vehicle/device assignment scope when choosing a last good fix.
+export const usableLocationOrder = `CASE WHEN l.gps_valid=true AND l.latitude BETWEEN -90 AND 90
+  AND l.longitude BETWEEN -180 AND 180 AND NOT(l.latitude=0 AND l.longitude=0)
+  THEN 0 ELSE 1 END,l.server_received_at DESC,l.id DESC`;
+
 const lastPacketTime=(lastSeen:Date|string|null)=>lastSeen==null?NaN:new Date(lastSeen).getTime();
 
 /** Diagnostic cadence only; does not change vehicle/dashboard status. */

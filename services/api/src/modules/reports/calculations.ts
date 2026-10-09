@@ -1,4 +1,4 @@
-export interface HistoryPoint {id:string;vehicle_id:string;tracker_timestamp:string|Date|null;server_received_at:string|Date;latitude:number|null;longitude:number|null;speed:number|null;ignition:boolean|null;gps_valid:boolean;ac:boolean|null;metadata?:Record<string,unknown>}
+export interface HistoryPoint {id:string;vehicle_id:string;tracker_timestamp:string|Date|null;server_received_at:string|Date;latitude:number|null;longitude:number|null;speed:number|null;ignition:boolean|null;gps_valid:boolean;ac:boolean|null;protocol?:string;address?:string|null;address_source?:string;address_attribution?:string|null;metadata?:Record<string,unknown>}
 export type MotionState='running'|'idle'|'stop'|'unreachable';
 export interface Summary {km:number;runningSeconds:number;idleSeconds:number;stopSeconds:number;unreachableSeconds:number;tripCount:number;idleCount:number;stopCount:number;unreachableCount:number;maxSpeed:number|null;avgSpeed:number|null;startPoint:HistoryPoint|null;endPoint:HistoryPoint|null}
 export interface HistorySession {startTime:string;endTime:string;durationSeconds:number;startPoint:HistoryPoint;endPoint:HistoryPoint;points:HistoryPoint[]}

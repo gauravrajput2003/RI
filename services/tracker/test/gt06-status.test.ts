@@ -32,4 +32,19 @@ describe('GT06 v1.8.1 status fields',()=>{
   it('rejects a heartbeat without its terminal status fields',()=>{
     expect(()=>decoder.decode(packet(0x13,Buffer.alloc(0)),new Date())).toThrow('Truncated');
   });
+  it('retains the documented serving-cell fields independently of GPS validity',()=>{
+    const decoded=decoder.decode(fixture('location'),new Date());
+    expect(decoded.location?.metadata).toMatchObject({cell:{mcc:404,mnc:96,lac:1620,cellId:41271}});
+    const body=fixture('location').subarray(4,-6);body.writeUInt16BE(0x04a6,16);
+    expect(decoder.decode(packet(0x12,body),new Date()).location?.metadata).toEqual(decoded.location?.metadata);
+    // No documented layout for 0x22: do not invent serving-cell fields.
+    expect(decoder.decode(packet(0x22,body),new Date()).location?.metadata).toEqual({});
+    expect(decoder.decode(packet(0x12,body.subarray(0,18)),new Date()).location?.metadata).toEqual({});
+  });
+  it('respects the 0x16 LBS length prefix',()=>{
+    const gps=fixture('location').subarray(4,22);
+    const body=Buffer.concat([gps,Buffer.from([9,1,0xcc,0,0,1,0,0,1,0x46,6,4,0,2])]);
+    expect(decoder.decode(packet(0x16,body),new Date()).location?.metadata).toEqual({cell:{mcc:460,mnc:0,lac:1,cellId:1}});
+    body[18]=0;expect(decoder.decode(packet(0x16,body),new Date()).location?.metadata).toEqual({});
+  });
 });

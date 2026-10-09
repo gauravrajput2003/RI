@@ -168,7 +168,7 @@ export default function PlaybackView() {
             <MaterialCommunityIcons name="clock-outline" size={16} color="#0284c7" />
             <Text style={styles.miniStatLabel}>GPS Timestamp</Text>
           </View>
-          <Text style={styles.miniStatValue}>{currentTimestamp}</Text>
+          <Text style={styles.miniStatValue}>{currentTimestamp}</Text>{currentPoint?.address&&<Text>{currentPoint.address}{currentPoint.address_attribution?' · '+currentPoint.address_attribution:''}</Text>}
         </View>
         <View style={styles.miniStatDivider} />
         <View style={styles.miniStat}>

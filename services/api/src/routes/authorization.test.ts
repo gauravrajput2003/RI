@@ -37,11 +37,12 @@ beforeAll(async () => {
   process.env.JWT_REFRESH_SECRET = secret + '-refresh';
   process.env.INTERNAL_TRACKER_SECRET = secret + '-internal';
   process.env.GEOAPIFY_API_KEY = '';
+  process.env.ADDRESS_SOURCE = 'gps';
   process.env.OFFLINE_TIMEOUT_SECONDS = '90';
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -94,6 +95,36 @@ describe('resource authorization with both customers persisted', () => {
     await state.db!.query("UPDATE device_status SET state='STOPPED',current_ignition=false,current_speed=0 WHERE device_id=$1",[da]);
     const stopped=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
     expect(stopped.body.data.find((row:{id:string})=>row.id===va)).toMatchObject({fleet_status:'STOPPED',ignition:false,speed:0});
+  });
+  it('retains the last valid position and address after a newer no-fix idle packet',async()=>{
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN' WHERE id=$1",[a]);
+    await state.db!.query('UPDATE devices SET last_seen_at=now() WHERE id=$1',[da]);
+    await state.db!.query("UPDATE device_status SET state='IDLE',current_ignition=true,current_speed=0,updated_at=now() WHERE device_id=$1",[da]);
+    await state.db!.query(`UPDATE locations SET metadata='{"address":"Rohtak road"}' WHERE id=$1`,[la]);
+    await state.db!.query("INSERT INTO locations(device_id,vehicle_id,server_received_at,latitude,longitude,gps_valid,speed,protocol) VALUES($1,$2,now(),0,0,false,0,'GT06')",[da,va]);
+    expect((await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data).toMatchObject({latitude:20,longitude:10,address:'Rohtak road',state:'IDLE',ignition:true});
+    const fleet=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(fleet.body.data.find((row:{id:string})=>row.id===va)).toMatchObject({latitude:20,longitude:10,address:'Rohtak road',fleet_status:'IDLE'});
+  });
+  it('scopes live and historical cell addresses independently of GPS positions',async()=>{
+    const {env}=await import('../config/env.js');const previous={source:env.ADDRESS_SOURCE,key:env.OPENCELLID_API_KEY};
+    try {
+      env.ADDRESS_SOURCE='cell';env.OPENCELLID_API_KEY='test-only-no-network';
+      await state.db!.query("UPDATE users SET role='SUPER_ADMIN' WHERE id=$1",[a]);
+      const cell={mcc:404,mnc:96,lac:1620,cellId:41271,radio:'GSM'};
+      await state.db!.query('UPDATE locations SET metadata=$2 WHERE id=$1',[la,JSON.stringify({cell})]);
+      await state.db!.query("INSERT INTO cell_location_cache(cell_key,latitude,longitude,address,attribution,expires_at) VALUES('GSM:404:96:1620:41271',28.87,76.59,'Cell area one','OpenCellID',now()+interval '1 day'),('GSM:404:96:1620:41272',28.88,76.60,'Cell area two','OpenCellID',now()+interval '1 day')");
+      await state.db!.query("INSERT INTO locations(device_id,vehicle_id,server_received_at,latitude,longitude,gps_valid,protocol,metadata) VALUES($1,$2,now(),0,0,false,'GT06',$3)",[da,va,JSON.stringify({cell})]);
+      const first=(await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data;
+      expect(first).toMatchObject({latitude:20,longitude:10,address_source:'cell',address:'Cell area (approx.): Cell area one'});
+      const fleet=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+      expect(fleet.body.data.find((row:{id:string})=>row.id===va)).toMatchObject({latitude:20,longitude:10,address_source:'cell'});
+      const playback=await request(app).get('/api/v1/playback').query({vehicleId:va,start:'2026-05-31',end:'2026-06-02'}).set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+      expect(playback.body.data[0]).toMatchObject({latitude:20,longitude:10,address_source:'cell',address:'Cell area (approx.): Cell area one'});
+      await state.db!.query("INSERT INTO locations(device_id,vehicle_id,server_received_at,gps_valid,protocol,metadata) VALUES($1,$2,now()+interval '1 second',false,'GT06',$3)",[da,va,JSON.stringify({cell:{...cell,cellId:41272}})]);
+      expect((await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data.address).toBe('Cell area (approx.): Cell area two');
+      await get(b,`/vehicles/${va}/latest-location`).expect(404);
+    } finally {env.ADDRESS_SOURCE=previous.source;env.OPENCELLID_API_KEY=previous.key;}
   });
   it('signs in by username while preserving email login and rejects ambiguous usernames', async () => {
     await state.db!.query("UPDATE users SET username='fleet.operator' WHERE id=$1",[a]);
