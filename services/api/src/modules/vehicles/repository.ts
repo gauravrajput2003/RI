@@ -18,7 +18,7 @@ export const latestLocation=async(id:string,owner:string)=>{const result=await a
   ${userScopeCte}
   SELECT l.vehicle_id,l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,
     NULLIF(l.metadata->>'address','') AS address,l.metadata->>'address_attribution' AS address_attribution,
-    l.ignition,l.gps_valid,l.satellites,l.battery_percent,l.gsm_signal,activity.*
+    COALESCE(activity.current_ignition,l.ignition) AS ignition,l.gps_valid,l.satellites,l.battery_percent,l.gsm_signal,activity.*
   FROM vehicles v JOIN vehicle_device_assignments a ON a.vehicle_id=v.id AND a.unassigned_at IS NULL
   JOIN locations l ON l.device_id=a.device_id AND l.vehicle_id=v.id AND l.server_received_at>=a.assigned_at
   ${vehicleActivityJoin} JOIN user_scope scope ON scope.id=v.owner_id

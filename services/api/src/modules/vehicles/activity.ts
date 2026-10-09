@@ -39,6 +39,7 @@ export async function activityQuery(sql: string, values: unknown[]) {
 export const vehicleActivityJoin = `LEFT JOIN LATERAL (
   SELECT CASE WHEN device.last_seen_at>=assign.assigned_at THEN device.last_seen_at END AS last_seen_at,
     CASE WHEN status.updated_at>=assign.assigned_at THEN status.state END AS activity_state,
+    CASE WHEN status.updated_at>=assign.assigned_at THEN status.current_ignition END AS current_ignition,
     device.active AND v.active AS activity_active
   FROM vehicle_device_assignments assign JOIN devices device ON device.id=assign.device_id
   LEFT JOIN device_status status ON status.device_id=device.id

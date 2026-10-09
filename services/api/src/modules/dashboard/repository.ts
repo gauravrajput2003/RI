@@ -1,3 +1,4 @@
+import {dailyMetricsSql} from '../vehicles/daily-metrics.js';
 import {query} from '../../db/pool.js';
 import {enrichAddresses} from '../geocoding/service.js';
 import {env} from '../../config/env.js';
@@ -9,7 +10,7 @@ export type FleetStatus='ALL'|'OVERSPEED'|'RUNNING'|'IDLE'|'STOPPED'|'UNREACHABL
 const fleetCte=`${userScopeCte}, fleet AS (
   SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.active,v.overspeed_limit,v.owner_id,
     owner.email AS owner_email,owner.name AS client_name,owner.username AS client_username,d.id AS device_id,d.last_seen_at,ds.state,
-    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,latest.speed,latest.ignition,latest.gps_valid,
+    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,latest.speed) AS speed,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_ignition END,latest.ignition) AS ignition,latest.gps_valid,
     latest.address,latest.address_attribution,ds.updated_at AS status_since_at,
     today.today_distance_km,today.today_running_seconds,today.today_stopped_seconds,today.today_avg_speed,today.today_max_speed,
     CASE WHEN last_stop.observed_at IS NULL OR latest.observed_at IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM (latest.observed_at-last_stop.observed_at)) END AS duration_from_last_stop_seconds,
@@ -19,7 +20,7 @@ const fleetCte=`${userScopeCte}, fleet AS (
       WHEN NOT v.active THEN 'INACTIVE'
       WHEN d.id IS NULL THEN 'NEW'
       WHEN d.last_seen_at IS NULL OR d.last_seen_at<d.current_assigned_at OR d.last_seen_at<now()-($2::int*interval '1 minute') THEN 'UNREACHABLE'
-      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(latest.speed,CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,0)>v.overspeed_limit THEN 'OVERSPEED'
+      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,latest.speed,0)>v.overspeed_limit THEN 'OVERSPEED'
       WHEN ds.updated_at>=d.current_assigned_at AND ds.state='MOVING' THEN 'RUNNING'
       WHEN ds.updated_at>=d.current_assigned_at AND ds.state='IDLE' THEN 'IDLE'
       WHEN ds.updated_at>=d.current_assigned_at AND ds.state='STOPPED' THEN 'STOPPED'
@@ -41,22 +42,7 @@ const fleetCte=`${userScopeCte}, fleet AS (
     FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=d.current_assigned_at
     ORDER BY l.server_received_at DESC LIMIT 1
   ) latest ON true
-  LEFT JOIN LATERAL (
-    SELECT
-      SUM(CASE WHEN daily.gps_valid AND daily.position IS NOT NULL AND daily.previous_position IS NOT NULL THEN ST_Distance(daily.previous_position,daily.position) ELSE 0 END)/1000.0 AS today_distance_km,
-      SUM(CASE WHEN daily.next_at IS NOT NULL AND COALESCE(daily.speed,0)>$3 THEN EXTRACT(EPOCH FROM (daily.next_at-daily.observed_at)) END) AS today_running_seconds,
-      SUM(CASE WHEN daily.next_at IS NOT NULL AND daily.ignition=false AND COALESCE(daily.speed,0)<=$3 THEN EXTRACT(EPOCH FROM (daily.next_at-daily.observed_at)) END) AS today_stopped_seconds,
-      AVG(daily.speed) FILTER(WHERE daily.speed>=0) AS today_avg_speed,
-      MAX(daily.speed) FILTER(WHERE daily.speed>=0) AS today_max_speed
-    FROM (
-      SELECT l.position,l.gps_valid,l.speed,l.ignition,COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,
-        lag(l.position) OVER(ORDER BY COALESCE(l.tracker_timestamp,l.server_received_at),l.id) AS previous_position,
-        lead(COALESCE(l.tracker_timestamp,l.server_received_at)) OVER(ORDER BY COALESCE(l.tracker_timestamp,l.server_received_at),l.id) AS next_at
-      FROM locations l WHERE l.vehicle_id=v.id
-        AND COALESCE(l.tracker_timestamp,l.server_received_at)>=date_trunc('day',now())
-        AND COALESCE(l.tracker_timestamp,l.server_received_at)<date_trunc('day',now())+interval '1 day'
-    ) daily
-  ) today ON true
+  LEFT JOIN LATERAL (${dailyMetricsSql}) today ON true
   LEFT JOIN LATERAL (
     SELECT l.position,COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at
     FROM locations l WHERE l.vehicle_id=v.id AND l.ignition=false AND COALESCE(l.speed,0)<=$3

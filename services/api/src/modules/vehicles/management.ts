@@ -1,3 +1,4 @@
+import {dailyMetricsSql} from './daily-metrics.js';
 import type {PoolClient} from 'pg';
 import {env} from '../../config/env.js';
 import {query,transaction} from '../../db/pool.js';
@@ -18,26 +19,14 @@ const fleetCte=`${userScopeCte}, fleet AS (
     today.today_distance_km,today.today_running_seconds,
     CASE WHEN NOT v.active THEN 'INACTIVE' WHEN d.id IS NULL THEN 'NEW'
       WHEN d.last_seen_at IS NULL OR d.last_seen_at<a.assigned_at OR d.last_seen_at<now()-($2::int*interval '1 minute') THEN 'UNREACHABLE'
-      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(latest.speed,CASE WHEN ds.updated_at>=a.assigned_at THEN ds.current_speed END,0)>v.overspeed_limit THEN 'OVERSPEED'
+      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(CASE WHEN ds.updated_at>=a.assigned_at THEN ds.current_speed END,latest.speed,0)>v.overspeed_limit THEN 'OVERSPEED'
       WHEN ds.updated_at>=a.assigned_at AND ds.state='MOVING' THEN 'RUNNING' WHEN ds.updated_at>=a.assigned_at AND ds.state='IDLE' THEN 'IDLE' WHEN ds.updated_at>=a.assigned_at AND ds.state='STOPPED' THEN 'STOPPED' ELSE 'UNREACHABLE' END AS fleet_status
   FROM vehicles v JOIN user_scope scope ON scope.id=v.owner_id
   JOIN users client ON client.id=v.owner_id LEFT JOIN users admin ON admin.id=CASE WHEN client.role='CLIENT' THEN client.owner_id WHEN client.role='ADMIN' THEN client.id END AND admin.role='ADMIN'
   LEFT JOIN vehicle_device_assignments a ON a.vehicle_id=v.id AND a.unassigned_at IS NULL
   LEFT JOIN devices d ON d.id=a.device_id LEFT JOIN device_status ds ON ds.device_id=d.id
   LEFT JOIN LATERAL(SELECT l.speed,l.tracker_timestamp,l.server_received_at,NULLIF(l.metadata->>'address','') AS address FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=a.assigned_at ORDER BY l.server_received_at DESC LIMIT 1) latest ON true
-  LEFT JOIN LATERAL(
-    SELECT
-      SUM(CASE WHEN daily.gps_valid AND daily.position IS NOT NULL AND daily.previous_position IS NOT NULL THEN ST_Distance(daily.previous_position,daily.position) ELSE 0 END)/1000.0 AS today_distance_km,
-      SUM(CASE WHEN daily.next_at IS NOT NULL AND COALESCE(daily.speed,0)>$3 THEN EXTRACT(EPOCH FROM (daily.next_at-daily.observed_at)) END) AS today_running_seconds
-    FROM (
-      SELECT l.position,l.gps_valid,l.speed,COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,
-        lag(l.position) OVER(ORDER BY COALESCE(l.tracker_timestamp,l.server_received_at),l.id) AS previous_position,
-        lead(COALESCE(l.tracker_timestamp,l.server_received_at)) OVER(ORDER BY COALESCE(l.tracker_timestamp,l.server_received_at),l.id) AS next_at
-      FROM locations l WHERE l.vehicle_id=v.id
-        AND COALESCE(l.tracker_timestamp,l.server_received_at)>=date_trunc('day',now())
-        AND COALESCE(l.tracker_timestamp,l.server_received_at)<date_trunc('day',now())+interval '1 day'
-    ) daily
-  ) today ON true
+  LEFT JOIN LATERAL (${dailyMetricsSql}) today ON true
 )`;
 
 export async function listManagedVehicles(actorId:string,filters:{status:FleetStatus;search:string;page:number;pageSize:number;adminId?:string;clientId?:string;deviceType?:string;addedFrom?:Date;addedTo?:Date;modifiedFrom?:Date;modifiedTo?:Date;subscriptionStartFrom?:Date;subscriptionStartTo?:Date;subscriptionDueFrom?:Date;subscriptionDueTo?:Date;inactiveFrom?:Date;inactiveTo?:Date}){

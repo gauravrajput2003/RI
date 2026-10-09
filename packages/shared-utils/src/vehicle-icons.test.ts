@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {normalizeVehicleType,vehicleAppearance,vehicleStateAppearance} from './index.js';
+import {normalizeVehicleType,vehicleAppearance,vehicleStateAppearance,vehicleRasterAsset} from './index.js';
 
 describe('shared vehicle appearance',()=>{
   it('normalizes common persisted vehicle labels deterministically',()=>{
@@ -13,7 +13,9 @@ describe('shared vehicle appearance',()=>{
   });
   it('keeps operational colors independent of vehicle type',()=>{
     expect(vehicleStateAppearance('MOVING')).toMatchObject({key:'running',color:'#168a55'});
+    expect(vehicleStateAppearance('ONLINE')).toMatchObject({key:'new',label:'Online (motion unknown)'});
     expect(vehicleStateAppearance('IDLE')).toMatchObject({key:'idle',color:'#ad7e00'});
+    expect(vehicleRasterAsset('Bike','IDLE')).toEqual({type:'bike',state:'idle'});
     expect(vehicleStateAppearance('UNREACHABLE')).toMatchObject({key:'unreachable',color:'#607584'});
   });
 });

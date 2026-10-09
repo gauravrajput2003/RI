@@ -36,6 +36,7 @@ beforeAll(async () => {
   process.env.JWT_SECRET = secret;
   process.env.JWT_REFRESH_SECRET = secret + '-refresh';
   process.env.INTERNAL_TRACKER_SECRET = secret + '-internal';
+  process.env.GEOAPIFY_API_KEY = '';
   process.env.OFFLINE_TIMEOUT_SECONDS = '90';
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
@@ -79,6 +80,21 @@ beforeEach(async () => {
 });
 
 describe('resource authorization with both customers persisted', () => {
+  it('exposes heartbeat ACC on a stationary GPS fix and keeps the dashboard idle',async()=>{
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN' WHERE id=$1",[a]);
+    await state.db!.query('UPDATE devices SET last_seen_at=now() WHERE id=$1',[da]);
+    await state.db!.query("UPDATE device_status SET state='IDLE',current_ignition=true,current_speed=0,current_gps_valid=true,updated_at=now() WHERE device_id=$1",[da]);
+    await state.db!.query('UPDATE locations SET speed=0,ignition=NULL,gps_valid=true WHERE id=$1',[la]);
+    expect((await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data).toMatchObject({state:'IDLE',ignition:true});
+    const fleet=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(fleet.body.data.find((row:{id:string})=>row.id===va)).toMatchObject({fleet_status:'IDLE',ignition:true,speed:0});
+    // A later OFF heartbeat overrides old high speed for live overspeed/status.
+    await state.db!.query('UPDATE vehicles SET overspeed_limit=10 WHERE id=$1',[va]);
+    await state.db!.query('UPDATE locations SET speed=24 WHERE id=$1',[la]);
+    await state.db!.query("UPDATE device_status SET state='STOPPED',current_ignition=false,current_speed=0 WHERE device_id=$1",[da]);
+    const stopped=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(stopped.body.data.find((row:{id:string})=>row.id===va)).toMatchObject({fleet_status:'STOPPED',ignition:false,speed:0});
+  });
   it('signs in by username while preserving email login and rejects ambiguous usernames', async () => {
     await state.db!.query("UPDATE users SET username='fleet.operator' WHERE id=$1",[a]);
     const usernameLogin=await request(app).post('/api/v1/auth/login')

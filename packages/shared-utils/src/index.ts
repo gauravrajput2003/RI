@@ -27,8 +27,10 @@ export function normalizeVehicleType(value?: string | null): VehicleVisualType {
 
 export function vehicleStateAppearance(state: VehicleVisualState) {
   switch (state) {
-    case 'RUNNING': case 'MOVING': case 'ONLINE':
+    case 'RUNNING': case 'MOVING':
       return {key: 'running', color: '#168a55', background: '#e6f7ee', label: 'Running'} as const;
+    case 'ONLINE':
+      return {key: 'new', color: '#2d73ad', background: '#e6f2fc', label: 'Online (motion unknown)'} as const;
     case 'IDLE':
       return {key: 'idle', color: '#ad7e00', background: '#fff5cc', label: 'Idle'} as const;
     case 'STOPPED':
