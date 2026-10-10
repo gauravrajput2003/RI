@@ -15,11 +15,11 @@ const fleetCte=`${userScopeCte}, fleet AS (
   SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.image_url,v.remark,v.mileage,v.odometer,v.overspeed_limit,v.owner_id,v.active,v.created_at,v.updated_at,v.coins,v.billing_start,v.billing_due,v.auto_renewal,v.door_configured,v.relay_configured,v.buzzer_configured,v.ignition_wiring,v.ac_power_plus,v.parking_alarm_on_ignition,v.gps_location,d.sim_info,client.role AS owner_role,CASE WHEN client.role='CLIENT' THEN client.name END AS client_name,CASE WHEN client.role='CLIENT' THEN client.email END AS client_email,CASE WHEN client.role='CLIENT' THEN client.username END AS client_username,
     admin.id AS admin_id,admin.name AS admin_name,admin.email AS admin_email,admin.username AS admin_username,
     d.id AS device_id,d.imei,d.protocol,d.model AS device_model,d.sim_number,d.sim_operator,d.sim_type,d.capabilities,CASE WHEN d.last_seen_at>=a.assigned_at THEN d.last_seen_at END AS last_seen_at,
-    latest.speed,latest.tracker_timestamp,latest.server_received_at,latest.address,ds.updated_at AS status_since_at,
+    CASE WHEN ds.updated_at>=a.assigned_at THEN ds.current_speed ELSE latest.speed END AS speed,latest.tracker_timestamp,latest.server_received_at,latest.address,CASE WHEN ds.state_since_at>=a.assigned_at THEN ds.state_since_at END AS status_since_at,
     today.today_distance_km,today.today_running_seconds,
     CASE WHEN NOT v.active THEN 'INACTIVE' WHEN d.id IS NULL THEN 'NEW'
       WHEN d.last_seen_at IS NULL OR d.last_seen_at<a.assigned_at OR d.last_seen_at<now()-($2::int*interval '1 minute') THEN 'UNREACHABLE'
-      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(CASE WHEN ds.updated_at>=a.assigned_at THEN ds.current_speed END,latest.speed,0)>v.overspeed_limit THEN 'OVERSPEED'
+      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(CASE WHEN ds.updated_at>=a.assigned_at THEN ds.current_speed ELSE latest.speed END,0)>v.overspeed_limit THEN 'OVERSPEED'
       WHEN ds.updated_at>=a.assigned_at AND ds.state='MOVING' THEN 'RUNNING' WHEN ds.updated_at>=a.assigned_at AND ds.state='IDLE' THEN 'IDLE' WHEN ds.updated_at>=a.assigned_at AND ds.state='STOPPED' THEN 'STOPPED' ELSE 'UNREACHABLE' END AS fleet_status
   FROM vehicles v JOIN user_scope scope ON scope.id=v.owner_id
   JOIN users client ON client.id=v.owner_id LEFT JOIN users admin ON admin.id=CASE WHEN client.role='CLIENT' THEN client.owner_id WHEN client.role='ADMIN' THEN client.id END AND admin.role='ADMIN'

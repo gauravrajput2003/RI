@@ -15,6 +15,8 @@ export function createLiveVehicleStore() {
       const present = Object.fromEntries(Object.entries(location).filter(([key, value]) => value !== null && value !== undefined
         && !(location.gps_valid === false && ['latitude','longitude','tracker_timestamp',...(location.address_source?[]:['address','address_attribution'])].includes(key))));
       const next = { ...previous, ...present } as Location;
+      // A server current-speed null is authoritative; partial packets without it still preserve speed.
+      if (location.current_speed !== undefined) { next.current_speed=location.current_speed; next.speed=location.current_speed; }
       if (previous && previous.address_source !== 'cell' && previous.address_source !== 'unavailable' && location.gps_valid !== false && !location.address && ((location.latitude != null && location.latitude !== previous.latitude)
         || (location.longitude != null && location.longitude !== previous.longitude))) {
         next.address = null; next.address_attribution = null;

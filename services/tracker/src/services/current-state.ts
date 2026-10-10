@@ -15,6 +15,20 @@ export function heartbeatState(metadata:Record<string,unknown>):{ignition:boolea
 /** Ordinary GT06 locations omit ACC. Derive state from merged values so a
  * stationary fix retains the heartbeat's ACC. Invalid GPS cannot prove motion. */
 export async function mergeCurrentLocation(client:StateDatabase,deviceId:string,location:NormalizedLocation,threshold:number):Promise<DeviceState> {
+  const sampleAt=location.trackerTimestamp==null?null:+new Date(location.trackerTimestamp);
+  const age=sampleAt==null?null:+new Date(location.serverReceivedAt)-sampleAt;
+  // Keep delayed positions in history, but never use their old speed/ACC as
+  // evidence of current motion. A recent live fix still takes precedence.
+  if(age!==null&&(!Number.isFinite(age)||age>120000||age< -60000)){
+    const result=await client.query<{state:DeviceState}>(`INSERT INTO device_status(device_id,state,updated_at)
+      VALUES($1,'ONLINE',now()) ON CONFLICT(device_id) DO UPDATE SET
+      state=CASE WHEN device_status.last_location_at IS NULL OR device_status.last_location_at<$2::timestamptz-interval '2 minutes'
+        THEN CASE WHEN device_status.current_ignition=true THEN 'IDLE' WHEN device_status.current_ignition=false THEN 'STOPPED' ELSE 'ONLINE' END::device_connection_state ELSE device_status.state END,
+      current_speed=CASE WHEN device_status.last_location_at IS NULL OR device_status.last_location_at<$2::timestamptz-interval '2 minutes' THEN NULL ELSE device_status.current_speed END,
+      current_gps_valid=CASE WHEN device_status.last_location_at IS NULL OR device_status.last_location_at<$2::timestamptz-interval '2 minutes' THEN false ELSE device_status.current_gps_valid END,
+      updated_at=now() RETURNING state`,[deviceId,location.serverReceivedAt]);
+    return result.rows[0].state;
+  }
   const state=derivedState(location,threshold);
   const result=await client.query<{state:DeviceState}>(`INSERT INTO device_status(device_id,state,last_location_at,connected_at,current_position,current_speed,current_ignition,current_gps_valid,current_satellites,current_battery_percent,current_gsm_signal,updated_at)
     VALUES($1,$2,$3,now(),CASE WHEN $4::double precision IS NULL OR $5::double precision IS NULL OR NOT $8 THEN NULL ELSE ST_SetSRID(ST_MakePoint($5,$4),4326)::geography END,$6,$7,$8,$9,$10,$11,now())
@@ -39,7 +53,7 @@ export async function mergeHeartbeat(client:StateDatabase,identity:string,at:Dat
     ON CONFLICT(device_id) DO UPDATE SET state=CASE
       WHEN EXCLUDED.current_ignition IS NULL THEN device_status.state
       WHEN EXCLUDED.current_ignition=false THEN 'STOPPED'
-      WHEN device_status.last_location_at<$2::timestamptz-interval '2 minutes' AND device_status.current_speed>$8 THEN 'ONLINE'
+      WHEN device_status.last_location_at IS NULL OR device_status.last_location_at<$2::timestamptz-interval '2 minutes' THEN 'IDLE'
       WHEN device_status.current_gps_valid AND device_status.current_speed>$8 THEN 'MOVING'
       ELSE 'IDLE' END,
     last_heartbeat_at=EXCLUDED.last_heartbeat_at,current_ignition=COALESCE(EXCLUDED.current_ignition,device_status.current_ignition),

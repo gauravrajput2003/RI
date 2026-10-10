@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { demoLocations, demoVehicles } from '../demo/data';
-import { demoCardExtras, fleetFilters, matchesFilter, visibleVehicles } from './model';
+import { demoCardExtras, liveCardExtras, fleetFilters, matchesFilter, visibleVehicles } from './model';
 import { searchReports } from '../reports/catalog';
 
 describe('dashboard preview models', () => {
@@ -21,5 +21,24 @@ describe('dashboard preview models', () => {
     expect(searchReports('distance').map(report => report.title)).toEqual(['Distance Report']);
     expect(searchReports('TRAVEL').map(report => report.title)).toEqual(['Travel Summary']);
     expect(searchReports('not found')).toEqual([]);
+  });
+});
+
+describe('real dashboard metrics',()=>{
+  const vehicle={id:'real',vehicle_number:'REAL',alias:null,vehicle_type:'Bike',odometer:8710,active:true};
+  const now=Date.parse('2026-10-09T04:00:00Z');
+  it('shows recorded daily totals and keeps zero values, without inventing fuel',()=>{
+    const latest={server_received_at:'2026-10-09T04:00:00Z',today_distance_km:0,today_max_speed:0,status_since_at:'2026-10-09T03:30:00Z'};
+    expect(liveCardExtras(vehicle,latest,undefined,now)).toMatchObject({distance:'0.0 km',maxSpeed:'0 km/h',fuel:'Not available',since:'30 min'});
+    expect(liveCardExtras(vehicle,{...latest,today_max_speed:67,today_distance_km:2.345},undefined,now)).toMatchObject({distance:'2.3 km',maxSpeed:'67 km/h'});
+  });
+  it('uses the newest server status and heartbeat sync, not old GPS time',()=>{
+    const latest={server_received_at:'2026-10-09T03:00:00Z',status_checked_at:'2026-10-09T04:00:00Z',state:'IDLE' as const,status_since_at:'2026-10-09T03:50:00Z',last_seen_at:'2026-10-09T03:59:50Z'};
+    expect(liveCardExtras(vehicle,latest,undefined,now).since).toBe('10 min');
+    expect(liveCardExtras(vehicle,latest,undefined,now).lastSync).toBe(new Date(latest.last_seen_at).toLocaleString());
+    expect(liveCardExtras({...vehicle,state:'OFFLINE',status_checked_at:'2026-10-09T04:01:00Z',offline_at:'2026-10-09T03:55:00Z'},latest,undefined,now).since).toBe('5 min');
+  });
+  it('does not use lifetime odometer or pretend an unknown transition time is known',()=>{
+    expect(liveCardExtras(vehicle,undefined,undefined,now)).toMatchObject({distance:'Not available',maxSpeed:'Not available',since:'Not available'});
   });
 });

@@ -35,7 +35,7 @@ export function withDashboardPreviewTelemetry(vehicles:FleetVehicle[]):FleetVehi
 export function mergeDashboardTelemetry(vehicle:FleetVehicle,payload:Partial<FleetVehicle>&{gps_valid?:boolean;gpsValid?:boolean}):FleetVehicle {
  const valid=payload.gps_valid??payload.gpsValid;
  const usable=valid===false?Object.fromEntries(Object.entries(payload).filter(([key])=>!['latitude','longitude','tracker_timestamp','server_received_at',...(payload.address_source?[]:['address','address_attribution'])].includes(key))):payload;
- return {...vehicle,...usable,...(valid!==false&&vehicle.address_source!=='cell'&&vehicle.address_source!=='unavailable'&&!payload.address&&((payload.latitude!=null&&payload.latitude!==vehicle.latitude)||(payload.longitude!=null&&payload.longitude!==vehicle.longitude))?{address:null,address_attribution:null}:{})};
+ return {...vehicle,...usable,...(Object.hasOwn(payload,'current_speed')?{speed:payload.current_speed as number|null}:{}),...(valid!==false&&vehicle.address_source!=='cell'&&vehicle.address_source!=='unavailable'&&!payload.address&&((payload.latitude!=null&&payload.latitude!==vehicle.latitude)||(payload.longitude!=null&&payload.longitude!==vehicle.longitude))?{address:null,address_attribution:null}:{})};
 }
 
 export function DashboardPage(){

@@ -4,7 +4,7 @@ import type { Location, Vehicle } from '../../types/models';
 const timestamp = z.string().refine(value => Number.isFinite(Date.parse(value)));
 const numeric = z.union([z.number().finite(), z.string().regex(/^-?\d+(\.\d+)?$/).transform(Number)]);
 const nullableNumber = numeric.nullable().optional();
-const activity = { state: z.enum(['ONLINE','OFFLINE','MOVING','IDLE','STOPPED']).optional(), last_seen_at: timestamp.nullable().optional(), status_checked_at: timestamp.optional(), offline_at: timestamp.nullable().optional() };
+const activity = { current_speed:nullableNumber, state: z.enum(['ONLINE','OFFLINE','MOVING','IDLE','STOPPED']).optional(), last_seen_at: timestamp.nullable().optional(), status_checked_at: timestamp.optional(), status_since_at: timestamp.nullable().optional(), offline_at: timestamp.nullable().optional() };
 const locationSchema = z.object({
   ...activity,
   vehicle_id: z.string().optional(), tracker_timestamp: timestamp.nullable().optional(),
@@ -12,7 +12,7 @@ const locationSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable().optional(),
   speed: nullableNumber, course: nullableNumber, ignition: z.boolean().nullable().optional(),
   satellites: nullableNumber, gps_valid: z.boolean().nullable().optional(), battery_percent: nullableNumber,
-  gsm_signal: nullableNumber,
+  gsm_signal: nullableNumber,today_distance_km:nullableNumber,today_max_speed:nullableNumber,
   address_source:z.enum(['gps','cell','unavailable']).optional(),tower_status:z.string().optional(),address:z.string().nullable().optional(),address_attribution:z.string().nullable().optional(),
 });
 export function normalizeLocation(input: unknown): Location | null {

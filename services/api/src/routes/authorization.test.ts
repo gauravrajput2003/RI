@@ -42,7 +42,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql','023_device_state_since.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -81,6 +81,33 @@ beforeEach(async () => {
 });
 
 describe('resource authorization with both customers persisted', () => {
+  it('does not fall back to historical GPS speed when current Idle speed is unknown',async()=>{
+    await state.db!.query("UPDATE users SET role='SUPER_ADMIN' WHERE id=$1",[a]);
+    await state.db!.query('UPDATE devices SET last_seen_at=now() WHERE id=$1',[da]);
+    await state.db!.query("UPDATE device_status SET state='IDLE',current_ignition=true,current_speed=NULL,updated_at=now() WHERE device_id=$1",[da]);
+    await state.db!.query('UPDATE locations SET speed=22 WHERE id=$1',[la]);
+    expect((await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data).toMatchObject({state:'IDLE',speed:null,current_speed:null});
+    const fleet=await request(app).get('/api/v1/dashboard/vehicles').set('Authorization',`Bearer ${token(a,'SUPER_ADMIN')}`).expect(200);
+    expect(fleet.body.data.find((row:{id:string})=>row.id===va)).toMatchObject({fleet_status:'IDLE',speed:null});
+    await state.db!.query('UPDATE device_status SET current_speed=0 WHERE device_id=$1',[da]);
+    expect((await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data.speed).toBe(0);
+    expect((await state.db!.query<{speed:number}>('SELECT speed FROM locations WHERE id=$1',[la])).rows[0].speed).toBe(22);
+  });
+
+  it('returns recorded daily maximum speed and the stable state transition time to the mobile endpoint',async()=>{
+    await state.db!.query('UPDATE devices SET last_seen_at=now() WHERE id=$1',[da]);
+    await state.db!.query("UPDATE device_status SET state='IDLE',current_ignition=true WHERE device_id=$1",[da]);
+    await state.db!.query('UPDATE locations SET tracker_timestamp=now(),server_received_at=now(),speed=67,position=point(10,20) WHERE id=$1',[la]);
+    const first=(await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data;
+    expect(Number(first.today_max_speed)).toBe(67);
+    expect(Number(first.today_distance_km)).toBe(0);
+    expect(first.status_since_at).toEqual(expect.any(String));
+    await state.db!.query("UPDATE device_status SET updated_at=now() WHERE device_id=$1",[da]);
+    const second=(await get(a,`/vehicles/${va}/latest-location`).expect(200)).body.data;
+    expect(second.status_since_at).toBe(first.status_since_at);
+    await get(b,`/vehicles/${va}/latest-location`).expect(404);
+  });
+
   it('exposes heartbeat ACC on a stationary GPS fix and keeps the dashboard idle',async()=>{
     await state.db!.query("UPDATE users SET role='SUPER_ADMIN' WHERE id=$1",[a]);
     await state.db!.query('UPDATE devices SET last_seen_at=now() WHERE id=$1',[da]);
@@ -138,9 +165,9 @@ describe('resource authorization with both customers persisted', () => {
   });
   it.each(['MOVING','STOPPED','IDLE','ONLINE'] as const)('preserves recent %s activity using configured timeout', state => {
     const now=new Date('2026-08-01T00:00:00Z');
-    expect(deviceActivity(now,state,true,now)).toEqual({state,unreachable:false,status_checked_at:now.toISOString(),offline_at:'2026-08-01T00:01:30.000Z',unreachable_at:'2026-08-01T00:30:00.000Z'});
+    expect(deviceActivity(now,state,true,now)).toEqual({state,unreachable:false,status_checked_at:now.toISOString(),offline_at:'2026-08-01T00:30:00.000Z',unreachable_at:'2026-08-01T00:30:00.000Z'});
   });
-  it.each([[89999,'MOVING'],[90000,'MOVING'],[90001,'OFFLINE']] as const)('handles configured timeout boundary at %i ms', (age,state) => {
+  it.each([[90001,'MOVING'],[1799999,'MOVING'],[1800000,'OFFLINE'],[1800001,'OFFLINE']] as const)('handles configured timeout boundary at %i ms', (age,state) => {
     const now=new Date('2026-08-01T00:00:00Z');
     expect(deviceActivity(new Date(+now-age),'MOVING',true,now).state).toBe(state);
   });
@@ -160,10 +187,10 @@ describe('resource authorization with both customers persisted', () => {
         for(const path of ['/vehicles','/devices',`/vehicles/${va}`,`/vehicles/${va}/latest-location`]) {
           const response=await get(a,path).expect(200);
           const data=Array.isArray(response.body.data)?response.body.data[0]:response.body.data;
-          expect(data).toMatchObject({state:expected,last_seen_at:now.toISOString(),offline_at:'2026-08-01T00:01:30.000Z'});
+          expect(data).toMatchObject({state:expected,last_seen_at:now.toISOString(),offline_at:'2026-08-01T00:30:00.000Z'});
         }
       };
-      await check('MOVING');vi.setSystemTime(+now+90001);await check('OFFLINE');
+      await check('MOVING');vi.setSystemTime(+now+90001);await check('MOVING');vi.setSystemTime(+now+1800000);await check('OFFLINE');
       expect((await get(b,'/vehicles')).body.data[0].state).toBe('OFFLINE');
       expect((await state.db!.query('SELECT state FROM device_status WHERE device_id=$1',[da])).rows[0]).toEqual({state:'MOVING'});
       expect((await state.db!.query('SELECT * FROM locations WHERE device_id=$1',[da])).rows).toEqual(before);

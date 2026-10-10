@@ -30,7 +30,7 @@ export function vehicleStateAppearance(state: VehicleVisualState) {
     case 'RUNNING': case 'MOVING':
       return {key: 'running', color: '#168a55', background: '#e6f7ee', label: 'Running'} as const;
     case 'ONLINE':
-      return {key: 'new', color: '#2d73ad', background: '#e6f2fc', label: 'Online (motion unknown)'} as const;
+      return {key: 'new', color: '#6f7780', background: '#eceff1', label: 'Online (motion unknown)'} as const;
     case 'IDLE':
       return {key: 'idle', color: '#ad7e00', background: '#fff5cc', label: 'Idle'} as const;
     case 'STOPPED':
@@ -56,7 +56,8 @@ export function vehicleAppearance(type?: string | null, state?: VehicleVisualSta
 /** Both clients use the same uploaded artwork and tracker-state mapping. */
 export function vehicleRasterAsset(type?: string | null, state?: VehicleVisualState) {
   const appearance = vehicleAppearance(type, state);
-  if (appearance.type === 'van') return null;
+  // The blue raster is reserved for actual no-signal/offline state.
+  if (appearance.type === 'van' || ['ONLINE','NEW','INACTIVE','UNKNOWN'].includes(state ?? '') || state == null) return null;
   const imageState = appearance.key === 'overspeed' ? 'running'
     : appearance.key === 'new' || appearance.key === 'inactive' ? 'unreachable'
     : appearance.key;

@@ -88,6 +88,28 @@ export function formatDuration(seconds: number): string {
   return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+/** Only actual, valid fixes can participate in a route. Receipt time is a
+ * fallback for devices that omit GPS time, never a replacement for old GPS time. */
+export function routeTime(point: Location): number {
+  return Date.parse(point.tracker_timestamp || point.server_received_at);
+}
+export function normalizeRoute(points: Location[]): Location[] {
+  return points.filter(p => p.gps_valid !== false &&
+    typeof p.latitude === 'number' && Number.isFinite(p.latitude) && Math.abs(p.latitude) <= 90 &&
+    typeof p.longitude === 'number' && Number.isFinite(p.longitude) && Math.abs(p.longitude) <= 180 &&
+    !(p.latitude === 0 && p.longitude === 0) && Number.isFinite(routeTime(p)))
+    .sort((a, b) => routeTime(a) - routeTime(b));
+}
+export function routeIndex(points: Location[], time: number): number {
+  let low = 0, high = points.length - 1, result = 0;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (routeTime(points[middle]) <= time) { result = middle; low = middle + 1; }
+    else high = middle - 1;
+  }
+  return result;
+}
+
 /**
  * Computes pure analytics from route points:
  * - Distance via Haversine
@@ -96,8 +118,7 @@ export function formatDuration(seconds: number): string {
  * - Halt count & Halt locations
  */
 export function calculateRouteStats(points: Location[]): RouteStats {
-  const validPoints = points
-    .filter(p => typeof p.latitude === 'number' && typeof p.longitude === 'number')
+  const validPoints = normalizeRoute(points)
     .map(p => {
       const ts = p.tracker_timestamp || p.server_received_at;
       const timeMs = ts ? new Date(ts).getTime() : 0;
@@ -139,10 +160,14 @@ export function calculateRouteStats(points: Location[]): RouteStats {
     if (i > 0) {
       const prev = validPoints[i - 1];
       const dist = haversineDistance(prev.latitude, prev.longitude, current.latitude, current.longitude);
-      kmTravelled += dist;
+
 
       const deltaMs = Math.max(0, current.timeMs - prev.timeMs);
       const deltaSec = deltaMs / 1000;
+      // Match the existing daily metric guard: reject impossible jumps and
+      // stationary jitter, without estimating travel between missing fixes.
+      if (deltaSec <= 0 || dist > deltaSec * (200 / 3600)) continue;
+      if (dist >= 0.01 || current.speed > 5 || prev.speed > 5) kmTravelled += dist;
 
       // Speed threshold: > 1 km/h is running, <= 1 km/h is stoppage
       const isRunning = current.speed > 1 || (dist > 0.05 && deltaSec > 0 && (dist / (deltaSec / 3600)) > 1);

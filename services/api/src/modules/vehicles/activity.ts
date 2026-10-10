@@ -18,12 +18,13 @@ export function packetActivity(lastSeen:Date|string|null,now=new Date()){
 /** Read-time status only: never updates current-state merges or location history. */
 export function deviceActivity(lastSeen: Date | string | null, storedState: DeviceState | null, active = true, now = new Date()) {
   const seen = lastPacketTime(lastSeen);
-  const offlineAt = seen + env.OFFLINE_TIMEOUT_SECONDS * 1000;
+  // Dashboard blue/no-signal uses the same 30-minute packet deadline as the web fleet.
+  const offlineAt = seen + env.NO_SIGNAL_TIMEOUT_MINUTES * 60_000;
   const unreachableAt = seen + env.NO_SIGNAL_TIMEOUT_MINUTES * 60_000;
-  const offline = !active || !Number.isFinite(seen) || now.getTime() > offlineAt;
+  const offline = !active || !Number.isFinite(seen) || now.getTime() >= offlineAt;
   return {
     state: (offline ? 'OFFLINE' : storedState && storedState !== 'OFFLINE' && storedState !== 'UNKNOWN' ? storedState : 'ONLINE') as DeviceState,
-    unreachable: !active || !Number.isFinite(seen) || now.getTime() > unreachableAt,
+    unreachable: !active || !Number.isFinite(seen) || now.getTime() >= unreachableAt,
     status_checked_at: now.toISOString(),
     offline_at: Number.isFinite(offlineAt) && active ? new Date(offlineAt).toISOString() : null,
     unreachable_at: Number.isFinite(unreachableAt) && active ? new Date(unreachableAt).toISOString() : null,
@@ -35,7 +36,9 @@ export async function activityQuery(sql: string, values: unknown[]) {
   const now = new Date();
   return { ...result, rows: result.rows.map(row => {
     const { activity_state, activity_active, ...record } = row;
-    return { ...record, ...deviceActivity(row.last_seen_at ?? null, activity_state ?? null, activity_active ?? false, now) };
+    // An explicit null current speed must clear old GPS speed, not fall back to history.
+    return { ...record, ...deviceActivity(row.last_seen_at ?? null, activity_state ?? null, activity_active ?? false, now),
+      ...(Object.hasOwn(record, 'current_speed') ? {speed:record.current_speed} : {}) };
   }) };
 }
 
@@ -45,6 +48,8 @@ export const vehicleActivityJoin = `LEFT JOIN LATERAL (
   SELECT CASE WHEN device.last_seen_at>=assign.assigned_at THEN device.last_seen_at END AS last_seen_at,
     CASE WHEN status.updated_at>=assign.assigned_at THEN status.state END AS activity_state,
     CASE WHEN status.updated_at>=assign.assigned_at THEN status.current_ignition END AS current_ignition,
+    CASE WHEN status.updated_at>=assign.assigned_at THEN status.current_speed END AS current_speed,
+    CASE WHEN status.state_since_at>=assign.assigned_at THEN status.state_since_at END AS status_since_at,
     device.active AND v.active AS activity_active
   FROM vehicle_device_assignments assign JOIN devices device ON device.id=assign.device_id
   LEFT JOIN device_status status ON status.device_id=device.id

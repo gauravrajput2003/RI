@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stateForVehicle } from './status';
+import { stateForVehicle,currentSpeedForVehicle } from './status';
 import { visibleVehicles } from '../dashboard/model';
 import { normalizeLocation, normalizeVehicles } from './normalize';
 const vehicle={id:'a',vehicle_number:'A',alias:null,odometer:null,vehicle_type:null,active:true,
@@ -24,4 +24,10 @@ describe('server-derived offline display',()=>{
     expect(normalizeLocation({...vehicle,server_received_at:vehicle.status_checked_at})).toMatchObject({offline_at:vehicle.offline_at});
     expect(stateForVehicle({...vehicle,state:'OFFLINE',offline_at:null})).toBe('OFFLINE');
   });
+});
+
+it('uses newer server activity to clear an old moving GPS speed',()=>{
+  const old={server_received_at:'2026-08-01T00:00:00Z',status_checked_at:'2026-08-01T00:00:00Z',speed:22};
+  expect(currentSpeedForVehicle({...vehicle,current_speed:null,status_checked_at:'2026-08-01T00:02:00Z'},old)).toBeNull();
+  expect(currentSpeedForVehicle({...vehicle,current_speed:0,status_checked_at:'2026-08-01T00:02:00Z'},old)).toBe(0);
 });

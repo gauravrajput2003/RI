@@ -11,8 +11,8 @@ export type FleetStatus='ALL'|'OVERSPEED'|'RUNNING'|'IDLE'|'STOPPED'|'UNREACHABL
 const fleetCte=`${userScopeCte}, fleet AS (
   SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.active,v.overspeed_limit,v.owner_id,
     owner.email AS owner_email,owner.name AS client_name,owner.username AS client_username,d.id AS device_id,d.last_seen_at,ds.state,
-    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,latest.speed) AS speed,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_ignition END,latest.ignition) AS ignition,latest.gps_valid,
-    latest.address,latest.address_attribution,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,ds.updated_at AS status_since_at,
+    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed ELSE latest.speed END AS speed,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_ignition END,latest.ignition) AS ignition,latest.gps_valid,
+    latest.address,latest.address_attribution,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,CASE WHEN ds.state_since_at>=d.current_assigned_at THEN ds.state_since_at END AS status_since_at,
     today.today_distance_km,today.today_running_seconds,today.today_stopped_seconds,today.today_avg_speed,today.today_max_speed,
     CASE WHEN last_stop.observed_at IS NULL OR latest.observed_at IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM (latest.observed_at-last_stop.observed_at)) END AS duration_from_last_stop_seconds,
     CASE WHEN last_stop.position IS NULL OR latest.position IS NULL THEN NULL ELSE ST_Distance(last_stop.position,latest.position)/1000.0 END AS distance_from_last_stop_km,
@@ -21,7 +21,7 @@ const fleetCte=`${userScopeCte}, fleet AS (
       WHEN NOT v.active THEN 'INACTIVE'
       WHEN d.id IS NULL THEN 'NEW'
       WHEN d.last_seen_at IS NULL OR d.last_seen_at<d.current_assigned_at OR d.last_seen_at<now()-($2::int*interval '1 minute') THEN 'UNREACHABLE'
-      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed END,latest.speed,0)>v.overspeed_limit THEN 'OVERSPEED'
+      WHEN v.overspeed_limit IS NOT NULL AND COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed ELSE latest.speed END,0)>v.overspeed_limit THEN 'OVERSPEED'
       WHEN ds.updated_at>=d.current_assigned_at AND ds.state='MOVING' THEN 'RUNNING'
       WHEN ds.updated_at>=d.current_assigned_at AND ds.state='IDLE' THEN 'IDLE'
       WHEN ds.updated_at>=d.current_assigned_at AND ds.state='STOPPED' THEN 'STOPPED'

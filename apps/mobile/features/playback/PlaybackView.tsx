@@ -20,6 +20,7 @@ import {
   formatDuration,
   formatTime,
   parseDateTime,
+  normalizeRoute, routeTime, routeIndex,
 } from './route';
 
 export default function PlaybackView() {
@@ -44,6 +45,9 @@ export default function PlaybackView() {
   const [confirmedRange, setConfirmedRange] = useState<{ from: Date; to: Date } | null>(null);
   const [playbackIndex, setPlaybackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [rate, setRate] = useState(60);
+  const indexRef = useRef(0);
+  indexRef.current = playbackIndex;
 
   const query = useHistory(
     vehicleId,
@@ -52,7 +56,7 @@ export default function PlaybackView() {
     Boolean(confirmedRange && vehicleId)
   );
 
-  const points = useMemo(() => query.data ?? [], [query.data]);
+  const points = useMemo(() => normalizeRoute(query.data ?? []), [query.data]);
   const stats = useMemo(() => calculateRouteStats(points), [points]);
 
   const onConfirmForm = () => {
@@ -85,20 +89,11 @@ export default function PlaybackView() {
   };
 
   const initialRegion = useMemo<Region | undefined>(() => {
-    if (points.length === 0) {
-      return {
-        latitude: 28.8950,
-        longitude: 76.6050,
-        latitudeDelta: 0.1,
-        longitudeDelta: 0.1,
-      };
-    }
     const first = points[0];
+    if (!first) return undefined;
     return {
-      latitude: first.latitude ?? 28.8950,
-      longitude: first.longitude ?? 76.6050,
-      latitudeDelta: 0.08,
-      longitudeDelta: 0.08,
+      latitude: first.latitude!, longitude: first.longitude!,
+      latitudeDelta: 0.08, longitudeDelta: 0.08,
     };
   }, [points]);
 
@@ -121,12 +116,30 @@ export default function PlaybackView() {
     }
   }, [polylineCoords]);
   useEffect(() => { fitRoute(); }, [fitRoute]);
+  useEffect(() => { setPlaybackIndex(0); setIsPlaying(false); }, [points]);
+  useEffect(() => {
+    if (!isPlaying || points.length < 2) return;
+    let last = Date.now(), virtual = routeTime(points[indexRef.current]);
+    const timer = setInterval(() => {
+      const now = Date.now(); virtual += (now - last) * rate; last = now;
+      const next = routeIndex(points, virtual);
+      setPlaybackIndex(next);
+      if (next >= points.length - 1) setIsPlaying(false);
+    }, 100);
+    return () => clearInterval(timer);
+  }, [isPlaying, points, rate]);
+  const togglePlayback = () => {
+    if (points.length < 2) return;
+    if (!isPlaying && playbackIndex >= points.length - 1) setPlaybackIndex(0);
+    setIsPlaying(value => !value);
+  };
+
 
   const startPoint = polylineCoords[0];
   const endPoint = polylineCoords.length > 1 ? polylineCoords[polylineCoords.length - 1] : undefined;
 
   const currentPoint = points[playbackIndex] ?? points[points.length - 1];
-  const currentSpeed = currentPoint?.speed ?? 0;
+  const currentSpeed = currentPoint?.speed ?? '—';
   const currentTimestamp = currentPoint
     ? formatTime(new Date(currentPoint.tracker_timestamp || currentPoint.server_received_at))
     : '--';
@@ -158,7 +171,7 @@ export default function PlaybackView() {
         <View style={styles.miniStat}>
           <View style={styles.miniStatRow}>
             <MaterialCommunityIcons name="map-marker-distance" size={16} color="#0f766e" />
-            <Text style={styles.miniStatLabel}>KM Covered</Text>
+            <Text style={styles.miniStatLabel}>Recorded KM</Text>
           </View>
           <Text style={styles.miniStatValue}>{stats.kmTravelled} KM</Text>
         </View>
@@ -187,12 +200,22 @@ export default function PlaybackView() {
             <ActivityIndicator size="large" color="#ef4444" />
             <Text style={styles.loadingText}>Loading route playback...</Text>
           </View>
+        ) : query.isError || !points.length ? (
+          <View style={styles.loadingContainer}>
+            <Text>{query.isError ? 'Unable to load GPS history. Please retry.' : 'No valid GPS recordings in this period.'}</Text>
+            <Pressable onPress={() => query.refetch()}><Text>Retry</Text></Pressable>
+          </View>
         ) : (
           <MapView ref={map} style={styles.map} initialRegion={initialRegion} onMapReady={fitRoute}>
             {polylineCoords.length > 1 ? (
               <Polyline coordinates={polylineCoords} strokeColor="#000000" strokeWidth={3.5} />
             ) : null}
 
+            {currentPoint && hasPosition(currentPoint) && (
+              <Marker coordinate={currentPoint} title={`Playback ${currentTimestamp}`}>
+                <MaterialCommunityIcons name="motorbike" size={32} color="#087ca7" />
+              </Marker>
+            )}
             {/* Start Marker */}
             {startPoint ? (
               <Marker coordinate={startPoint} title="Start" pinColor="#22c55e">
@@ -229,12 +252,20 @@ export default function PlaybackView() {
 
         {/* Speed Multiplier Badge */}
         <View style={styles.speedTag}>
-          <Text style={styles.speedTagText}>4x</Text>
+          <Text style={styles.speedTagText}>{rate}x</Text>
         </View>
       </View>
 
       {/* Bottom Controls & Stats Panel */}
       <View style={styles.bottomPanel}>
+        <Text>Recorded GPS: {points.length ? `${formatDateTime(new Date(routeTime(points[0])))} – ${formatDateTime(new Date(routeTime(points[points.length - 1])))}` : 'No recordings'}</Text>
+        <Pressable disabled={!points.length} onPress={() => { setIsPlaying(false); setPlaybackIndex(i => Math.min(i + 1, points.length - 1)); }}>
+          <Text>Next recording</Text>
+        </Pressable>
+        <Pressable disabled={query.isFetching} onPress={() => { setIsPlaying(false); void query.refetch(); }}>
+          <Text>{query.isFetching ? 'Refreshing…' : 'Refresh GPS history'}</Text>
+        </Pressable>
+        {points.length >= 50000 && <Text>Recording limit reached. Select a shorter date range.</Text>}
         {/* Scrubber / Progress Bar */}
         <View style={styles.scrubberContainer}>
           <View style={styles.scrubberTrack}>
@@ -265,7 +296,8 @@ export default function PlaybackView() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={isPlaying ? 'Pause playback' : 'Start playback'}
-              onPress={() => setIsPlaying(!isPlaying)}
+              disabled={points.length < 2}
+              onPress={togglePlayback}
               style={styles.playButton}
             >
               <Ionicons
@@ -286,7 +318,8 @@ export default function PlaybackView() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Playback settings"
+                accessibilityLabel="Change playback speed"
+                onPress={() => setRate(value => value === 60 ? 4 : value === 4 ? 12 : 60)}
                 style={styles.actionIcon}
               >
                 <Ionicons name="options-outline" size={22} color="#475569" />

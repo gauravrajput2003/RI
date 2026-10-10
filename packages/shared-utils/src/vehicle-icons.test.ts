@@ -19,3 +19,9 @@ describe('shared vehicle appearance',()=>{
     expect(vehicleStateAppearance('UNREACHABLE')).toMatchObject({key:'unreachable',color:'#607584'});
   });
 });
+
+it('reserves the blue no-signal artwork for offline or unreachable vehicles',()=>{
+  expect(vehicleRasterAsset('Bike','OFFLINE')).toEqual({type:'bike',state:'unreachable'});
+  expect(vehicleRasterAsset('Bike','UNREACHABLE')).toEqual({type:'bike',state:'unreachable'});
+  for(const state of ['ONLINE','NEW','INACTIVE','UNKNOWN',null] as const) expect(vehicleRasterAsset('Bike',state)).toBeNull();
+});

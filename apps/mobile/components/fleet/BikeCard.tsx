@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Location, Vehicle } from '../../types/models';
 import type { CardExtras } from '../../features/dashboard/model';
 import { MetricIcon, type MetricIconKind } from './MetricIcon';
-import { stateForVehicle } from '../../features/vehicles/status';
+import { stateForVehicle, currentSpeedForVehicle } from '../../features/vehicles/status';
 import { statusLabel } from '../../utils/format';
 import { VehicleIcon } from './VehicleIcon';
 function Metric({ label, value, icon }: { label: string; value: string; icon: MetricIconKind }) {
@@ -12,13 +12,14 @@ function Metric({ label, value, icon }: { label: string; value: string; icon: Me
 }
 export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }: { vehicle: Vehicle; live?: Location; extra?: CardExtras; onPress(): void }) {
   const state=stateForVehicle(vehicle,live)??'UNKNOWN';
+  const currentSpeed=currentSpeedForVehicle(vehicle,live);
   return <Pressable accessibilityRole="button" accessibilityLabel={'Open actions for ' + vehicle.vehicle_number} onPress={onPress} style={styles.card}>
     <View style={styles.top}>
       <View style={styles.identity}><VehicleIcon type={vehicle.vehicle_type??extra?.visual} state={state} size={45}/><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text><Text style={styles.alias}>{statusLabel(state)}</Text></View>
       <View style={styles.metrics}>
         <Metric label="KM" value={extra?.distance ?? '—'} icon="distance" />
         <Metric label="Fuel" value={extra?.fuel ?? '—'} icon="fuel" />
-        <Metric label="Speed" value={live?.speed == null ? '—' : String(Math.round(live.speed))} icon="speed" />
+        <Metric label="Speed" value={currentSpeed == null ? '—' : String(Math.round(currentSpeed))} icon="speed" />
         <Metric label="Max Speed" value={extra?.maxSpeed ?? '—'} icon="maxSpeed" />
         <Metric label="Since" value={extra?.since ?? '—'} icon="since" />
         <Metric label="Last Sync" value={extra?.lastSync ?? (live ? new Date(live.server_received_at).toLocaleString() : '—')} icon="lastSync" />

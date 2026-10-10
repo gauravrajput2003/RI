@@ -12,8 +12,8 @@ export const getLatestLocation = async (id: string, signal?: AbortSignal) => {
 export const getHistory = async (id: string, from: Date | string, to: Date | string, limit = 500, signal?: AbortSignal): Promise<Location[]> => {
   const fromIso = typeof from === 'string' ? from : from.toISOString();
   const toIso = typeof to === 'string' ? to : to.toISOString();
-  const { data } = await api.get('/vehicles/' + encodeURIComponent(id) + '/history', {
-    params: { from: fromIso, to: toIso, limit },
+  const { data } = await api.get('/playback', {
+    params: { vehicleId: id, start: fromIso, end: toIso, limit },
     signal,
   });
   return normalizeHistory(data.data);

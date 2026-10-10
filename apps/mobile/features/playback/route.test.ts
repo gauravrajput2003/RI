@@ -8,6 +8,7 @@ import {
   formatDuration,
   calculateRouteStats,
   generateDemoHistory,
+  normalizeRoute, routeIndex, routeTime,
 } from './route';
 import type { Location } from '../../types/models';
 
@@ -125,4 +126,17 @@ describe('route utilities and math', () => {
     expect(stats.maxSpeedKmh).toBeGreaterThan(0);
     expect(stats.totalRunningSeconds).toBeGreaterThan(0);
   });
+});
+
+it('plays recordings chronologically, excluding invalid fixes without inventing positions', () => {
+  const at = (id: string, time: string, latitude = 28, gps_valid = true): Location => ({ id, latitude, longitude: 76, gps_valid, server_received_at: time, speed: 20 });
+  const points = normalizeRoute([at('last', '2026-10-09T04:00:00Z'), at('bad', '2026-10-09T03:00:00Z', 200), at('invalid', '2026-10-09T03:00:00Z', 28, false), at('first', '2026-10-09T02:00:00Z')]);
+  expect(points.map(p => p.id)).toEqual(['first', 'last']);
+  expect(routeIndex(points, routeTime(points[0]) + 1000)).toBe(0);
+  expect(routeIndex(points, routeTime(points[1]))).toBe(1);
+});
+it('rejects impossible GPS jumps and stationary jitter in route mileage', () => {
+  const at = (minute: number, latitude: number, speed = 0): Location => ({latitude, longitude: 76, speed, gps_valid: true, server_received_at: new Date(Date.parse('2026-10-09T00:00:00Z') + minute * 60000).toISOString()});
+  const stats = calculateRouteStats([at(0, 28), at(1, 28.00001), at(2, 50), at(3, 28.00001), at(4, 28.00101, 20)]);
+  expect(stats.kmTravelled).toBeCloseTo(0.11, 2);
 });

@@ -32,3 +32,8 @@ it('accepts a cell address even when GPS has no fix',()=>{
  expect(mergeDashboardTelemetry(previous,{gpsValid:false,latitude:0,longitude:0,address_source:'cell',address:'Cell area (approx.): New'})).toMatchObject({latitude:previous.latitude,address:'Cell area (approx.): New'});
  expect(mergeDashboardTelemetry(previous,{gpsValid:true,latitude:29}).address).toBe(previous.address);
 });
+
+it('clears historical speed when the server marks current speed unavailable',()=>{
+ expect(mergeDashboardTelemetry(vehicle,{speed:22,current_speed:null,fleet_status:'IDLE'})).toMatchObject({speed:null,fleet_status:'IDLE'});
+ expect(mergeDashboardTelemetry(vehicle,{speed:22,current_speed:0,fleet_status:'IDLE'}).speed).toBe(0);
+});

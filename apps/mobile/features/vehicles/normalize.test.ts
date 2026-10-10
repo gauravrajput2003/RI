@@ -15,3 +15,8 @@ describe('real REST and realtime boundaries', () => {
     expect(normalizeLocation({ latitude: 100, longitude: 1, serverReceivedAt: '2026-09-11T00:00:00Z' })).toBeNull();
   });
 });
+
+it('preserves daily metrics and the state transition timestamp from PostgreSQL',()=>{
+  expect(normalizeLocation({server_received_at:'2026-10-09T04:00:00Z',today_distance_km:'1.25',today_max_speed:'67',status_since_at:'2026-10-09T03:50:00Z'}))
+    .toMatchObject({today_distance_km:1.25,today_max_speed:67,status_since_at:'2026-10-09T03:50:00Z'});
+});

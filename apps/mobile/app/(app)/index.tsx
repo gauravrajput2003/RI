@@ -7,7 +7,7 @@ import { BikeCard } from '../../components/fleet/BikeCard';
 import { BikeActions, type BikeAction } from '../../components/fleet/BikeActions';
 import { NoticeSheet } from '../../components/fleet/Sheet';
 import { ShareSheet } from '../../components/fleet/ShareSheet';
-import { demoCardExtras, fleetFilters, matchesFilter, visibleVehicles, type FleetFilter } from '../../features/dashboard/model';
+import { demoCardExtras, liveCardExtras, fleetFilters, matchesFilter, visibleVehicles, type FleetFilter } from '../../features/dashboard/model';
 import { useLatestLocation, useVehicles } from '../../features/vehicles/queries';
 import { useLiveVehicleStore } from '../../store/liveVehicleStore';
 import { useVehicleStore } from '../../store/vehicleStore';
@@ -18,10 +18,10 @@ import type { Vehicle } from '../../types/models';
 import {useQueryClient} from '@tanstack/react-query';
 import {announcementInboxKey} from '../../services/api/announcements';
 const DashboardRow = memo(function DashboardRow({ vehicle, select }: { vehicle: Vehicle; select(vehicle: Vehicle): void }) {
-  useLatestLocation(vehicle.id);
+  const latest = useLatestLocation(vehicle.id);
   const live = useLiveVehicleStore(state => state.byVehicleId[vehicle.id]);
   const open = useCallback(() => select(vehicle), [vehicle, select]);
-  return <BikeCard vehicle={vehicle} live={live} extra={config.demoMode ? demoCardExtras[vehicle.id] : undefined} onPress={open} />;
+  return <BikeCard vehicle={vehicle} live={live} extra={config.demoMode ? demoCardExtras[vehicle.id] : liveCardExtras(vehicle, latest.data, live)} onPress={open} />;
 });
 export default function Dashboard() {
   const cache=useQueryClient();

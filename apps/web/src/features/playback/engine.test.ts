@@ -1,3 +1,7 @@
 import {describe,expect,it} from 'vitest';import {normalizePoints,playbackIndex,pointTime} from './engine';import type {PlaybackPoint} from '../../types';
 const point=(id:string,time:string,latitude:number|null=28):PlaybackPoint=>({id,tracker_timestamp:time,server_received_at:time,latitude,longitude:76,speed:20,course:0,ignition:true,gps_valid:true,odometer:null});
 describe('deterministic playback timeline',()=>{const raw=[point('c','2026-09-16T10:00:20Z'),point('a','2026-09-16T10:00:00Z'),point('b','2026-09-16T10:00:10Z')];it('normalizes points chronologically without inventing data',()=>{expect(normalizePoints(raw).map(p=>p.id)).toEqual(['a','b','c']);expect(raw.map(p=>p.id)).toEqual(['c','a','b'])});it('derives one current index from the shared time position',()=>{const points=normalizePoints(raw);expect(playbackIndex(points,pointTime(points[0]))).toBe(0);expect(playbackIndex(points,new Date('2026-09-16T10:00:15Z').getTime())).toBe(1);expect(playbackIndex(points,pointTime(points[2]))).toBe(2)})});
+
+it('does not animate invalid GPS or out-of-range coordinates',()=>{
+  expect(normalizePoints([{...point('bad','2026-09-16T10:00:00Z'),gps_valid:false},point('outside','2026-09-16T10:00:00Z',100),point('missing','2026-09-16T10:00:00Z',null)])).toEqual([]);
+});

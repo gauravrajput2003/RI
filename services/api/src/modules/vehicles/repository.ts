@@ -1,3 +1,5 @@
+import {dailyMetricsSql} from './daily-metrics.js';
+import {env} from '../../config/env.js';
 import {query} from '../../db/pool.js';
 import {displayedAddresses} from '../cellular/service.js';
 import {activityQuery, vehicleActivityJoin, usableLocationOrder} from './activity.js';
@@ -18,7 +20,7 @@ export const latestLocation=async(id:string,owner:string)=>{const result=await a
   ${userScopeCte}
   SELECT l.vehicle_id,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,
     NULLIF(l.metadata->>'address','') AS address,l.metadata->>'address_attribution' AS address_attribution,
-    COALESCE(activity.current_ignition,l.ignition) AS ignition,l.gps_valid,l.satellites,l.battery_percent,l.gsm_signal,activity.*
+    COALESCE(activity.current_ignition,l.ignition) AS ignition,l.gps_valid,l.satellites,l.battery_percent,l.gsm_signal,activity.*,today.today_distance_km,today.today_max_speed
   FROM vehicles v JOIN vehicle_device_assignments a ON a.vehicle_id=v.id AND a.unassigned_at IS NULL
   JOIN locations l ON l.device_id=a.device_id AND l.vehicle_id=v.id AND l.server_received_at>=a.assigned_at
   LEFT JOIN LATERAL (
@@ -28,7 +30,8 @@ export const latestLocation=async(id:string,owner:string)=>{const result=await a
     ORDER BY c.server_received_at DESC,c.id DESC LIMIT 1
   ) cell_latest ON true
   ${vehicleActivityJoin} JOIN user_scope scope ON scope.id=v.owner_id
-  WHERE v.id=$2 ORDER BY ${usableLocationOrder} LIMIT 1`,[owner,id]);return {...result,rows:await displayedAddresses(result.rows)}};
+  LEFT JOIN LATERAL (${dailyMetricsSql}) today ON true
+  WHERE v.id=$2 ORDER BY ${usableLocationOrder} LIMIT 1`,[owner,id,env.MOVEMENT_THRESHOLD_KPH]);return {...result,rows:await displayedAddresses(result.rows)}};
 export const history=(id:string,owner:string,from:Date,to:Date,limit:number)=>query(`${userScopeCte} SELECT l.id,l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.course,l.ignition,l.satellites,l.gps_valid,l.metadata,l.protocol FROM locations l JOIN vehicles v ON v.id=l.vehicle_id JOIN user_scope scope ON scope.id=v.owner_id WHERE l.vehicle_id=$2 AND l.tracker_timestamp BETWEEN $3 AND $4 ORDER BY l.tracker_timestamp DESC LIMIT $5`,[owner,id,from,to,limit]).then(async result=>({...result,rows:await displayedAddresses(result.rows,true)}));
 /** Internal committed-telemetry publisher only; customer reads use the scoped functions above. */
 export const publishedVehicleActivity=(id:string)=>activityQuery(`SELECT activity.*,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at

@@ -35,7 +35,7 @@ export function useHistory(vehicleId: string, from: Date | null, to: Date | null
   const toIso = to?.toISOString();
   return useQuery({
     queryKey: vehicleKeys.history(vehicleId, fromIso, toIso),
-    queryFn: ({ signal }) => getHistory(vehicleId, fromIso!, toIso!, 500, signal),
+    queryFn: ({ signal }) => getHistory(vehicleId, fromIso!, toIso!, 50000, signal),
     enabled: Boolean(enabled && vehicleId && fromIso && toIso),
     staleTime: 60_000,
     retry: 1,
