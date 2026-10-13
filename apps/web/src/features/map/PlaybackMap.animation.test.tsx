@@ -1,0 +1,21 @@
+import type {ReactNode} from 'react';
+import {cleanup,render} from '@testing-library/react';
+import {afterEach,expect,it,vi} from 'vitest';
+import type {PlaybackPoint} from '../../types';
+import {PlaybackMap} from './MapSurface';
+const state=vi.hoisted(()=>({container:document.createElement('div'),map:{getContainer:():HTMLElement=>state.container,setView:vi.fn(),fitBounds:vi.fn(),invalidateSize:vi.fn(),stop:vi.fn(),eachLayer:vi.fn()}}));
+vi.mock('react-leaflet',()=>({MapContainer:({children}:{children:ReactNode})=><div>{children}</div>,TileLayer:()=>null,Popup:()=>null,Tooltip:()=>null,Polyline:()=>null,useMap:()=>state.map,Marker:({position,icon}:{position:number[];icon:{options:{html:string}}})=><div data-testid="map-marker" data-position={position.join(',')} dangerouslySetInnerHTML={{__html:icon.options.html}}/>}));
+afterEach(()=>{cleanup();vi.unstubAllGlobals()});
+it('moves the selected bike on the map without recentering on every animation frame',()=>{
+ Object.defineProperties(state.container,{clientWidth:{configurable:true,value:800},clientHeight:{configurable:true,value:500}});
+ vi.stubGlobal('requestAnimationFrame',(callback:()=>void)=>{callback();return 1});vi.stubGlobal('cancelAnimationFrame',vi.fn());
+ const points=[0,1].map(i=>({id:String(i),latitude:28+i*.01,longitude:76+i*.01,gps_valid:true,speed:20,ignition:true,course:0,odometer:null,server_received_at:'2026-10-09T00:00:00Z'})) as PlaybackPoint[];
+ const {container,rerender}=render(<PlaybackMap points={points} index={0} position={{latitude:28,longitude:76}} vehicleType="bike"/>);
+ const marker=()=>container.querySelector('[aria-label="Running bike"]')?.closest('[data-testid="map-marker"]');
+ expect(marker()?.getAttribute('data-position')).toBe('28,76');
+ expect(marker()?.querySelector('img')?.getAttribute('src')).toContain('/bike/');
+ state.map.setView.mockClear();state.map.fitBounds.mockClear();
+ rerender(<PlaybackMap points={points} index={0} position={{latitude:28.005,longitude:76.005}} vehicleType="bike"/>);
+ expect(marker()?.getAttribute('data-position')).toBe('28.005,76.005');
+ expect(state.map.setView).not.toHaveBeenCalled();expect(state.map.fitBounds).not.toHaveBeenCalled();
+});

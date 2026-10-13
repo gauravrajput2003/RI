@@ -2,8 +2,8 @@ import type {ReactNode} from 'react';
 import {act,cleanup,render} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 import {FleetMap} from './MapSurface';
-const state=vi.hoisted(()=>({container:document.createElement('div'),resize:[] as (()=>void)[],map:{getContainer:():HTMLElement=>state.container,setView:vi.fn(),fitBounds:vi.fn(),invalidateSize:vi.fn(),stop:vi.fn()}}));
-vi.mock('react-leaflet',()=>({MapContainer:({children}:{children:ReactNode})=><div>{children}</div>,TileLayer:()=>null,Marker:()=>null,Tooltip:()=>null,CircleMarker:()=>null,Polyline:()=>null,useMap:()=>state.map}));
+const state=vi.hoisted(()=>({container:document.createElement('div'),resize:[] as (()=>void)[],map:{getContainer:():HTMLElement=>state.container,setView:vi.fn(),fitBounds:vi.fn(),invalidateSize:vi.fn(),stop:vi.fn(),eachLayer:vi.fn()}}));
+vi.mock('react-leaflet',()=>({MapContainer:({children}:{children:ReactNode})=><div>{children}</div>,Popup:({children}:{children:ReactNode})=><div>{children}</div>,TileLayer:()=>null,Marker:()=>null,Tooltip:()=>null,CircleMarker:()=>null,Polyline:()=>null,useMap:()=>state.map}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals()});
 it('defers fitting a hidden map and focuses its selected marker when resized into view',()=>{
  let width=0,height=0;

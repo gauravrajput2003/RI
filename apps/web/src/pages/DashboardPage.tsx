@@ -14,7 +14,6 @@ import {StatePanel} from '../components/ui/StatePanel';
 import {FleetMap} from '../features/map/MapSurface';
 import {SelectedVehicleSummary} from '../features/dashboard/SelectedVehicleSummary';
 import {FilterPill} from '../features/dashboard/FilterPill';
-import {VehiclePopup} from '../features/dashboard/VehiclePopup';
 import {VehicleIcon} from '../features/vehicles/VehicleIcon';
 import {PageFilterDrawer} from '../features/shell/PageFilterDrawer';
 import {usePageFilterDrawer} from '../features/shell/pageFilterContext';
@@ -47,7 +46,7 @@ export function DashboardPage(){
  const [search,setSearch]=useState('');
  const [page,setPage]=useState(1);
  const [selected,setSelected]=useState<string|null>(null);
- const [hovered,setHovered]=useState<string|null>(null);
+ const [mapPopupOpen,setMapPopupOpen]=useState(false);
  const [panelMode,setPanelMode]=useState<PanelMode>('split');
  const [mapSettings,setMapSettings]=useState(false);
  const [mapType,setMapType]=useState<'street'|'satellite'>('street');
@@ -70,7 +69,7 @@ export function DashboardPage(){
  const apiRows=query.data?.data;
  const rows=useMemo(()=>withDashboardPreviewTelemetry(apiRows||[]),[apiRows]);
  const chosen=rows.find(vehicle=>vehicle.id===selected)||null;
- const preview=rows.find(vehicle=>vehicle.id===hovered)||chosen;
+ useEffect(()=>{if(selected&&apiRows&&!apiRows.some(vehicle=>vehicle.id===selected&&vehicle.latitude!=null&&vehicle.longitude!=null)){setSelected(null);setMapPopupOpen(false)}},[apiRows,selected]);
  const allColumns=useMemo<Record<ColumnKey,Column<FleetVehicle>>>(()=>({
   sn:{key:'sn',label:'SN',render:(_,index)=>(page-1)*25+index+1},
   status:{key:'status',label:'Status',sortValue:row=>row.fleet_status,render:row=><VehicleIcon type={row.vehicle_type} state={row.fleet_status} size="lg"/>},
@@ -97,13 +96,13 @@ export function DashboardPage(){
       <button type="button" className="panel-tool" aria-label={panelMode==='table'?'Exit table fullscreen':'Table fullscreen'} title={panelMode==='table'?'Exit Table Fullscreen':'Table Fullscreen'} aria-pressed={panelMode==='table'} onClick={()=>setPanelMode(value=>value==='table'?'split':'table')}>{panelMode==='table'?<Minimize2/>:<FontAwesomeIcon icon={faMaximize}/>}</button>
      </div>
     </div>
-    {query.isLoading?<StatePanel kind="loading" title="Loading authorized fleet"/>:query.isError?<StatePanel kind="error" title="Fleet data unavailable" detail={errorMessage(query.error)} onRetry={()=>query.refetch()}/>:!rows.length?<StatePanel kind="empty" title="No vehicles found" detail="Try another status or search term."/>:<><DataTable columns={columns} rows={rows} selected={selected} onSelect={row=>setSelected(row.id)}/><div className="pagination dashboard-pagination"><span>Showing {(page-1)*25+1} to {Math.min(page*25,query.data?.pagination.total||0)} of {query.data?.pagination.total||0} entries</span><div><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>Previous</button><button disabled={page*25>=(query.data?.pagination.total||0)} onClick={()=>setPage(value=>value+1)}>Next</button></div></div></>}
+    {query.isLoading?<StatePanel kind="loading" title="Loading authorized fleet"/>:query.isError?<StatePanel kind="error" title="Fleet data unavailable" detail={errorMessage(query.error)} onRetry={()=>query.refetch()}/>:!rows.length?<StatePanel kind="empty" title="No vehicles found" detail="Try another status or search term."/>:<><DataTable columns={columns} rows={rows} selected={selected} onSelect={row=>{setSelected(row.id);setMapPopupOpen(false)}}/><div className="pagination dashboard-pagination"><span>Showing {(page-1)*25+1} to {Math.min(page*25,query.data?.pagination.total||0)} of {query.data?.pagination.total||0} entries</span><div><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>Previous</button><button disabled={page*25>=(query.data?.pagination.total||0)} onClick={()=>setPage(value=>value+1)}>Next</button></div></div></>}
    </section>
    <button type="button" className="dashboard-resizer" role="separator" aria-label="Resize table and map" aria-orientation="vertical" aria-valuemin={30} aria-valuemax={70} aria-valuenow={Math.round(splitPercent)} onPointerDown={()=>setResizing(true)} onKeyDown={event=>{if(event.key==='ArrowLeft')setSplitPercent(value=>Math.max(30,value-2));if(event.key==='ArrowRight')setSplitPercent(value=>Math.min(70,value+2))}}/>
    <section className="map-panel">
-    <FleetMap vehicles={rows} selectedId={selected} onSelect={setSelected} onHover={setHovered} mapType={mapType}/>
+    <FleetMap vehicles={rows} selectedId={selected} showPopup={mapPopupOpen} onSelect={id=>{setSelected(id);setMapPopupOpen(id!==null)}} mapType={mapType}/>
     <div className="dashboard-map-tools"><button type="button" aria-label={panelMode==='map'?'Exit map fullscreen':'Map fullscreen'} title={panelMode==='map'?'Exit Map Fullscreen':'Map Fullscreen'} aria-pressed={panelMode==='map'} onClick={()=>setPanelMode(value=>value==='map'?'split':'map')}>{panelMode==='map'?<Minimize2/>:<FontAwesomeIcon icon={faMaximize}/>}</button><button type="button" aria-label="Map settings" title="Map settings" aria-expanded={mapSettings} onClick={()=>setMapSettings(value=>!value)}><Settings/></button>{mapSettings&&<div className="dashboard-layer-menu"><label><input type="checkbox" role="switch" aria-label="Satellite" checked={mapType==='satellite'} onChange={event=>setMapType(event.target.checked?'satellite':'street')}/><span>Satellite</span></label></div>}</div>
-    {preview&&<VehiclePopup vehicle={preview} onClose={()=>hovered?setHovered(null):setSelected(null)}/>}
+
    </section>
   </div>
   {chosen&&<SelectedVehicleSummary vehicle={chosen} onClose={()=>setSelected(null)}/>}

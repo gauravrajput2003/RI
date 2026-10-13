@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import type {ReactNode} from 'react';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
@@ -36,4 +36,23 @@ it('accepts a cell address even when GPS has no fix',()=>{
 it('clears historical speed when the server marks current speed unavailable',()=>{
  expect(mergeDashboardTelemetry(vehicle,{speed:22,current_speed:null,fleet_status:'IDLE'})).toMatchObject({speed:null,fleet_status:'IDLE'});
  expect(mergeDashboardTelemetry(vehicle,{speed:22,current_speed:0,fleet_status:'IDLE'}).speed).toBe(0);
+});
+
+it('clears a disappeared or unpositioned selection instead of reopening it on a later fleet refresh',async()=>{
+ const response={success:true,data:[vehicle],counts:{ALL:1},pagination:{page:1,pageSize:25,total:1}};
+ mocks.get.mockResolvedValue({data:response});
+ const cache=new QueryClient({defaultOptions:{queries:{retry:false}}});
+ render(<QueryClientProvider client={cache}><MemoryRouter><DashboardPage/></MemoryRouter></QueryClientProvider>);
+ await screen.findByText(vehicle.vehicle_number);
+ fireEvent.click(screen.getByText(vehicle.vehicle_number));
+ expect(screen.getByRole('region',{name:`${vehicle.vehicle_number} details`})).toBeInTheDocument();
+ act(()=>cache.setQueriesData({queryKey:['fleet']},{...response,data:[{...vehicle,latitude:null,longitude:null}]}));
+ await waitFor(()=>expect(screen.queryByRole('region',{name:`${vehicle.vehicle_number} details`})).not.toBeInTheDocument());
+ act(()=>cache.setQueriesData({queryKey:['fleet']},response));
+ expect(screen.queryByRole('region',{name:`${vehicle.vehicle_number} details`})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByText(vehicle.vehicle_number));
+ act(()=>cache.setQueriesData({queryKey:['fleet']},{...response,data:[]}));
+ await screen.findByText('No vehicles found');
+ act(()=>cache.setQueriesData({queryKey:['fleet']},response));
+ expect(screen.queryByRole('region',{name:`${vehicle.vehicle_number} details`})).not.toBeInTheDocument();
 });
