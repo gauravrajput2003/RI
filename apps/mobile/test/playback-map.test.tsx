@@ -11,7 +11,7 @@ vi.mock('react-native', () => ({ View: 'View', Text: 'Text', Pressable: 'Pressab
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn() }), useLocalSearchParams: () => ({ vehicleId: 'demo' }) }));
 vi.mock('@expo/vector-icons', () => ({ Feather: 'Icon', MaterialCommunityIcons: 'Icon', Ionicons: 'Icon' }));
 vi.mock('../features/vehicles/queries', () => ({ useHistory: () => ({ data: boundary.points, isLoading: false }) }));
-vi.mock('react-native-maps', async () => {
+vi.mock('../features/map/LeafletMap', async () => {
   const { forwardRef, useImperativeHandle, createElement } = await import('react');
   return { default: forwardRef((props: Record<string, unknown>, ref) => {
     useImperativeHandle(ref, () => ({ fitToCoordinates: boundary.fit, animateToRegion: boundary.animate }));

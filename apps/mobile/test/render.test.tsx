@@ -17,7 +17,7 @@ vi.mock('../features/vehicles/queries', () => ({ useVehicles: () => ({ data: { d
 vi.mock('../components/VehicleCard', () => ({ VehicleCard: ({ vehicle }: { vehicle: { id: string } }) => {
   boundary.renders.set(vehicle.id, (boundary.renders.get(vehicle.id) ?? 0) + 1); return null;
 } }));
-vi.mock('react-native-maps', async () => {
+vi.mock('../features/map/LeafletMap', async () => {
   const { forwardRef, useImperativeHandle, createElement } = await import('react');
   return { default: forwardRef((props: Record<string, unknown>, ref) => {
     useImperativeHandle(ref, () => ({ animateToRegion: boundary.animate }));

@@ -1,0 +1,23 @@
+import React from 'react';
+import {act,create,type ReactTestRenderer} from 'react-test-renderer';
+import {it,expect,vi} from 'vitest';
+const state=vi.hoisted(()=>({inject:vi.fn()}));
+vi.mock('react-native',()=>({View:'View',Text:'Text',Pressable:'Pressable',Linking:{openURL:vi.fn()}}));
+vi.mock('react-native-webview',async()=>{const React=await import('react');return{WebView:React.forwardRef((props,ref)=>{React.useImperativeHandle(ref,()=>({injectJavaScript:state.inject}));return React.createElement('WebView',props);})};});
+import MapView,{Marker} from './LeafletMap';
+Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+it('initializes the map bridge and updates one marker without reloading its document',async()=>{
+ const press=vi.fn(),pan=vi.fn(),region=vi.fn();let tree!:ReactTestRenderer;
+ const render=(latitude:number)=><MapView onPanDrag={pan} onRegionChangeComplete={region}><Marker coordinate={{latitude,longitude:76}} title="Bike" onPress={press}/></MapView>;
+ await act(async()=>{tree=create(render(28));});
+ const web=tree.root.findByType('WebView' as React.ElementType),source=web.props.source;
+ await act(async()=>web.props.onMessage({nativeEvent:{data:JSON.stringify({type:'ready'})}}));
+ const initial=state.inject.mock.calls.at(-1)![0] as string;const payload=JSON.parse(initial.slice('window.fleetReceive('.length,initial.lastIndexOf(');true;')));
+ const id=payload.layers[0][0];expect(payload.type).toBe('layers');
+ state.inject.mockClear();await act(async()=>tree.update(render(29)));
+ expect(tree.root.findByType('WebView' as React.ElementType).props.source).toBe(source);
+ expect(state.inject.mock.calls.at(-1)![0]).toContain('"type":"updates"');
+ await act(async()=>{for(const message of [{type:'press',id},{type:'pan'},{type:'region',region:{latitude:29,longitude:76,latitudeDelta:1,longitudeDelta:1}}])web.props.onMessage({nativeEvent:{data:JSON.stringify(message)}});});
+ expect(press).toHaveBeenCalledOnce();expect(pan).toHaveBeenCalledOnce();expect(region).toHaveBeenCalledOnce();
+ await act(async()=>tree.unmount());
+});

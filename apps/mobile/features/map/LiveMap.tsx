@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, type Region } from 'react-native-maps';
+import MapView, { Marker, type Region,type MapHandle } from './LeafletMap';
 import { useShallow } from 'zustand/react/shallow';
 import { useLatestLocation, useVehicles } from '../../features/vehicles/queries';
 import { useLiveVehicleStore } from '../../store/liveVehicleStore';
@@ -16,7 +16,7 @@ const VehicleMarker = memo(function VehicleMarker({ id, title, selected }: { id:
   return <Marker coordinate={{ latitude: point.latitude, longitude: point.longitude }} rotation={point.course ?? 0} title={title} onPress={select} pinColor={selected ? '#0f766e' : '#ef4444'} tracksViewChanges={false} />;
 });
 export default function LiveMap() {
-  const map = useRef<MapView>(null);
+  const map = useRef<MapHandle>(null);
   const vehicles = useVehicles();
   const selected = useVehicleStore(state => state.selectedVehicleId);
   useLatestLocation(selected ?? vehicles.data?.data[0]?.id ?? '');

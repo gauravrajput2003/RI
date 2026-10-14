@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
+import MapView, { Marker, Polyline, type Region,type MapHandle } from '../map/LeafletMap';
 import { useHistory } from '../vehicles/queries';
 import { hasPosition } from '../map/viewport';
 import {
@@ -24,7 +24,7 @@ import {
 } from './route';
 
 export default function PlaybackView() {
-  const map = useRef<MapView>(null);
+  const map = useRef<MapHandle>(null);
   const router = useRouter();
   const params = useLocalSearchParams<{ vehicleId?: string; vehicleNumber?: string }>();
   const vehicleId = params.vehicleId ?? '';

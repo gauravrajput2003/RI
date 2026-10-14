@@ -17,8 +17,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   ios: { ...config.ios, infoPlist: { ...config.ios?.infoPlist, NSAppTransportSecurity: {
     NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true,
   } } },
-  plugins: [...(config.plugins ?? []),'./plugins/with-lan-http.cjs',['expo-notifications',{enableBackgroundRemoteNotifications:true,sounds:['./assets/voice/vehicle-running.wav','./assets/voice/vehicle-idle.wav','./assets/voice/vehicle-stopped.wav']}], ['react-native-maps', {
-    androidGoogleMapsApiKey: process.env.EXPO_PUBLIC_ANDROID_MAPS_API_KEY,
-  }]],
+  plugins: [...(config.plugins ?? []),'./plugins/with-lan-http.cjs',['expo-notifications',{enableBackgroundRemoteNotifications:true,sounds:['./assets/voice/vehicle-running.wav','./assets/voice/vehicle-idle.wav','./assets/voice/vehicle-stopped.wav']}]],
   });
 };
