@@ -2,7 +2,7 @@
 import { resolveDemoMode } from '../features/demo/mode';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { resolveEndpoints } from './endpoints';
+import { resolveEndpoints, secureBuildEndpoints } from './endpoints';
 
 const isDev = typeof __DEV__ !== 'undefined' ? Boolean(__DEV__) : process.env.NODE_ENV !== 'production';
 const demoMode = resolveDemoMode(process.env.EXPO_PUBLIC_DEMO_MODE, isDev);
@@ -16,7 +16,7 @@ const endpoints = resolveEndpoints({
   expoHostUri: Constants.expoConfig?.hostUri,
 });
 
-if (!demoMode && process.env.NODE_ENV === 'production' && (!apiUrl?.startsWith('https://') || !socketUrl?.startsWith('https://'))) {
+if (!demoMode && process.env.NODE_ENV === 'production' && !secureBuildEndpoints(apiUrl,socketUrl,Constants.expoConfig?.extra?.lanTest===true)) {
   throw new Error('Production requires HTTPS EXPO_PUBLIC_API_URL and EXPO_PUBLIC_SOCKET_URL');
 }
 

@@ -47,6 +47,7 @@ export function DashboardPage(){
  const [page,setPage]=useState(1);
  const [selected,setSelected]=useState<string|null>(null);
  const [mapPopupOpen,setMapPopupOpen]=useState(false);
+ const [summaryOpen,setSummaryOpen]=useState(false);
  const [panelMode,setPanelMode]=useState<PanelMode>('split');
  const [mapSettings,setMapSettings]=useState(false);
  const [mapType,setMapType]=useState<'street'|'satellite'>('street');
@@ -69,7 +70,7 @@ export function DashboardPage(){
  const apiRows=query.data?.data;
  const rows=useMemo(()=>withDashboardPreviewTelemetry(apiRows||[]),[apiRows]);
  const chosen=rows.find(vehicle=>vehicle.id===selected)||null;
- useEffect(()=>{if(selected&&apiRows&&!apiRows.some(vehicle=>vehicle.id===selected&&vehicle.latitude!=null&&vehicle.longitude!=null)){setSelected(null);setMapPopupOpen(false)}},[apiRows,selected]);
+ useEffect(()=>{if(selected&&apiRows&&!apiRows.some(vehicle=>vehicle.id===selected&&vehicle.latitude!=null&&vehicle.longitude!=null)){setSelected(null);setMapPopupOpen(false);setSummaryOpen(false)}},[apiRows,selected]);
  const allColumns=useMemo<Record<ColumnKey,Column<FleetVehicle>>>(()=>({
   sn:{key:'sn',label:'SN',render:(_,index)=>(page-1)*25+index+1},
   status:{key:'status',label:'Status',sortValue:row=>row.fleet_status,render:row=><VehicleIcon type={row.vehicle_type} state={row.fleet_status} size="lg"/>},
@@ -84,7 +85,7 @@ export function DashboardPage(){
  }),[page]);
  const columns=(manager?[...operationalColumns.slice(0,3),'client' as ColumnKey,...operationalColumns.slice(3)]:operationalColumns).map(key=>allColumns[key]);
 
- return <section className={`page dashboard-page dashboard-mode-${effectiveMode} ${chosen?'has-selected':''}`}>
+ return <section className={`page dashboard-page dashboard-mode-${effectiveMode} ${chosen&&summaryOpen?'has-selected':''}`}>
  {role==='SUPER_ADMIN'&&issuance.data&&<div className="dashboard-issuance" role="status">Monthly issuance: <strong>{Number(issuance.data.issued).toLocaleString()} / {Number(issuance.data.monthly_target).toLocaleString()} coins</strong><span>{issuance.data.enforce_hard_cap?'Monthly cap enabled':'Reporting target'}</span></div>}
   <div className="status-grid">{filters.map(([key,label,Icon])=><FilterPill key={key} status={key} label={label} count={query.data?.counts?.[key]} icon={Icon} active={status===key} onClick={()=>setStatus(key)}/>)}</div>
   {compact&&<div className="dashboard-panel-switch" role="group" aria-label="Fleet view"><button type="button" aria-pressed={effectiveMode==='table'} onClick={()=>setPanelMode('table')}>Vehicle list</button><button type="button" aria-pressed={effectiveMode==='map'} onClick={()=>setPanelMode('map')}>Map</button></div>}
@@ -96,16 +97,16 @@ export function DashboardPage(){
       <button type="button" className="panel-tool" aria-label={panelMode==='table'?'Exit table fullscreen':'Table fullscreen'} title={panelMode==='table'?'Exit Table Fullscreen':'Table Fullscreen'} aria-pressed={panelMode==='table'} onClick={()=>setPanelMode(value=>value==='table'?'split':'table')}>{panelMode==='table'?<Minimize2/>:<FontAwesomeIcon icon={faMaximize}/>}</button>
      </div>
     </div>
-    {query.isLoading?<StatePanel kind="loading" title="Loading authorized fleet"/>:query.isError?<StatePanel kind="error" title="Fleet data unavailable" detail={errorMessage(query.error)} onRetry={()=>query.refetch()}/>:!rows.length?<StatePanel kind="empty" title="No vehicles found" detail="Try another status or search term."/>:<><DataTable columns={columns} rows={rows} selected={selected} onSelect={row=>{setSelected(row.id);setMapPopupOpen(false)}}/><div className="pagination dashboard-pagination"><span>Showing {(page-1)*25+1} to {Math.min(page*25,query.data?.pagination.total||0)} of {query.data?.pagination.total||0} entries</span><div><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>Previous</button><button disabled={page*25>=(query.data?.pagination.total||0)} onClick={()=>setPage(value=>value+1)}>Next</button></div></div></>}
+    {query.isLoading?<StatePanel kind="loading" title="Loading authorized fleet"/>:query.isError?<StatePanel kind="error" title="Fleet data unavailable" detail={errorMessage(query.error)} onRetry={()=>query.refetch()}/>:!rows.length?<StatePanel kind="empty" title="No vehicles found" detail="Try another status or search term."/>:<><DataTable columns={columns} rows={rows} selected={selected} onSelect={row=>{setSelected(row.id);setMapPopupOpen(false);setSummaryOpen(true)}}/><div className="pagination dashboard-pagination"><span>Showing {(page-1)*25+1} to {Math.min(page*25,query.data?.pagination.total||0)} of {query.data?.pagination.total||0} entries</span><div><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>Previous</button><button disabled={page*25>=(query.data?.pagination.total||0)} onClick={()=>setPage(value=>value+1)}>Next</button></div></div></>}
    </section>
    <button type="button" className="dashboard-resizer" role="separator" aria-label="Resize table and map" aria-orientation="vertical" aria-valuemin={30} aria-valuemax={70} aria-valuenow={Math.round(splitPercent)} onPointerDown={()=>setResizing(true)} onKeyDown={event=>{if(event.key==='ArrowLeft')setSplitPercent(value=>Math.max(30,value-2));if(event.key==='ArrowRight')setSplitPercent(value=>Math.min(70,value+2))}}/>
    <section className="map-panel">
-    <FleetMap vehicles={rows} selectedId={selected} showPopup={mapPopupOpen} onSelect={id=>{setSelected(id);setMapPopupOpen(id!==null)}} mapType={mapType}/>
+    <FleetMap vehicles={rows} selectedId={selected} showPopup={mapPopupOpen} onPopupClose={()=>setMapPopupOpen(false)} onSelect={id=>{if(id!==null){setSelected(id);setSummaryOpen(true)}setMapPopupOpen(id!==null)}} mapType={mapType}/>
     <div className="dashboard-map-tools"><button type="button" aria-label={panelMode==='map'?'Exit map fullscreen':'Map fullscreen'} title={panelMode==='map'?'Exit Map Fullscreen':'Map Fullscreen'} aria-pressed={panelMode==='map'} onClick={()=>setPanelMode(value=>value==='map'?'split':'map')}>{panelMode==='map'?<Minimize2/>:<FontAwesomeIcon icon={faMaximize}/>}</button><button type="button" aria-label="Map settings" title="Map settings" aria-expanded={mapSettings} onClick={()=>setMapSettings(value=>!value)}><Settings/></button>{mapSettings&&<div className="dashboard-layer-menu"><label><input type="checkbox" role="switch" aria-label="Satellite" checked={mapType==='satellite'} onChange={event=>setMapType(event.target.checked?'satellite':'street')}/><span>Satellite</span></label></div>}</div>
 
    </section>
   </div>
-  {chosen&&<SelectedVehicleSummary vehicle={chosen} onClose={()=>setSelected(null)}/>}
+  {chosen&&summaryOpen&&<SelectedVehicleSummary vehicle={chosen} onClose={()=>setSummaryOpen(false)}/>}
   {manager&&<PageFilterDrawer title="Client" ariaLabel="Dashboard filters">
    <label>Client<SearchableSelect aria-label="Client" placeholder="Select Client" value={clientDraft} onChange={setClientDraft} isClearable options={(clients.data??[]).map(owner=>({value:owner.id,label:owner.name||owner.username||owner.email}))}/></label>
    <button className="button" type="button" onClick={()=>{setClientId(clientDraft);pageFilter.close()}}>Search</button>

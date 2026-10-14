@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType, type Response, type NextFunction } from 'express';
 import { randomBytes, createHash } from 'node:crypto';
+import {refreshHash} from '../modules/mobile-push/service.js';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { PERMISSIONS as P, hasEffectivePermission, type PermissionKey } from '@fleet/shared-types';
@@ -31,6 +32,26 @@ async function visible(req: AuthRequest) {
 }
 export const mobileApi: RouterType = Router();
 mobileApi.use(authorize('ADMIN', 'CLIENT', 'SUPER_ADMIN'));
+const pushDeviceBody=z.object({installationId:z.string().uuid(),expoToken:z.string().regex(/^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/).nullable(),platform:z.enum(['android','ios','web']),refreshToken:z.string().min(1),enabled:z.boolean(),sound:z.boolean(),vibration:z.boolean(),voice:z.boolean(),voiceVehicles:z.array(z.string().uuid()).max(5000).default([])});
+mobileApi.put('/push-device',permission(P.notificationsView),route(async(req,res)=>{
+ const body=pushDeviceBody.parse(req.body),hash=refreshHash(body.refreshToken);
+ const login=await query('SELECT 1 FROM refresh_tokens WHERE user_id=$1 AND token_hash=$2 AND revoked_at IS NULL AND expires_at>now()',[req.user!.id,hash]);
+ if(!login.rows.length)throw new AppError(401,'INVALID_REFRESH_TOKEN','Sign in again to enable push notifications');
+ await transaction(async client=>{
+  if((await client.query('SELECT 1 FROM mobile_push_devices WHERE id=$1 AND user_id<>$2',[body.installationId,req.user!.id])).rows.length)throw new AppError(403,'FORBIDDEN','This installation belongs to another account');
+  // An installation or push token may move only through a fresh authenticated registration.
+  await client.query('DELETE FROM mobile_push_devices WHERE expo_token=$1 AND id<>$2',[body.expoToken,body.installationId]);
+  await client.query(`INSERT INTO mobile_push_devices(id,user_id,expo_token,platform,refresh_token_hash,enabled,sound,vibration,voice,voice_vehicles)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO UPDATE SET user_id=EXCLUDED.user_id,expo_token=EXCLUDED.expo_token,
+   platform=EXCLUDED.platform,refresh_token_hash=EXCLUDED.refresh_token_hash,enabled=EXCLUDED.enabled,sound=EXCLUDED.sound,vibration=EXCLUDED.vibration,voice=EXCLUDED.voice,voice_vehicles=EXCLUDED.voice_vehicles,updated_at=now()`,
+  [body.installationId,req.user!.id,body.expoToken,body.platform,hash,body.enabled,body.sound,body.vibration,body.voice,JSON.stringify(body.voiceVehicles)]);
+ });
+ res.json({success:true,data:{userId:req.user!.id}});
+}));
+mobileApi.delete('/push-device/:id',route(async(req,res)=>{
+ await query('UPDATE mobile_push_devices SET enabled=false WHERE id=$1 AND user_id=$2',[z.string().uuid().parse(req.params.id),req.user!.id]);
+ res.status(204).end();
+}));
 mobileApi.get('/support-contact', route(async (req, res) => {
   // Resolve only the authenticated account's direct parent, never a caller-supplied ID.
   const contact=(await query(`SELECT COALESCE(NULLIF(p.company,''),NULLIF(p.name,''),NULLIF(p.username,''),'Support Team') AS name,

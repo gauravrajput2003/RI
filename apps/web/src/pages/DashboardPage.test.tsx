@@ -9,7 +9,7 @@ import type {FleetVehicle} from '../types';
 const mocks=vi.hoisted(()=>({get:vi.fn()}));
 vi.mock('../services/api/client',()=>({api:{get:mocks.get},errorMessage:()=> 'error'}));
 vi.mock('../lib/auth',()=>({getTokens:()=>null,claims:()=>({role:'ADMIN'})}));
-vi.mock('../features/map/MapSurface',()=>({FleetMap:()=> <div data-testid="map"/>}));
+vi.mock('../features/map/MapSurface',()=>({FleetMap:({onSelect,onPopupClose,showPopup}:{onSelect:(id:string)=>void;onPopupClose:()=>void;showPopup:boolean})=><div data-testid="map"><button onClick={()=>onSelect('v1')}>Select map vehicle</button>{showPopup&&<button onClick={onPopupClose}>Close map popup</button>}</div>}));
 vi.mock('socket.io-client',()=>({io:()=>({on:vi.fn(),disconnect:vi.fn()})}));
 const vehicle:FleetVehicle={id:'v1',vehicle_number:'HR12AV4151',alias:'North route',vehicle_type:'truck',active:true,overspeed_limit:80,owner_id:'u1',owner_email:'ops@test.local',device_id:'d1',last_seen_at:'2026-09-16T10:00:00Z',state:'MOVING',tracker_timestamp:'2026-09-16T10:00:00Z',server_received_at:'2026-09-16T10:00:00Z',latitude:28.87,longitude:76.62,speed:44,ignition:true,fleet_status:'RUNNING',address:null,status_since_at:'2026-09-16T09:55:00Z',today_distance_km:12.4,today_running_seconds:1800,today_stopped_seconds:300,today_avg_speed:32,today_max_speed:61,distance_from_last_stop_km:4.2,duration_from_last_stop_seconds:900,duration_at_last_stop_seconds:null};
 const wrapper=(ui:ReactNode)=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><MemoryRouter>{ui}</MemoryRouter></QueryClientProvider>);
@@ -55,4 +55,22 @@ it('clears a disappeared or unpositioned selection instead of reopening it on a 
  await screen.findByText('No vehicles found');
  act(()=>cache.setQueriesData({queryKey:['fleet']},response));
  expect(screen.queryByRole('region',{name:`${vehicle.vehicle_number} details`})).not.toBeInTheDocument();
+});
+
+it('closes the map popup and summary independently and can reopen either',async()=>{
+ mocks.get.mockResolvedValue({data:{success:true,data:[vehicle],counts:{ALL:1},pagination:{page:1,pageSize:25,total:1}}});
+ wrapper(<DashboardPage/>);
+ await screen.findByText(vehicle.vehicle_number);
+ fireEvent.click(screen.getByRole('button',{name:'Select map vehicle'}));
+ const summary=screen.getByRole('region',{name:`${vehicle.vehicle_number} details`});
+ fireEvent.click(screen.getByRole('button',{name:'Close map popup'}));
+ expect(summary).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Close map popup'})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Select map vehicle'}));
+ fireEvent.click(screen.getByRole('button',{name:'Close vehicle summary'}));
+ expect(screen.queryByRole('region',{name:`${vehicle.vehicle_number} details`})).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Close map popup'})).toBeInTheDocument();
+ fireEvent.click(screen.getByText(vehicle.vehicle_number));
+ expect(screen.getByRole('region',{name:`${vehicle.vehicle_number} details`})).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Close map popup'})).not.toBeInTheDocument();
 });

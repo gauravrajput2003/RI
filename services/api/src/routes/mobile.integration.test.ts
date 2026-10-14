@@ -13,14 +13,14 @@ vi.mock('../db/pool.js',()=>{
 });
 const admin=randomUUID(),client=randomUUID(),foreign=randomUUID(),vehicle=randomUUID(),otherVehicle=randomUUID();
 let app:express.Express,adminToken:string,clientToken:string,refreshToken:string;
-const call=(method:'get'|'post'|'patch',path:string,token=clientToken)=>request(app)[method]('/api/v1'+path).set('Authorization',`Bearer ${token}`);
+const call=(method:'get'|'post'|'patch'|'put'|'delete',path:string,token=clientToken)=>request(app)[method]('/api/v1'+path).set('Authorization',`Bearer ${token}`);
 beforeAll(async()=>{
  process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';process.env.JWT_SECRET='mobile-integration-secret-at-least-32-characters';process.env.JWT_REFRESH_SECRET='mobile-integration-refresh-secret-at-least-32-characters';process.env.INTERNAL_TRACKER_SECRET='mobile-integration-internal-secret-at-least-32-characters';process.env.ACCOUNT_PASSWORD_ENCRYPTION_KEY='a'.repeat(64);
  state.db=new PGlite();
- for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','019_mobile_actions.sql']){
+ for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','019_mobile_actions.sql','021_reverse_geocoding.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql']){
   let sql=await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g,'').replace(/geography\(Point, 4326\)/g,'point').replace(/CREATE INDEX locations_position_gist[^;]+;/g,'');await state.db.exec(sql);
  }
- await state.db.exec('CREATE TABLE geofences(id uuid PRIMARY KEY);');
+ await state.db.exec("CREATE TABLE geofences(id uuid PRIMARY KEY); CREATE FUNCTION ST_Distance(point,point) RETURNS double precision LANGUAGE SQL AS 'SELECT 0::double precision';");
  for(const name of ['007_alerts_and_announcements.sql','008_subscription_alerts.sql','010_announcement_recipients.sql','011_announcement_images.sql'])await state.db.exec(await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8'));
  const hash=await bcrypt.hash('original-password',4),root=randomUUID(),otherAdmin=randomUUID();
  await state.db.query("INSERT INTO users(id,email,password_hash,role) VALUES($1,'root@test.local',$2,'SUPER_ADMIN')",[root,hash]);
@@ -127,4 +127,21 @@ describe('persisted mobile roles and ownership',()=>{
   await request(app).post('/api/v1/auth/login').send({identifier:'client.mobile',password:'original-password'}).expect(401);
   await request(app).post('/api/v1/auth/login').send({identifier:'client.mobile',password:'new-password-123'}).expect(200);
  });
+});
+
+it('registers push only for an owned active login and never lets another account disable it',async()=>{
+ const pushClient=randomUUID();
+ await state.db!.query("INSERT INTO users(id,email,username,password_hash,role,owner_id) VALUES($1,'push.client@test.local','push.client',$2,'CLIENT',$3)",[pushClient,await bcrypt.hash('push-password-123',4),admin]);
+ const login=(await request(app).post('/api/v1/auth/login').send({identifier:'push.client',password:'push-password-123'}).expect(200)).body.data;
+ const installationId=randomUUID();
+ const body={installationId,expoToken:'ExpoPushToken[test-device]',platform:'android',refreshToken:login.refreshToken,enabled:true,sound:true,vibration:true,voice:true};
+ await call('put','/mobile/push-device',login.accessToken).send(body).expect(200);
+ await call('put','/mobile/push-device',adminToken).send(body).expect(401);
+ await call('delete',`/mobile/push-device/${installationId}`,adminToken).expect(204);
+ expect((await state.db!.query<{enabled:boolean}>('SELECT enabled FROM mobile_push_devices WHERE id=$1',[installationId])).rows[0].enabled).toBe(true);
+ await call('put','/mobile/push-device',login.accessToken).send({...body,expoToken:'invalid'}).expect(400);
+ await call('delete',`/mobile/push-device/${installationId}`,login.accessToken).expect(204);
+ expect((await state.db!.query<{enabled:boolean}>('SELECT enabled FROM mobile_push_devices WHERE id=$1',[installationId])).rows[0].enabled).toBe(false);
+ await request(app).post('/api/v1/auth/logout').send({refreshToken:login.refreshToken}).expect(204);
+ await call('put','/mobile/push-device',login.accessToken).send(body).expect(401);
 });

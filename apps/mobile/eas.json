@@ -14,6 +14,14 @@
         "buildType": "apk"  
       }
     },
+    "preview-lan": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_DEMO_MODE": "false",
+        "EXPO_PUBLIC_API_URL": "http://10.244.133.175:3000/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "http://10.244.133.175:3000"
+      }
+    },
     "production": {
       "autoIncrement": true
     }

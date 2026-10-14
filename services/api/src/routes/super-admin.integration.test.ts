@@ -18,7 +18,7 @@ beforeAll(async()=>{
   process.env.ACCOUNT_PASSWORD_ENCRYPTION_KEY='a'.repeat(64);
   process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';process.env.JWT_SECRET=secret;process.env.JWT_REFRESH_SECRET=secret+'-refresh';process.env.INTERNAL_TRACKER_SECRET=secret+'-internal';process.env.EXPECTED_PACKET_INTERVAL_SECONDS='10';process.env.NO_SIGNAL_TIMEOUT_MINUTES='30';
   state.db=new PGlite();
-  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql']){
+  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','021_reverse_geocoding.sql','022_cell_location_cache.sql','023_device_state_since.sql']){
     let sql=await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g,'').replace(/geography\(Point, 4326\)/g,'point').replace(/CREATE INDEX locations_position_gist[^;]+;/g,'');await state.db.exec(sql);
   }
   await state.db.exec(`CREATE DOMAIN geometry AS point; CREATE FUNCTION ST_Distance(geometry,geometry) RETURNS double precision LANGUAGE SQL AS 'SELECT 0::double precision';`);
@@ -255,6 +255,10 @@ it('requires explicit move confirmation and preserves history while new location
  expect(fresh.body.data).toMatchObject({speed:null,server_received_at:null,sim_info:'travels with tracker'});
  await state.db!.query<Record<string,unknown>>(`INSERT INTO locations(device_id,vehicle_id,tracker_timestamp,server_received_at,latitude,longitude,speed,gps_valid,protocol)
    SELECT $1,vehicle_id,clock_timestamp(),clock_timestamp(),28.8,76.5,45,true,'GT06' FROM vehicle_device_assignments WHERE device_id=$1 AND unassigned_at IS NULL`,[device]);
+ // Real ingestion updates current state as well as the locations table.
+ await state.db!.query(`INSERT INTO device_status(device_id,state,current_speed,current_gps_valid,last_location_at)
+   VALUES($1,'MOVING',45,true,clock_timestamp()) ON CONFLICT(device_id) DO UPDATE SET
+   state='MOVING',current_speed=45,current_gps_valid=true,last_location_at=clock_timestamp(),updated_at=clock_timestamp()`,[device]);
  const updated=await request(app).get(`/api/v1/web/client-vehicles/${target}`).set(auth(client,'CLIENT')).expect(200);
  expect(updated.body.data.speed).toBe(45);
  const old=await request(app).get(`/api/v1/web/client-vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(200);
@@ -341,4 +345,10 @@ it('expires client balances and rejects amounts with extra decimal places',async
  const params={start:new Date(Date.now()-86400000).toISOString(),end:new Date(Date.now()+86400000).toISOString()};
  const flow=await request(app).get('/api/v1/coin-flow').set(auth()).query(params).expect(200);expect(flow.body.data.accounts).toContainEqual(expect.objectContaining({id:client,balance:'0'}));
  await request(app).post('/api/v1/coin-sales').set(auth()).send({...saleBody(a),amountInr:1.001}).expect(400);
+});
+
+it('includes the recorded course for dashboard marker rotation',async()=>{
+ await state.db!.query('UPDATE locations SET course=125 WHERE vehicle_id=$1',[vehicle]);
+ const dashboard=await request(app).get('/api/v1/dashboard/vehicles').set(auth()).expect(200);
+ expect(dashboard.body.data.find((row:{id:string})=>row.id===vehicle).course).toBe(125);
 });

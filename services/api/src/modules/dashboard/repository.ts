@@ -11,7 +11,7 @@ export type FleetStatus='ALL'|'OVERSPEED'|'RUNNING'|'IDLE'|'STOPPED'|'UNREACHABL
 const fleetCte=`${userScopeCte}, fleet AS (
   SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.active,v.overspeed_limit,v.owner_id,
     owner.email AS owner_email,owner.name AS client_name,owner.username AS client_username,d.id AS device_id,d.last_seen_at,ds.state,
-    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed ELSE latest.speed END AS speed,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_ignition END,latest.ignition) AS ignition,latest.gps_valid,
+    latest.tracker_timestamp,latest.server_received_at,latest.latitude,latest.longitude,latest.course,CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_speed ELSE latest.speed END AS speed,COALESCE(CASE WHEN ds.updated_at>=d.current_assigned_at THEN ds.current_ignition END,latest.ignition) AS ignition,latest.gps_valid,
     latest.address,latest.address_attribution,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,CASE WHEN ds.state_since_at>=d.current_assigned_at THEN ds.state_since_at END AS status_since_at,
     today.today_distance_km,today.today_running_seconds,today.today_stopped_seconds,today.today_avg_speed,today.today_max_speed,
     CASE WHEN last_stop.observed_at IS NULL OR latest.observed_at IS NULL THEN NULL ELSE EXTRACT(EPOCH FROM (latest.observed_at-last_stop.observed_at)) END AS duration_from_last_stop_seconds,
@@ -38,7 +38,7 @@ const fleetCte=`${userScopeCte}, fleet AS (
   ) d ON true
   LEFT JOIN device_status ds ON ds.device_id=d.id
   LEFT JOIN LATERAL (
-    SELECT l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.ignition,l.gps_valid,l.position,
+    SELECT l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.course,l.speed,l.ignition,l.gps_valid,l.position,
       COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at,NULLIF(l.metadata->>'address','') AS address,l.metadata->>'address_attribution' AS address_attribution
     FROM locations l WHERE l.vehicle_id=v.id AND l.device_id=d.id AND l.server_received_at>=d.current_assigned_at
     ORDER BY ${usableLocationOrder} LIMIT 1

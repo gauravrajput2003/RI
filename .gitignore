@@ -9,3 +9,11 @@ coverage/
 
 .expo/
 .expo-export/
+
+# Phone push configuration and private signing credentials
+apps/mobile/google-services.json
+apps/mobile/android/app/google-services.json
+apps/mobile/credentials.json
+**/*firebase-adminsdk*.json
+**/*service-account*.json
+**/*.p8

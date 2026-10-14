@@ -27,7 +27,8 @@ it('fits the route when ready and after history changes, with non-null marker co
   await act(async () => tree.root.findByType('MapView' as React.ElementType).props.onMapReady());
   expect(boundary.fit).toHaveBeenCalledWith([{ latitude: 28, longitude: 76 }, { latitude: 29, longitude: 77 }], expect.any(Object));
   for (const marker of tree.root.findAllByType('Marker' as React.ElementType)) {
-    expect(marker.props.pinColor).toMatch(/^#[0-9a-f]{6}$/);
+    if(String(marker.props.title).startsWith('Playback'))expect(marker.props.children).toBeDefined();
+    else expect(marker.props.pinColor).toMatch(/^#[0-9a-f]{6}$/);
   }
   boundary.points = [{ latitude: 12, longitude: 80, speed: 0, server_received_at: '2026-09-14T01:00:00Z' }];
   await act(async () => tree.update(<PlaybackView />));

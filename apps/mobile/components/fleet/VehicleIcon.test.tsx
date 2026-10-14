@@ -8,7 +8,7 @@ vi.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'Icon' }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 it.each(['bike', 'scooter', 'car', 'bus', 'truck'])('renders bundled web artwork for %s in every tracker state', async type => {
-  for (const [state, file] of [['MOVING', 'running'], ['IDLE', 'idle'], ['STOPPED', 'stopped'], ['OFFLINE', 'unreachable'], ['OVERSPEED', 'running'], ['NEW', 'unreachable']] as const) {
+  for (const [state, file] of [['MOVING', 'running'], ['IDLE', 'idle'], ['STOPPED', 'stopped'], ['OFFLINE', 'unreachable'], ['OVERSPEED', 'running']] as const) {
     let tree!: ReactTestRenderer;
     await act(async () => { tree = create(<VehicleIcon type={type} state={state} />); });
     const image = tree.root.findByType('Image' as React.ElementType);
@@ -21,4 +21,12 @@ it('normalizes web vehicle names and keeps the fallback for missing van artwork'
   expect(vehicleImageSource('motor bike', 'RUNNING')).toContain('/bike/running.png');
   expect(vehicleImageSource('Scooty', 'STOPPED')).toContain('/scooter/stopped.png');
   expect(vehicleImageSource('delivery van', 'IDLE')).toBeNull();
+});
+
+it('keeps unknown/new telemetry distinct from a disconnected tracker',async()=>{
+ let tree!:ReactTestRenderer;
+ await act(async()=>{tree=create(<VehicleIcon type="bike" state="NEW"/>);});
+ expect(tree.root.findAllByType('Image' as React.ElementType)).toHaveLength(0);
+ expect(tree.root.findByType('View' as React.ElementType).props.accessibilityLabel).toContain('New');
+ await act(async()=>tree.unmount());
 });

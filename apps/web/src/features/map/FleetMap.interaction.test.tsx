@@ -5,6 +5,7 @@ import {afterEach,expect,it,vi} from 'vitest';
 import type {FleetVehicle} from '../../types';
 import {dateTime} from '../../lib/format';
 import {FleetMap} from './MapSurface';
+import L from 'leaflet';
 
 const vehicle={id:'first',vehicle_number:'HR12AU6674',vehicle_type:'car',fleet_status:'STOPPED',latitude:28.868,longitude:76.5942,speed:0,today_distance_km:66.25,status_since_at:'2026-10-13T08:02:39Z',server_received_at:'2026-10-13T11:02:36Z',address:'Rohtak Jhajjar Rd',address_source:'cell',address_attribution:'OpenCellID'} as FleetVehicle;
 const second={...vehicle,id:'second',vehicle_number:vehicle.vehicle_number,latitude:28.869,speed:45,today_distance_km:null,address:null};
@@ -13,6 +14,31 @@ function Fleet({vehicles=[vehicle,second]}:{vehicles?:FleetVehicle[]}){
  return <FleetMap vehicles={vehicles} selectedId={selected} onSelect={setSelected}/>;
 }
 afterEach(()=>{cleanup();vi.restoreAllMocks()});
+
+it('closes only the map popup when a separate close handler is provided',()=>{
+ const onSelect=vi.fn(),onPopupClose=vi.fn();
+ render(<FleetMap vehicles={[vehicle]} selectedId={vehicle.id} showPopup onSelect={onSelect} onPopupClose={onPopupClose}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Close vehicle details'}));
+ expect(onPopupClose).toHaveBeenCalledOnce();
+ expect(onSelect).not.toHaveBeenCalled();
+});
+
+it('updates a dashboard marker in place with its position, heading and backend status',()=>{
+ const setPosition=vi.spyOn(L.Marker.prototype,'setLatLng');
+ const setIcon=vi.spyOn(L.Marker.prototype,'setIcon');
+ const addMarker=vi.spyOn(L.Marker.prototype,'addTo');
+ const {container,rerender}=render(<Fleet vehicles={[{...vehicle,vehicle_type:'Bike',course:0}]}/>);
+ const initialAdds=addMarker.mock.calls.length;
+ expect(container.querySelector('.leaflet-marker-icon svg')).toHaveAttribute('viewBox','0 0 64 128');
+ expect(container.querySelector('.leaflet-marker-icon')?.innerHTML).toContain('#ef4444');
+ setPosition.mockClear();setIcon.mockClear();
+ rerender(<Fleet vehicles={[{...vehicle,vehicle_type:'Bike',latitude:28.87,longitude:76.6,fleet_status:'RUNNING',course:90}]}/>);
+ expect(setPosition).toHaveBeenCalledWith([28.87,76.6]);
+ expect(setIcon).toHaveBeenCalled();
+ expect(addMarker.mock.calls.length).toBe(initialAdds);
+ expect(container.querySelector('.leaflet-marker-icon')?.innerHTML).toContain('rotate(90deg)');
+ expect(container.querySelector('.leaflet-marker-icon')?.innerHTML).toContain('#22c55e');
+});
 
 it('uses actual Leaflet clicks to select by ID, persist, switch, toggle, and close without hover selection',()=>{
  const {container}=render(<Fleet/>);

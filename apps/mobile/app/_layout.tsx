@@ -8,12 +8,15 @@ import '../global.css';
 import { CredentialWarning } from '../components/CredentialWarning';
 import { PreviewNotice } from '../components/PreviewNotice';
 import { DemoNotice } from '../components/DemoNotice';
+import {VehicleAlertBanner} from '../components/VehicleAlertBanner';
+import {startNotificationRuntime} from '../services/notifications/runtime';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnReconnect: false } } });
 export default function RootLayout() {
   useEffect(() => {
     const stop = startRuntime(queryClient);
+    const stopNotifications=startNotificationRuntime(queryClient);
     void useAuthStore.getState().hydrate();
-    return stop;
+    return()=>{stopNotifications();stop();};
   }, []);
-  return <SafeAreaProvider><QueryClientProvider client={queryClient}><DemoNotice /><PreviewNotice /><CredentialWarning /><Stack screenOptions={{ headerShown: false }} /></QueryClientProvider></SafeAreaProvider>;
+  return <SafeAreaProvider><QueryClientProvider client={queryClient}><DemoNotice /><PreviewNotice /><CredentialWarning /><Stack screenOptions={{ headerShown: false }} /><VehicleAlertBanner/></QueryClientProvider></SafeAreaProvider>;
 }

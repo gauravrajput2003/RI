@@ -2,10 +2,13 @@ import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSettingsStore } from '../../store/settingsStore';
+import {useNotificationStore} from '../../store/notificationStore';
+import {voiceQueue} from '../../services/notifications/voice';
 import indianFlag from '../../assets/indianflag.png';
 
 export default function SettingsScreen() {
   const settings = useSettingsStore();
+  const pushStatus=useNotificationStore(state=>state.status);
 
   const renderRadio = (option: 'Menu' | 'Report' | 'Dashboard') => {
     const isSelected = settings.landingPage === option;
@@ -94,7 +97,7 @@ export default function SettingsScreen() {
               <Text style={styles.optionLabel}>Voice Assistance</Text>
               <Switch
                 value={settings.voiceAssistance}
-                onValueChange={() => settings.toggleSetting('voiceAssistance')}
+                onValueChange={() => {const enabled=!settings.voiceAssistance;settings.setSetting('voiceAssistance',enabled);if(enabled){settings.setSetting('alertNotification',true);voiceQueue.add('Voice alerts are enabled.');}}}
                 trackColor={{ false: '#e2e8f0', true: '#93c5fd' }}
                 thumbColor={settings.voiceAssistance ? '#ee0509' : '#64748b'}
               />
@@ -102,6 +105,11 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.optionLabel}>{pushStatus}</Text>
+          <Text style={{fontSize:12,color:'#64748b',marginTop:6}}>Voice reads new started, stopped and idle alerts. Installed builds use spoken notification sounds when closed. iPhone prepares each vehicle’s voice files while open; Android also attempts to read the full number in the background. Phone silent mode and notification permissions apply.</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Test voice alerts" onPress={()=>voiceQueue.add('Vehicle voice alerts are working.')} style={{paddingVertical:12}}><Text style={{color:'#0f766e',fontWeight:'700'}}>Test voice</Text></Pressable>
+        </View>
         {/* Landing Page Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Landing Page</Text>

@@ -1,4 +1,5 @@
 import { snapshotStorage } from './cache/storage';
+import {publishMobileAlert} from './notifications/events';
 import NetInfo from '@react-native-community/netinfo';
 import { AppState } from 'react-native';
 import { focusManager, onlineManager, type InfiniteData, type QueryClient } from '@tanstack/react-query';
@@ -34,7 +35,7 @@ export function startRuntime(queryClient: QueryClient) {
       reconnectionDelay: 1000, reconnectionDelayMax: 10000, randomizationFactor: 0.3,
     }) as unknown as SocketPort;
   }, {
-    location: receive, status: receive,
+    location: receive, status: receive, notification:publishMobileAlert,
     connection: connected => useRuntimeStore.setState({ connected }),
     unauthorized: () => { void api.refreshSession().catch(() => undefined); },
     connected: () => {

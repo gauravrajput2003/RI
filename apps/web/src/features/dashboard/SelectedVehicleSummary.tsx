@@ -23,7 +23,7 @@ export function SelectedVehicleSummary({vehicle,onClose}:{vehicle:FleetVehicle;o
   <button type="button" className="summary-expand-toggle" aria-label={expanded?'Collapse vehicle details':'Expand vehicle details'} aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?<ChevronDown/>:<ChevronUp/>}</button>
   <header className="summary-title">
    <strong>{vehicle.vehicle_number}</strong>
-   <div className="summary-actions"><PermissionAction permission={PERMISSIONS.playbackView}><Link className="summary-action" to={`/dashboard/playback?vehicleId=${encodeURIComponent(vehicle.id)}`}>History</Link></PermissionAction><button type="button" className="summary-action" onClick={()=>setMore(value=>!value)} aria-expanded={more}>More<MoreVertical/></button><button type="button" className="summary-close" onClick={onClose} aria-label="Clear selected vehicle"><X/></button></div>
+   <div className="summary-actions"><PermissionAction permission={PERMISSIONS.playbackView}><Link className="summary-action" to={`/dashboard/playback?vehicleId=${encodeURIComponent(vehicle.id)}`}>History</Link></PermissionAction><button type="button" className="summary-action" onClick={()=>setMore(value=>!value)} aria-expanded={more}>More<MoreVertical/></button><button type="button" className="summary-close" onClick={onClose} aria-label="Close vehicle summary"><X/></button></div>
   </header>
   <div className="summary-metric-row summary-primary">
    <Metric icon={detailImage('speed.png')} label="Speed" value={speed(vehicle.speed)} tone="orange"/>
