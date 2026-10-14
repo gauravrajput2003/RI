@@ -281,3 +281,61 @@ button:has(svg),.leaflet-control-zoom a{min-width:44px;min-height:44px}
 @container(max-width:300px){.fleet-vehicle-popup .map-popup .map-popup-fields{grid-template-columns:minmax(0,1fr)}}
 
 .playback-page .playback-layout.filters-closed>.filter-panel{display:none}
+
+/* Keep playback filters inside the grid row, with a scrolling body and a
+   permanently reachable action. The calendar expands inside that same body. */
+.playback-page .playback-layout>.filter-panel{min-height:0;height:100%;padding:0;overflow:hidden}
+.playback-filter-content{display:flex;flex-direction:column;min-height:0;height:100%;flex:1;min-width:0}
+.playback-filter-content>header{flex-shrink:0;display:flex;justify-content:space-between;padding:18px;margin:0;border-bottom:1px solid #e5edf2}
+.playback-filter-content>header>div{display:flex;flex-direction:column;gap:4px}
+.playback-filter-fields{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;padding:16px 18px}
+.playback-filter-actions{flex-shrink:0;padding:12px 18px;border-top:1px solid #e5edf2;background:#fff}
+.playback-filter-actions .button{float:none;width:100%;margin:0;min-height:44px}
+.playback-filter-fields .date-picker-popover{position:static;inset:auto;width:100%;max-width:100%;max-height:none;overflow:visible;margin-top:10px;padding:10px;box-shadow:none}
+.playback-filter-fields .calendar-pair{grid-template-columns:minmax(0,1fr);gap:16px}
+.playback-filter-fields .date-picker-presets{grid-template-columns:repeat(2,minmax(0,1fr))}
+.playback-filter-fields .date-time-row{grid-template-columns:minmax(0,1fr)}
+.playback-filter-fields .date-time-row label>span{min-width:0;flex:1;justify-content:flex-end}
+.playback-filter-fields .date-time-row .searchable-select{min-width:0;width:70px}
+.page-filter-drawer:has(>.playback-filter-content){display:flex;flex-direction:column;overflow:hidden}
+.page-filter-drawer>.playback-filter-content{height:auto}
+.page-filter-drawer>.playback-filter-content .playback-filter-actions .button{float:none;width:100%;margin:0}
+
+.playback-rate{position:relative;flex:0 0 88px;width:88px;min-width:0}
+.playback-rate select{appearance:none;-webkit-appearance:none;display:block;width:100%;height:40px;margin:0;padding:0 30px 0 14px;border:1px solid #cbd7df;border-radius:8px;background:#fff;color:#29465e;font:inherit;font-size:.88rem;line-height:normal;cursor:pointer}
+.playback-rate>svg{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:#607b90;pointer-events:none}
+.playback-rate select:focus-visible{outline:2px solid #087ca7;outline-offset:2px}
+.playback-settings .playback-rate{width:100%}
+.playback-page .transport>.playback-rate{flex:0 0 88px}
+
+/* Compact vehicle-list detail panel, matching the dashboard reference. */
+.dashboard-page .vehicle-summary .summary-title{height:46px;min-height:46px;padding:0 24px;gap:12px}
+.dashboard-page .summary-actions{gap:5px;flex-shrink:0;align-items:center}
+.dashboard-page .summary-actions .summary-action,.dashboard-page .summary-actions .summary-close{box-sizing:border-box;height:30px;min-height:30px;max-height:30px;min-width:76px;margin:0;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:3px;border-radius:4px;font-size:12px;line-height:1;vertical-align:middle}
+.dashboard-page .summary-actions .summary-close{width:42px;min-width:42px;padding:0}
+.dashboard-page .summary-actions svg{width:14px;height:14px;flex-shrink:0}
+.dashboard-page .summary-actions a:focus-visible,.dashboard-page .summary-actions button:focus-visible{outline:2px solid #087ca7;outline-offset:2px}
+.dashboard-page .vehicle-summary .summary-metric-row{grid-template-columns:repeat(6,minmax(0,1fr));border:0;gap:0}
+.dashboard-page .vehicle-summary .summary-metric{min-height:88px;padding:8px 6px;gap:4px;justify-content:flex-start}
+.dashboard-page .summary-metric>svg,.dashboard-page .summary-detail-icon{display:block;width:28px;height:28px;flex:0 0 28px;object-fit:contain}
+.dashboard-page .summary-metric span{line-height:1.3;font-size:12px}
+.dashboard-page .summary-metric strong{line-height:1.35;font-size:13px}
+.dashboard-page .vehicle-summary .summary-address{min-height:78px;padding:8px 24px!important;border:0!important;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-template-rows:28px auto auto;gap:3px 0;align-items:start}
+.dashboard-page .summary-address>.summary-detail-icon{grid-column:1;grid-row:1;justify-self:center}
+.dashboard-page .summary-address>span{grid-column:1;grid-row:2;text-align:center}
+.dashboard-page .summary-address>strong{grid-column:1/-1;grid-row:3;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:1100px){.dashboard-page .vehicle-summary .summary-metric-row{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-page .vehicle-summary .summary-address{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:639px){.dashboard-page .vehicle-summary .summary-title{height:auto;min-height:58px;padding:8px 12px;flex-wrap:wrap}.dashboard-page .summary-actions .summary-action,.dashboard-page .summary-actions .summary-close{height:44px;min-height:44px;max-height:44px}.dashboard-page .vehicle-summary .summary-metric-row{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-page .vehicle-summary .summary-address{grid-template-columns:repeat(2,minmax(0,1fr))!important;padding:8px 12px!important}}
+
+.dashboard-page .vehicle-summary{border-radius:4px}
+.dashboard-page .summary-expand-toggle{width:32px;min-width:32px;height:32px;min-height:32px;top:-16px}
+@media(max-width:639px){.dashboard-page .summary-expand-toggle{width:44px;min-width:44px;height:44px;min-height:44px;top:-22px}}
+
+/* Reveal a selected vehicle's details from the bottom-left. The same vehicle's
+   live updates keep the existing element, so packet updates never replay it. */
+.dashboard-page .vehicle-summary{transform-origin:bottom left;animation:vehicle-details-enter 320ms cubic-bezier(.16,1,.3,1) both}
+@keyframes vehicle-details-enter{
+ from{opacity:0;transform:translate3d(-28px,44px,0) scale(.88)}
+ to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@media(prefers-reduced-motion:reduce){.dashboard-page .vehicle-summary{animation:none}}

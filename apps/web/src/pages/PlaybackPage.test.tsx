@@ -19,7 +19,7 @@ const renderPage=(entry='/dashboard/playback')=>render(<MemoryRouter initialEntr
 beforeEach(()=>{mocks.get.mockReset();mocks.get.mockImplementation(async(url:string)=>{if(url==='/dashboard/vehicles')return{data:{data:[vehicle]}};if(url==='/playback')return{data:{data:points,meta:{totalDistanceKm:12.5,avgSpeed:20,maxSpeed:30,pointCount:2,startAt:points[0].tracker_timestamp,endAt:points[1].tracker_timestamp}}};return{data:{data:[]}}})});
 afterEach(cleanup);
 
-it('validates playback filters before requesting a route',async()=>{renderPage();fireEvent.click(screen.getByRole('button',{name:'Search route'}));expect(await screen.findByText('Select a vehicle.')).toBeInTheDocument();expect(mocks.get.mock.calls.some(call=>call[0]==='/playback')).toBe(false)});
+it('validates playback filters before requesting a route',async()=>{renderPage();fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));expect(await screen.findByText('Select a vehicle.')).toBeInTheDocument();expect(mocks.get.mock.calls.some(call=>call[0]==='/playback')).toBe(false)});
 
 it('loads an exact report playback deep link',async()=>{renderPage('/dashboard/playback?vehicleId=11111111-1111-4111-8111-111111111111&start=2026-09-17T00%3A00%3A00.000Z&end=2026-09-18T00%3A00%3A00.000Z');await waitFor(()=>expect(mocks.get.mock.calls.some(call=>call[0]==='/playback'&&call[1]?.params.vehicleId===vehicle.id)).toBe(true))});
 
