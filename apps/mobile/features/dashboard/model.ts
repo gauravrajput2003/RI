@@ -1,10 +1,11 @@
 import type { Location, Vehicle } from '../../types/models';
 import { stateForVehicle } from '../vehicles/status';
+import {STATUS_COLORS} from '../../utils/vehicleIcons';
 export type FleetFilter = 'All' | 'Overspeed' | 'Running' | 'Idle' | 'Stopped' | 'Inactive';
 export const fleetFilters: { label: FleetFilter; color: string }[] = [
   { label: 'All', color: '#ef080c' }, { label: 'Overspeed', color: '#ff8300' },
-  { label: 'Running', color: '#19b900' }, { label: 'Idle', color: '#d4bb00' },
-  { label: 'Stopped', color: '#ff1628' }, { label: 'Inactive', color: '#9767bb' },
+  { label: 'Running', color: STATUS_COLORS.running.main }, { label: 'Idle', color: STATUS_COLORS.idle.main },
+  { label: 'Stopped', color: STATUS_COLORS.stopped.main }, { label: 'Inactive', color: STATUS_COLORS.unreachable.main },
 ];
 export interface CardExtras { distance: string; fuel: string; maxSpeed: string; since: string; lastSync: string; address: string; visual: 'scooter' | 'bike'; }
 export const demoCardExtras: Record<string, CardExtras> = {

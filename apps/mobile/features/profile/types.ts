@@ -1,4 +1,4 @@
-import type { VehicleVisualType } from '../../../../packages/shared-utils/src/index';
+import type { VehicleVisualType,VehicleVisualState } from '../../../../packages/shared-utils/src/index';
 
 export interface UserProfile {
   name: string;
@@ -20,6 +20,7 @@ export interface VehicleCardDetail {
   subscriptionStart: string;
   subscriptionDue: string;
   visual: VehicleVisualType;
+  state?:VehicleVisualState;
 }
 
 export interface SubscriptionRecord {

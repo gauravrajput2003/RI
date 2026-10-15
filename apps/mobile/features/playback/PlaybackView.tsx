@@ -1,782 +1,121 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, type Region,type MapHandle } from '../map/LeafletMap';
-import { useHistory } from '../vehicles/queries';
-import { hasPosition } from '../map/viewport';
-import {
-  calculateRouteStats,
-  formatDate,
-  formatDateTime,
-  formatDuration,
-  formatTime,
-  parseDateTime,
-  normalizeRoute, routeTime, routeIndex,
-} from './route';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {ActivityIndicator,KeyboardAvoidingView,Modal,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useLocalSearchParams,useRouter,useFocusEffect} from 'expo-router';
+import {Feather,Ionicons,MaterialCommunityIcons} from '@expo/vector-icons';
+import MapView,{Marker,Polyline,type Region,type MapHandle} from '../map/LeafletMap';
+import {useHistory} from '../vehicles/queries';
+import {hasPosition} from '../map/viewport';
+import {calculateRouteStats,coveredDistances,formatDate,formatDateTime,formatDuration,formatTime,normalizeRoute,parseDateTime,routeTime,seekRecording} from './route';
+import {animationTimeline,animationFrame} from './animation';
+import {PlaybackMetricIcon,PlaybackOptionsIcon,type PlaybackMetric} from './PlaybackMetricIcon';
+import {PlaybackStatsGrid} from './PlaybackStatsGrid';
 
-export default function PlaybackView() {
-  const map = useRef<MapHandle>(null);
-  const router = useRouter();
-  const params = useLocalSearchParams<{ vehicleId?: string; vehicleNumber?: string }>();
-  const vehicleId = params.vehicleId ?? '';
-  const vehicleNumber = params.vehicleNumber ?? 'Vehicle';
-
-  const today = useMemo(() => new Date(), []);
-  const defaultStartDate = useMemo(() => formatDate(today), [today]);
-  const defaultDueDate = useMemo(() => formatDate(today), [today]);
-
-  const [startDateStr, setStartDateStr] = useState(defaultStartDate);
-  const [startTimeStr, setStartTimeStr] = useState('00:00');
-  const [dueDateStr, setDueDateStr] = useState(defaultDueDate);
-  const [dueTimeStr, setDueTimeStr] = useState('23:59');
-
-  const [formOpen, setFormOpen] = useState(true);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  const [confirmedRange, setConfirmedRange] = useState<{ from: Date; to: Date } | null>(null);
-  const [playbackIndex, setPlaybackIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [rate, setRate] = useState(60);
-  const indexRef = useRef(0);
-  indexRef.current = playbackIndex;
-
-  const query = useHistory(
-    vehicleId,
-    confirmedRange?.from ?? null,
-    confirmedRange?.to ?? null,
-    Boolean(confirmedRange && vehicleId)
-  );
-
-  const points = useMemo(() => normalizeRoute(query.data ?? []), [query.data]);
-  const stats = useMemo(() => calculateRouteStats(points), [points]);
-
-  const onConfirmForm = () => {
-    const from = parseDateTime(startDateStr, startTimeStr);
-    const to = parseDateTime(dueDateStr, dueTimeStr);
-
-    if (!from || !to) {
-      setFormError('Please enter valid dates (DD/MM/YYYY) and times (HH:MM)');
-      return;
-    }
-
-    if (from.getTime() >= to.getTime()) {
-      setFormError('Start date/time must be before due date/time');
-      return;
-    }
-
-    setFormError(null);
-    setConfirmedRange({ from, to });
-    setPlaybackIndex(0);
-    setIsPlaying(false);
-    setFormOpen(false);
-  };
-
-  const onCancelForm = () => {
-    if (!confirmedRange) {
-      router.replace('/(app)');
-    } else {
-      setFormOpen(false);
-    }
-  };
-
-  const initialRegion = useMemo<Region | undefined>(() => {
-    const first = points[0];
-    if (!first) return undefined;
-    return {
-      latitude: first.latitude!, longitude: first.longitude!,
-      latitudeDelta: 0.08, longitudeDelta: 0.08,
-    };
-  }, [points]);
-
-  const polylineCoords = useMemo(
-    () =>
-      points
-        .filter(hasPosition)
-        .map(p => ({ latitude: p.latitude as number, longitude: p.longitude as number })),
-    [points]
-  );
-
-  const fitRoute = useCallback(() => {
-    if (polylineCoords.length === 1) {
-      map.current?.animateToRegion({ ...polylineCoords[0], latitudeDelta: 0.02, longitudeDelta: 0.02 }, 250);
-    } else if (polylineCoords.length > 1) {
-      map.current?.fitToCoordinates(polylineCoords, {
-        edgePadding: { top: 40, right: 40, bottom: 60, left: 40 },
-        animated: false,
-      });
-    }
-  }, [polylineCoords]);
-  useEffect(() => { fitRoute(); }, [fitRoute]);
-  useEffect(() => { setPlaybackIndex(0); setIsPlaying(false); }, [points]);
-  useEffect(() => {
-    if (!isPlaying || points.length < 2) return;
-    let last = Date.now(), virtual = routeTime(points[indexRef.current]);
-    const timer = setInterval(() => {
-      const now = Date.now(); virtual += (now - last) * rate; last = now;
-      const next = routeIndex(points, virtual);
-      setPlaybackIndex(next);
-      if (next >= points.length - 1) setIsPlaying(false);
-    }, 100);
-    return () => clearInterval(timer);
-  }, [isPlaying, points, rate]);
-  const togglePlayback = () => {
-    if (points.length < 2) return;
-    if (!isPlaying && playbackIndex >= points.length - 1) setPlaybackIndex(0);
-    setIsPlaying(value => !value);
-  };
-
-
-  const startPoint = polylineCoords[0];
-  const endPoint = polylineCoords.length > 1 ? polylineCoords[polylineCoords.length - 1] : undefined;
-
-  const currentPoint = points[playbackIndex] ?? points[points.length - 1];
-  const currentSpeed = currentPoint?.speed ?? '—';
-  const currentTimestamp = currentPoint
-    ? formatTime(new Date(currentPoint.tracker_timestamp || currentPoint.server_received_at))
-    : '--';
-
-  return (
-    <View style={styles.page}>
-      {/* Top Header Bar */}
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.replace('/(app)')}
-          style={styles.backButton}
-        >
-          <Feather name="arrow-left" size={24} color="#111" />
-        </Pressable>
-        <View style={styles.titleContainer}>
-          <Text style={styles.headerTitle}>{vehicleNumber} History</Text>
-          <Text style={styles.headerSubtitle}>
-            {confirmedRange
-              ? `${formatDateTime(confirmedRange.from)} - ${formatDateTime(confirmedRange.to)}`
-              : `${startDateStr} 00:00:00 - ${dueDateStr} 23:59:59`}
-          </Text>
-        </View>
-      </View>
-
-      {/* Mini Stats Strip */}
-      <View style={styles.miniStatsBar}>
-        <View style={styles.miniStat}>
-          <View style={styles.miniStatRow}>
-            <MaterialCommunityIcons name="map-marker-distance" size={16} color="#0f766e" />
-            <Text style={styles.miniStatLabel}>Recorded KM</Text>
-          </View>
-          <Text style={styles.miniStatValue}>{stats.kmTravelled} KM</Text>
-        </View>
-        <View style={styles.miniStatDivider} />
-        <View style={styles.miniStat}>
-          <View style={styles.miniStatRow}>
-            <MaterialCommunityIcons name="clock-outline" size={16} color="#0284c7" />
-            <Text style={styles.miniStatLabel}>GPS Timestamp</Text>
-          </View>
-          <Text style={styles.miniStatValue}>{currentTimestamp}</Text>{currentPoint?.address&&<Text>{currentPoint.address}{currentPoint.address_attribution?' · '+currentPoint.address_attribution:''}</Text>}
-        </View>
-        <View style={styles.miniStatDivider} />
-        <View style={styles.miniStat}>
-          <View style={styles.miniStatRow}>
-            <MaterialCommunityIcons name="speedometer" size={16} color="#e11d48" />
-            <Text style={styles.miniStatLabel}>Current Speed</Text>
-          </View>
-          <Text style={styles.miniStatValue}>{currentSpeed} KMH</Text>
-        </View>
-      </View>
-
-      {/* Map View */}
-      <View style={styles.mapContainer}>
-        {query.isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ef4444" />
-            <Text style={styles.loadingText}>Loading route playback...</Text>
-          </View>
-        ) : query.isError || !points.length ? (
-          <View style={styles.loadingContainer}>
-            <Text>{query.isError ? 'Unable to load GPS history. Please retry.' : 'No valid GPS recordings in this period.'}</Text>
-            <Pressable onPress={() => query.refetch()}><Text>Retry</Text></Pressable>
-          </View>
-        ) : (
-          <MapView ref={map} style={styles.map} initialRegion={initialRegion} onMapReady={fitRoute}>
-            {polylineCoords.length > 1 ? (
-              <Polyline coordinates={polylineCoords} strokeColor="#000000" strokeWidth={3.5} />
-            ) : null}
-
-            {currentPoint && hasPosition(currentPoint) && (
-              <Marker coordinate={currentPoint} title={`Playback ${currentTimestamp}`}>
-                <MaterialCommunityIcons name="motorbike" size={32} color="#087ca7" />
-              </Marker>
-            )}
-            {/* Start Marker */}
-            {startPoint ? (
-              <Marker coordinate={startPoint} title="Start" pinColor="#22c55e">
-                <View style={[styles.markerBadge, { backgroundColor: '#22c55e' }]}>
-                  <Text style={styles.markerText}>S</Text>
-                </View>
-              </Marker>
-            ) : null}
-
-            {/* End Marker */}
-            {endPoint ? (
-              <Marker coordinate={endPoint} title="End" pinColor="#ef4444">
-                <View style={[styles.markerBadge, { backgroundColor: '#ef4444' }]}>
-                  <Text style={styles.markerText}>E</Text>
-                </View>
-              </Marker>
-            ) : null}
-
-            {/* Halt Markers */}
-            {stats.halts.map(halt => (
-              <Marker
-                key={`halt-${halt.haltIndex}`}
-                coordinate={{ latitude: halt.latitude, longitude: halt.longitude }}
-                title={`Halt ${halt.haltIndex} (${formatDuration(halt.durationSeconds)})`}
-                pinColor="#dc2626"
-              >
-                <View style={styles.haltBadge}>
-                  <Text style={styles.haltText}>{halt.haltIndex}</Text>
-                </View>
-              </Marker>
-            ))}
-          </MapView>
-        )}
-
-        {/* Speed Multiplier Badge */}
-        <View style={styles.speedTag}>
-          <Text style={styles.speedTagText}>{rate}x</Text>
-        </View>
-      </View>
-
-      {/* Bottom Controls & Stats Panel */}
-      <View style={styles.bottomPanel}>
-        <Text>Recorded GPS: {points.length ? `${formatDateTime(new Date(routeTime(points[0])))} – ${formatDateTime(new Date(routeTime(points[points.length - 1])))}` : 'No recordings'}</Text>
-        <Pressable disabled={!points.length} onPress={() => { setIsPlaying(false); setPlaybackIndex(i => Math.min(i + 1, points.length - 1)); }}>
-          <Text>Next recording</Text>
-        </Pressable>
-        <Pressable disabled={query.isFetching} onPress={() => { setIsPlaying(false); void query.refetch(); }}>
-          <Text>{query.isFetching ? 'Refreshing…' : 'Refresh GPS history'}</Text>
-        </Pressable>
-        {points.length >= 50000 && <Text>Recording limit reached. Select a shorter date range.</Text>}
-        {/* Scrubber / Progress Bar */}
-        <View style={styles.scrubberContainer}>
-          <View style={styles.scrubberTrack}>
-            <View
-              style={[
-                styles.scrubberProgress,
-                {
-                  width:
-                    points.length > 0
-                      ? `${Math.min(100, ((playbackIndex + 1) / points.length) * 100)}%`
-                      : '0%',
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.scrubberThumb,
-                {
-                  left:
-                    points.length > 0
-                      ? `${Math.min(95, ((playbackIndex + 1) / points.length) * 100)}%`
-                      : 0,
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.controlsRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isPlaying ? 'Pause playback' : 'Start playback'}
-              disabled={points.length < 2}
-              onPress={togglePlayback}
-              style={styles.playButton}
-            >
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={22}
-                color="#fff"
-                style={{ marginLeft: isPlaying ? 0 : 2 }}
-              />
-            </Pressable>
-            <View style={styles.controlActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Filter date range"
-                onPress={() => setFormOpen(true)}
-                style={styles.actionIcon}
-              >
-                <Ionicons name="funnel-outline" size={22} color="#475569" />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Change playback speed"
-                onPress={() => setRate(value => value === 60 ? 4 : value === 4 ? 12 : 60)}
-                style={styles.actionIcon}
-              >
-                <Ionicons name="options-outline" size={22} color="#475569" />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        {/* 2x3 Detailed Stats Grid */}
-        <View style={styles.statsGrid}>
-          {/* Row 1 */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <MaterialCommunityIcons name="map-marker-outline" size={18} color="#ef4444" />
-                <Text style={styles.statCardTitle}>KM Travelled</Text>
-              </View>
-              <Text style={styles.statCardValue}>{stats.kmTravelled}KM</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <MaterialCommunityIcons name="timer-outline" size={18} color="#22c55e" />
-                <Text style={styles.statCardTitle}>Total Running</Text>
-              </View>
-              <Text style={styles.statCardValue}>{formatDuration(stats.totalRunningSeconds)}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <MaterialCommunityIcons name="speedometer-slow" size={18} color="#0284c7" />
-                <Text style={styles.statCardTitle}>Avg Speed</Text>
-              </View>
-              <Text style={styles.statCardValue}>{stats.avgSpeedKmh}KMH</Text>
-            </View>
-          </View>
-
-          {/* Row 2 */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <MaterialCommunityIcons name="gas-station" size={18} color="#f59e0b" />
-                <Text style={styles.statCardTitle}>Halt Count</Text>
-              </View>
-              <Text style={styles.statCardValue}>{stats.haltCount}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <MaterialCommunityIcons name="clock-alert-outline" size={18} color="#dc2626" />
-                <Text style={styles.statCardTitle}>Total Stoppage</Text>
-              </View>
-              <Text style={styles.statCardValue}>{formatDuration(stats.totalStoppageSeconds)}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <MaterialCommunityIcons name="speedometer" size={18} color="#8b5cf6" />
-                <Text style={styles.statCardTitle}>Max Speed</Text>
-              </View>
-              <Text style={styles.statCardValue}>{stats.maxSpeedKmh}KMH</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Date/Time Filter Dialog Modal */}
-      <Modal
-        visible={formOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={onCancelForm}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.dialogCard}>
-            {/* Red Top Header */}
-            <View style={styles.dialogHeader}>
-              <Text style={styles.dialogHeaderText}>{vehicleNumber}</Text>
-            </View>
-
-            {/* Dialog Form Body */}
-            <View style={styles.dialogBody}>
-              {/* Start Date */}
-              <Text style={styles.fieldLabel}>Start Date</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  accessibilityLabel="Start date"
-                  value={startDateStr}
-                  onChangeText={setStartDateStr}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#999"
-                  style={[styles.inputField, { flex: 1.2 }]}
-                />
-                <TextInput
-                  accessibilityLabel="Start time"
-                  value={startTimeStr}
-                  onChangeText={setStartTimeStr}
-                  placeholder="00:00"
-                  placeholderTextColor="#999"
-                  style={[styles.inputField, { flex: 0.8 }]}
-                />
-              </View>
-
-              {/* Due Date */}
-              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Due Date</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  accessibilityLabel="Due date"
-                  value={dueDateStr}
-                  onChangeText={setDueDateStr}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#999"
-                  style={[styles.inputField, { flex: 1.2 }]}
-                />
-                <TextInput
-                  accessibilityLabel="Due time"
-                  value={dueTimeStr}
-                  onChangeText={setDueTimeStr}
-                  placeholder="23:59"
-                  placeholderTextColor="#999"
-                  style={[styles.inputField, { flex: 0.8 }]}
-                />
-              </View>
-
-              {/* Error validation message */}
-              {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-
-              {/* Action Buttons */}
-              <View style={styles.dialogActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Confirm playback range"
-                  onPress={onConfirmForm}
-                  style={styles.confirmCircle}
-                >
-                  <Ionicons name="checkmark" size={28} color="#22c55e" />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel playback dialog"
-                  onPress={onCancelForm}
-                  style={styles.cancelCircle}
-                >
-                  <Ionicons name="close" size={28} color="#ef4444" />
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+function Metric({kind,label,value,small=false}:{kind:PlaybackMetric;label:string;value:string;small?:boolean}){
+ return <View style={[s.metric,small?s.mini:null]}><View style={s.metricHeading}><PlaybackMetricIcon kind={kind}/><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={.8} style={s.metricLabel}>{label}</Text></View><Text numberOfLines={1} style={s.metricValue}>{value}</Text></View>;
 }
-
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f1f5f9' },
-  header: {
-    height: 52,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  backButton: {
-    padding: 6,
-    marginRight: 8,
-  },
-  titleContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
-  },
-  miniStatsBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  miniStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  miniStatRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  miniStatLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  miniStatValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginTop: 2,
-  },
-  miniStatDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#e2e8f0',
-  },
-  mapContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  map: {
-    ...StyleSheet.absoluteFill,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: '#f8fafc',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  markerBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  markerText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  haltBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#dc2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  haltText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  speedTag: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#dc2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  speedTagText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  bottomPanel: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-  },
-  scrubberContainer: {
-    marginBottom: 12,
-  },
-  scrubberTrack: {
-    height: 4,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 2,
-    position: 'relative',
-    marginHorizontal: 8,
-    marginBottom: 10,
-  },
-  scrubberProgress: {
-    height: 4,
-    backgroundColor: '#ef4444',
-    borderRadius: 2,
-  },
-  scrubberThumb: {
-    position: 'absolute',
-    top: -4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#ef4444',
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  playButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#65a30d',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  actionIcon: {
-    padding: 6,
-  },
-  statsGrid: {
-    gap: 8,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-  },
-  statCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  statCardTitle: {
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  statCardValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  // Modal & Dialog
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  dialogCard: {
-    width: '100%',
-    maxWidth: 320,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  dialogHeader: {
-    backgroundColor: '#ee1526',
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dialogHeaderText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  dialogBody: {
-    padding: 20,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontStyle: 'italic',
-    color: '#df8c17',
-    marginBottom: 6,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  inputField: {
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#334155',
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-    fontSize: 15,
-    color: '#0f172a',
-    fontWeight: '500',
-  },
-  errorText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: '#ef4444',
-    textAlign: 'center',
-  },
-  dialogActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 32,
-    marginTop: 24,
-  },
-  confirmCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#22c55e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  cancelCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#ef4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
+const speeds=[1,4,12,60];
+export default function PlaybackView(){
+ const router=useRouter(),params=useLocalSearchParams<{vehicleId?:string;vehicleNumber?:string}>();
+ const vehicleId=params.vehicleId??'',vehicleNumber=params.vehicleNumber??'Vehicle',map=useRef<MapHandle>(null);
+ const today=useMemo(()=>new Date(),[]);
+ const [startDate,setStartDate]=useState(formatDate(today)),[startTime,setStartTime]=useState('00:00');
+ const [dueDate,setDueDate]=useState(formatDate(today)),[dueTime,setDueTime]=useState('23:59');
+ const [formOpen,setFormOpen]=useState(true),[formError,setFormError]=useState('');
+ const [range,setRange]=useState<{from:Date;to:Date}|null>(null);
+ const [picker,setPicker]=useState<{field:'start'|'due';mode:'date'|'time'}|null>(null);
+ const [index,setIndex]=useState(0),[playing,setPlaying]=useState(false),[rate,setRate]=useState(4);
+ const [animated,setAnimated]=useState<ReturnType<typeof animationFrame>>(null);
+ const cursor=useRef(0);
+ const [speedOpen,setSpeedOpen]=useState(false),[optionsOpen,setOptionsOpen]=useState(false);
+ const [showRoute,setShowRoute]=useState(true),[showHalts,setShowHalts]=useState(true),[follow,setFollow]=useState(false);
+ const [trackWidth,setTrackWidth]=useState(1);
+ useEffect(()=>{setRange(null);setIndex(0);setPlaying(false);setFormOpen(true);setFormError('');},[vehicleId]);
+ useFocusEffect(useCallback(()=>{
+  setFormOpen(true);setPlaying(false);
+  return()=>{setPlaying(false);setFormOpen(false);setPicker(null);setSpeedOpen(false);setOptionsOpen(false);};
+ },[vehicleId]));
+ const query=useHistory(vehicleId,range?.from??null,range?.to??null,Boolean(range&&vehicleId));
+ const points=useMemo(()=>normalizeRoute(query.data??[]),[query.data]);
+ const timeline=useMemo(()=>animationTimeline(points),[points]);
+ const stats=useMemo(()=>calculateRouteStats(points),[points]),distances=useMemo(()=>coveredDistances(points),[points]);
+ const coordinates=useMemo(()=>points.map(point=>({latitude:point.latitude!,longitude:point.longitude!})),[points]);
+ const initialRegion=useMemo<Region|undefined>(()=>points[0]?{latitude:points[0].latitude!,longitude:points[0].longitude!,latitudeDelta:.08,longitudeDelta:.08}:undefined,[points]);
+ const fitRoute=useCallback(()=>{if(coordinates.length===1)map.current?.animateToRegion({...coordinates[0],latitudeDelta:.02,longitudeDelta:.02},250);else if(coordinates.length>1)map.current?.fitToCoordinates(coordinates,{edgePadding:{top:40,right:40,bottom:60,left:40},animated:false});},[coordinates]);
+ useEffect(()=>{fitRoute();},[fitRoute]);
+ useEffect(()=>{setIndex(0);setPlaying(false);setAnimated(null);cursor.current=0;},[points]);
+ useEffect(()=>{
+  if(!playing||points.length<2)return;
+  let last=Date.now();
+  const timer=setInterval(()=>{const now=Date.now();cursor.current+=(now-last)*rate;last=now;const frame=animationFrame(points,timeline,cursor.current);if(frame){setIndex(frame.index);setAnimated(frame);if(frame.index>=points.length-1)setPlaying(false);}},50);
+  return()=>clearInterval(timer);
+ },[playing,points,timeline,rate]);
+ const current=points[index]??points.at(-1),first=coordinates[0],last=coordinates.length>1?coordinates.at(-1):undefined;
+ const bike=animated&&animated.index===index?animated:current;
+ const centerCurrent=useCallback(()=>{if(bike&&typeof bike.latitude==='number'&&typeof bike.longitude==='number'&&Number.isFinite(bike.latitude)&&Number.isFinite(bike.longitude))map.current?.animateToRegion({latitude:bike.latitude!,longitude:bike.longitude!,latitudeDelta:.02,longitudeDelta:.02},250);},[bike]);
+ useEffect(()=>{if(follow)centerCurrent();},[follow,centerCurrent]);
+ const fraction=points.length>1?(routeTime(points[index])-routeTime(points[0]))/Math.max(1,routeTime(points.at(-1)!)-routeTime(points[0])):0;
+ const seekTo=(next:number)=>{setPlaying(false);setIndex(next);cursor.current=timeline[next]??0;setAnimated(null);};
+ const seek=(x:number)=>seekTo(seekRecording(points,x/Math.max(1,trackWidth)));
+ const back=()=>{setPlaying(false);setFormOpen(false);setPicker(null);setSpeedOpen(false);setOptionsOpen(false);router.replace({pathname:'/(app)/vehicles',params:{mode:'playback'}});};
+ const cancel=()=>{setPicker(null);if(!range)back();else setFormOpen(false);};
+ const confirm=()=>{
+  const from=parseDateTime(startDate,startTime),to=parseDateTime(dueDate,dueTime);
+  if(!from||!to){setFormError('Enter valid dates (DD/MM/YYYY) and times (HH:MM).');return;}
+  // The selected due minute includes its final second, including 23:59:59.
+  if(dueTime.trim().split(':').length===2)to.setSeconds(59,999);
+  if(from>=to){setFormError('Start date/time must be before due date/time.');return;}
+  if(!vehicleId){setFormError('Select a vehicle before loading playback.');return;}
+  setFormError('');setPicker(null);setRange({from,to});setIndex(0);setPlaying(false);setFormOpen(false);
+ };
+ const toggle=()=>{if(points.length<2)return;if(!playing&&index>=points.length-1){setIndex(0);cursor.current=0;setAnimated(null);}setPlaying(value=>!value);};
+ const stamp=current?formatDateTime(new Date(routeTime(current))):'--';
+ const pickedValue=picker?parseDateTime(picker.field==='start'?startDate:dueDate,picker.field==='start'?startTime:dueTime)??today:today;
+ return <SafeAreaView edges={['bottom']} style={s.page}>
+  <View style={s.header}><Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={back} style={s.back}><Feather name="arrow-left" size={24} color="#111"/></Pressable><View style={{flex:1}}><Text numberOfLines={1} style={s.title}>History · {vehicleNumber}</Text><Text numberOfLines={1} adjustsFontSizeToFit style={s.subtitle}>{range?`${formatDateTime(range.from)} - ${formatDateTime(range.to)}`:`${startDate} 00:00:00 - ${dueDate} 23:59:59`}</Text></View></View>
+  <View style={s.miniStrip}><Metric small kind="covered" label="KM Covered" value={current?`${distances[index]??0} KM`:'0 KM'}/><Metric small kind="gps" label="GPS Timestamp" value={current?formatDateTime(new Date(routeTime(current))).split(' ')[1]:'--'}/><Metric small kind="speed" label="Current Speed" value={current?.speed!=null?`${Math.round(current.speed)} KMH`:'-- KMH'}/></View>
+  <View style={s.mapContainer}>
+   {query.isLoading?<View style={s.empty}><ActivityIndicator color="#ef4444"/><Text>Loading route playback…</Text></View>:query.isError||!points.length?<View style={s.empty}><Text style={s.emptyText}>{!range?'Choose a date range to load recorded GPS.':query.isError?'Unable to load GPS history.':'No valid GPS recordings in this period.'}</Text>{range?<Pressable accessibilityRole="button" accessibilityLabel="Refresh GPS history" onPress={()=>void query.refetch()}><Text style={s.link}>Retry</Text></Pressable>:null}</View>:<MapView ref={map} style={s.map} initialRegion={initialRegion} onMapReady={fitRoute} onPanDrag={()=>setFollow(false)}>
+    {showRoute&&coordinates.length>1?<Polyline coordinates={coordinates} strokeColor="#087ca7" strokeWidth={3.5}/>:null}
+    {current&&hasPosition(current)?<Marker coordinate={{latitude:bike!.latitude!,longitude:bike!.longitude!}} rotation={animated?.heading??current.course??0} pinColor="#22c55e" iconType="bike" zIndexOffset={3000} title={`Playback ${stamp}`}><MaterialCommunityIcons name="motorbike" size={30} color="#087ca7"/></Marker>:null}
+    {first?<Marker coordinate={first} title="Start" pinColor="#22c55e"><View><Text>S</Text></View></Marker>:null}
+    {last?<Marker coordinate={last} title="End" pinColor="#ef4444"><View><Text>E</Text></View></Marker>:null}
+    {showHalts?stats.halts.map(halt=><Marker key={halt.haltIndex} coordinate={halt} title={`Halt ${halt.haltIndex} (${formatDuration(halt.durationSeconds)})`} pinColor="#ef4444"><View><Text>{halt.haltIndex}</Text></View></Marker>):null}
+   </MapView>}
+   <View style={s.mapTools}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Centre on playback vehicle" accessibilityState={{selected:follow}} disabled={!current} onPress={()=>{setFollow(true);centerCurrent();}} style={s.mapButton}><MaterialCommunityIcons name="crosshairs-gps" size={23} color={follow?'#087ca7':'#64748b'}/></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Show halt markers" accessibilityState={{selected:showHalts}} onPress={()=>setShowHalts(value=>!value)} style={s.mapButton}><MaterialCommunityIcons name="traffic-light" size={25} color={showHalts?'#364c56':'#aeb8bd'}/></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Show route line" accessibilityState={{selected:showRoute}} onPress={()=>setShowRoute(value=>!value)} style={s.mapButton}><MaterialCommunityIcons name="map-outline" size={24} color={showRoute?'#087ca7':'#aeb8bd'}/></Pressable>
+   </View>
+   <Pressable accessibilityRole="button" accessibilityLabel="Change playback speed" onPress={()=>setSpeedOpen(true)} style={s.speedTag}><Text style={s.speedText}>{rate}x</Text></Pressable>
+  </View>
+  <View style={s.bottom}>
+   <View style={s.transport}>
+    <Pressable accessibilityRole="adjustable" accessibilityLabel="Playback timeline" accessibilityValue={{min:0,max:100,now:Math.round(fraction*100)}} accessibilityActions={[{name:'increment'},{name:'decrement'}]} onAccessibilityAction={event=>seekTo(Math.max(0,Math.min(points.length-1,index+(event.nativeEvent.actionName==='increment'?1:-1))))} disabled={!points.length} onLayout={event=>setTrackWidth(event.nativeEvent.layout.width)} onPress={event=>seek(event.nativeEvent.locationX)} onTouchMove={event=>seek(event.nativeEvent.locationX)} style={s.trackTouch}><View pointerEvents="none" style={s.track}><View style={[s.progress,{width:`${Math.min(100,fraction*100)}%`}]}/><View style={[s.thumb,{left:`${Math.min(96,fraction*100)}%`}]}/></View></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={playing?'Pause playback':'Start playback'} disabled={points.length<2} onPress={toggle} style={[s.play,{opacity:points.length<2?.45:1}]}><Ionicons name={playing?'pause':'play'} size={20} color="white"/></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Filter date range" onPress={()=>{setFormError('');setFormOpen(true);}} style={s.control}><Ionicons name="funnel-outline" size={26} color="#364c56"/></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Playback options" onPress={()=>setOptionsOpen(true)} style={s.control}><PlaybackOptionsIcon/></Pressable>
+   </View>
+   <PlaybackStatsGrid stats={stats} hasRecordings={points.length>0}/>
+  </View>
+  <Modal visible={formOpen} transparent animationType="fade" onRequestClose={cancel}><KeyboardAvoidingView style={s.overlay} behavior={Platform.OS==='ios'?'padding':undefined}><View style={s.dialog}><View style={s.redHeader}><Text style={s.dialogPlate}>{vehicleNumber}</Text></View><ScrollView style={{flexGrow:0}} keyboardShouldPersistTaps="handled" contentContainerStyle={s.form}>
+   {(['start','due'] as const).map(field=><View key={field} style={{marginBottom:12}}><Text style={s.fieldLabel}>{field==='start'?'Start Date':'Due Date'}</Text><View style={s.inputRow}><TextInput accessibilityLabel={field==='start'?'Start date':'Due date'} value={field==='start'?startDate:dueDate} onChangeText={field==='start'?setStartDate:setDueDate} placeholder="DD/MM/YYYY" style={[s.input,{flex:1.2}]} keyboardType="numbers-and-punctuation"/><Pressable accessibilityRole="button" accessibilityLabel={`Choose ${field} date`} onPress={()=>setPicker({field,mode:'date'})} style={s.pickerButton}><Feather name="calendar" size={18} color="#64748b"/></Pressable><TextInput accessibilityLabel={field==='start'?'Start time':'Due time'} value={field==='start'?startTime:dueTime} onChangeText={field==='start'?setStartTime:setDueTime} placeholder="HH:MM" style={[s.input,{flex:.8}]} keyboardType="numbers-and-punctuation"/><Pressable accessibilityRole="button" accessibilityLabel={`Choose ${field} time`} onPress={()=>setPicker({field,mode:'time'})} style={s.pickerButton}><Feather name="clock" size={18} color="#64748b"/></Pressable></View></View>)}
+   {picker?<View><DateTimePicker value={pickedValue} mode={picker.mode} is24Hour display={Platform.OS==='ios'?'spinner':'default'} onDismiss={()=>setPicker(null)} onValueChange={(_event,value)=>{void _event;if(Platform.OS!=='ios')setPicker(null);if(picker.mode==='date')(picker.field==='start'?setStartDate:setDueDate)(formatDate(value));else(picker.field==='start'?setStartTime:setDueTime)(formatTime(value).slice(0,5));}}/>{Platform.OS==='ios'?<Pressable onPress={()=>setPicker(null)}><Text style={s.link}>Done</Text></Pressable>:null}</View>:null}
+   {formError?<Text accessibilityRole="alert" style={s.error}>{formError}</Text>:null}
+   <View style={s.dialogActions}><Pressable accessibilityRole="button" accessibilityLabel="Confirm playback range" onPress={confirm} style={s.dialogAction}><Ionicons name="checkmark-circle-outline" size={32} color="#22c55e"/></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Cancel playback dialog" onPress={cancel} style={s.dialogAction}><Ionicons name="close-circle-outline" size={32} color="#ef4444"/></Pressable></View>
+  </ScrollView></View></KeyboardAvoidingView></Modal>
+  <Modal visible={speedOpen} transparent animationType="fade" onRequestClose={()=>setSpeedOpen(false)}><View style={s.overlay}><View style={s.sheet}><Text style={s.sheetTitle}>Playback speed</Text>{speeds.map(value=><Pressable key={value} accessibilityRole="radio" accessibilityState={{checked:rate===value}} accessibilityLabel={`${value}x speed`} onPress={()=>{setRate(value);setSpeedOpen(false);}} style={s.sheetRow}><Text>{value}x</Text>{rate===value?<Feather name="check" size={20} color="#22c55e"/>:null}</Pressable>)}<Pressable accessibilityRole="button" onPress={()=>setSpeedOpen(false)} style={s.sheetRow}><Text>Close</Text></Pressable></View></View></Modal>
+  <Modal visible={optionsOpen} transparent animationType="fade" onRequestClose={()=>setOptionsOpen(false)}><View style={s.overlay}><View style={s.sheet}><Text style={s.sheetTitle}>Playback options</Text><Text style={s.coverage}>Playback animation compresses long stops and missing-data waits. Recorded times and totals stay unchanged.</Text><Text style={s.coverage}>Recorded GPS: {points.length?`${formatDateTime(new Date(routeTime(points[0])))} – ${formatDateTime(new Date(routeTime(points.at(-1)!)))}`:'No recordings'}</Text>
+   {current?.address?<Text style={s.coverage}>{current.address}{current.address_attribution?` · ${current.address_attribution}`:''}</Text>:null}
+   <Pressable accessibilityRole="button" accessibilityLabel="Next recording" disabled={!points.length} onPress={()=>{seekTo(Math.min(index+1,points.length-1));setOptionsOpen(false);}} style={s.sheetRow}><Text>Next recording</Text><Feather name="skip-forward" size={20} color="#087ca7"/></Pressable>
+   <Pressable accessibilityRole="button" accessibilityLabel="Fit recorded route" disabled={!points.length} onPress={()=>{setFollow(false);fitRoute();setOptionsOpen(false);}} style={s.sheetRow}><Text>Fit recorded route</Text><Feather name="maximize" size={20} color="#087ca7"/></Pressable>
+   <Pressable accessibilityRole="button" accessibilityLabel="Refresh GPS history" disabled={query.isFetching||!range} onPress={()=>{setPlaying(false);void query.refetch();setOptionsOpen(false);}} style={s.sheetRow}><Text>Refresh GPS history</Text><Feather name="refresh-cw" size={20} color="#087ca7"/></Pressable>
+   {points.length>=50000?<Text style={s.coverage}>Recording limit reached. Select a shorter date range.</Text>:null}
+   <Pressable onPress={()=>setOptionsOpen(false)} style={s.sheetRow}><Text>Close</Text></Pressable>
+  </View></View></Modal>
+ </SafeAreaView>;
+}
+const s=StyleSheet.create({
+ page:{flex:1,backgroundColor:'#fff'},header:{minHeight:50,flexDirection:'row',alignItems:'center',paddingHorizontal:8,borderBottomWidth:1,borderColor:'#e2e8f0'},back:{padding:8,marginRight:6},title:{fontSize:17,fontWeight:'700',color:'#111'},subtitle:{fontSize:10,color:'#111',marginTop:2},miniStrip:{height:49,flexDirection:'row',borderBottomWidth:1,borderColor:'#ddd'},metric:{flex:1,minWidth:0,justifyContent:'center',alignItems:'center',paddingHorizontal:3,paddingVertical:4,borderRightWidth:1,borderColor:'#e2e8f0'},mini:{paddingVertical:2},metricHeading:{flexDirection:'row',alignItems:'center',gap:3,width:'100%',justifyContent:'center'},metricLabel:{fontSize:10,fontWeight:'700',color:'#111',flexShrink:1},metricValue:{fontSize:11,fontWeight:'600',color:'#111',marginTop:1},mapContainer:{flex:1,minHeight:140,position:'relative'},map:{position:'absolute',top:0,right:0,bottom:0,left:0},empty:{flex:1,justifyContent:'center',alignItems:'center',gap:12,padding:30,backgroundColor:'#edf2f4'},emptyText:{color:'#64748b',textAlign:'center'},link:{color:'#087ca7',padding:8,fontWeight:'600'},mapTools:{position:'absolute',right:8,top:10,gap:5},mapButton:{width:36,height:36,borderRadius:18,backgroundColor:'rgba(255,255,255,.94)',alignItems:'center',justifyContent:'center',elevation:2},speedTag:{position:'absolute',bottom:12,right:10,width:38,height:38,borderRadius:19,backgroundColor:'#ed0505',alignItems:'center',justifyContent:'center',elevation:4},speedText:{fontSize:14,fontWeight:'800',color:'white'},bottom:{backgroundColor:'white',borderTopWidth:1,borderColor:'#ddd'},transport:{height:43,flexDirection:'row',alignItems:'center',paddingHorizontal:8,gap:5},trackTouch:{flex:1,height:40,justifyContent:'center',paddingHorizontal:3},track:{height:3,backgroundColor:'#e5e7eb',borderRadius:2},progress:{height:3,backgroundColor:'#ef0000'},thumb:{position:'absolute',top:-4,width:11,height:11,borderRadius:6,backgroundColor:'#ef0000'},play:{width:30,height:30,borderRadius:15,backgroundColor:'#78c800',alignItems:'center',justifyContent:'center'},control:{width:34,height:40,alignItems:'center',justifyContent:'center'},overlay:{flex:1,backgroundColor:'rgba(0,0,0,.55)',justifyContent:'center',alignItems:'center',padding:20},dialog:{width:'100%',maxWidth:360,maxHeight:'90%',backgroundColor:'white',borderRadius:3,overflow:'hidden'},redHeader:{height:48,backgroundColor:'#ed0505',alignItems:'center',justifyContent:'center'},dialogPlate:{color:'white',fontSize:15,fontWeight:'700'},form:{paddingHorizontal:16,paddingTop:16},fieldLabel:{color:'#ef9a00',fontSize:14,fontStyle:'italic',fontWeight:'700',marginBottom:6},inputRow:{flexDirection:'row',alignItems:'center',gap:4},input:{fontSize:15,color:'#111',borderBottomWidth:1,borderColor:'#555',paddingVertical:6,minWidth:0},pickerButton:{padding:3},dialogActions:{borderTopWidth:1,borderColor:'#ddd',marginTop:4,paddingVertical:8,flexDirection:'row',justifyContent:'center',gap:16},dialogAction:{width:44,height:44,justifyContent:'center',alignItems:'center'},error:{fontSize:12,color:'#b91c1c',paddingVertical:8},sheet:{width:'100%',maxWidth:360,backgroundColor:'white',borderRadius:12,padding:16},sheetTitle:{fontSize:17,fontWeight:'700',marginBottom:10},sheetRow:{minHeight:46,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:'#eee'},coverage:{fontSize:12,color:'#64748b',paddingVertical:6},
 });

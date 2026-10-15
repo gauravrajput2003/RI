@@ -6,7 +6,8 @@ import Profile from '../app/(app)/profile';
 import Subscription from '../app/(app)/subscription';
 import { vehicleDetails } from '../features/profile/vehicle-details';
 import { demoVehicleDetails } from '../features/demo/data';
-const boundary=vi.hoisted(()=>({demoMode:false,vehicles:{data:{data:[] as unknown[]} as {data:unknown[]}|undefined,isLoading:false,isError:false,refetch:vi.fn()},subscriptions:{data:[] as unknown[],isLoading:false,isError:false,refetch:vi.fn()}}));
+import {router} from 'expo-router';
+const boundary=vi.hoisted(()=>({demoMode:false,params:{} as {mode?:string},vehicles:{data:{data:[] as unknown[]} as {data:unknown[]}|undefined,isLoading:false,isError:false,refetch:vi.fn()},subscriptions:{data:[] as unknown[],isLoading:false,isError:false,refetch:vi.fn()}}));
 vi.mock('../constants/config',()=>({config:boundary}));
 vi.mock('../features/vehicles/queries',()=>({useVehicles:()=>boundary.vehicles}));
 vi.mock('@tanstack/react-query',()=>({useQuery:()=>boundary.subscriptions}));
@@ -17,7 +18,7 @@ vi.mock('../store/authStore',()=>({useAuthStore:{getState:()=>({setTokens:vi.fn(
 vi.mock('../components/fleet/VehicleActions',()=>({VehicleActions:()=>null}));
 vi.mock('../components/fleet/ShareSheet',()=>({ShareSheet:()=>null}));
 vi.mock('../services/api/subscriptions',()=>({getSubscriptions:vi.fn()}));
-vi.mock('expo-router',()=>({router:{push:vi.fn(),back:vi.fn(),replace:vi.fn()}}));
+vi.mock('expo-router',()=>({router:{push:vi.fn(),back:vi.fn(),replace:vi.fn()},useLocalSearchParams:()=>boundary.params}));
 vi.mock('@expo/vector-icons',()=>({Feather:'Icon',MaterialCommunityIcons:'Icon',FontAwesome6:'Icon'}));
 vi.mock('../components/fleet/VehicleVisual',()=>({VehicleVisual:'VehicleVisual'}));
 vi.mock('../components/fleet/Sheet',()=>({NoticeSheet:()=>null}));
@@ -28,8 +29,25 @@ vi.mock('react-native',async()=>{
 });
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
 async function render(component:React.ReactElement){let tree!:ReactTestRenderer;await act(async()=>{tree=create(component)});const result=JSON.stringify(tree.toJSON());await act(async()=>tree.unmount());return result}
-beforeEach(()=>{boundary.demoMode=false;boundary.vehicles.data={data:[]};boundary.vehicles.isLoading=false;boundary.vehicles.isError=false;boundary.subscriptions.data=[];boundary.subscriptions.isLoading=false;boundary.subscriptions.isError=false});
+beforeEach(()=>{boundary.params={};boundary.demoMode=false;boundary.vehicles.data={data:[]};boundary.vehicles.isLoading=false;boundary.vehicles.isError=false;boundary.subscriptions.data=[];boundary.subscriptions.isLoading=false;boundary.subscriptions.isError=false});
 describe('real-mode user-facing data',()=>{
+  it('passes each latest server status to list artwork and opens history directly in playback mode',async()=>{
+    const base={vehicle_number:'REAL-BIKE',alias:null,odometer:null,vehicle_type:'Bike',active:true,status_checked_at:'2026-10-14T05:00:00Z'};
+    boundary.vehicles.data={data:[
+      {...base,id:'running-test',state:'STOPPED',latestLocation:{state:'MOVING',current_speed:15,server_received_at:'2026-10-14T05:01:00Z',status_checked_at:'2026-10-14T05:01:00Z'}},
+      {...base,id:'idle-test',state:'IDLE'},
+      {...base,id:'stopped-test',state:'STOPPED'},
+      {...base,id:'offline-test',state:'OFFLINE'},
+    ]};
+    boundary.params={mode:'playback'};let tree!:ReactTestRenderer;
+    await act(async()=>{tree=create(<Vehicles/>);});
+    const visuals=tree.root.findAllByType('VehicleVisual' as React.ElementType);
+    expect(visuals.map(item=>item.props.state)).toEqual(['MOVING','IDLE','STOPPED','OFFLINE']);
+    const selection=tree.root.findAllByProps({accessibilityLabel:'Playback for REAL-BIKE'})[0];
+    await act(async()=>selection.props.onPress());
+    expect(router.push).toHaveBeenCalledWith({pathname:'/(app)/playback',params:{vehicleId:'running-test',vehicleNumber:'REAL-BIKE'}});
+    await act(async()=>tree.unmount());
+  });
   it('preserves the assigned web vehicle type when selecting mobile list artwork',()=>{
     for(const [type,visual] of [['Scooty','scooter'],['Motor bike','bike'],['Truck','truck'],['Bus','bus'],['Car','car'],['Van','van']] as const){
       expect(vehicleDetails([{id:'real',vehicle_number:'REAL',alias:null,odometer:null,vehicle_type:type,active:true}],false)[0].visual).toBe(visual);

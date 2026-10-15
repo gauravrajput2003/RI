@@ -9,6 +9,7 @@ coverage/
 
 .expo/
 .expo-export/
+.expo-dev-export/
 
 # Phone push configuration and private signing credentials
 apps/mobile/google-services.json

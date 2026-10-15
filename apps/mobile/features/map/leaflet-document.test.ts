@@ -1,24 +1,41 @@
 import {Script,runInNewContext} from 'node:vm';
 import {it,expect,vi} from 'vitest';
 import {mapHtml} from './leaflet-document';
+import {getVehicleSvg} from '../../utils/vehicleIcons';
 it('bundles executable Leaflet offline and retains attribution without Google services',()=>{
  const html=mapHtml();const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match=>match[1]);
  expect(scripts).toHaveLength(2);for(const source of scripts)expect(()=>new Script(source)).not.toThrow();
  expect(html).toContain('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
  expect(html).toContain('OpenStreetMap');expect(html).not.toMatch(/<script[^>]+src=/);
 });
-it('moves existing markers, preserves the route during marker updates, and removes stale layers',()=>{
+it('renders centered inline SVGs and rotates or moves a marker without replacing its SVG',()=>{
  const sources=[...mapHtml().matchAll(/<script>([\s\S]*?)<\/script>/g)];
- const marker={addTo:vi.fn().mockReturnThis(),on:vi.fn(),setLatLng:vi.fn(),setIcon:vi.fn(),getPopup:()=>false,bindPopup:vi.fn()};
- const line={addTo:vi.fn().mockReturnThis(),setLatLngs:vi.fn()};
+ const element={style:{transform:''}},marker={addTo:vi.fn().mockReturnThis(),on:vi.fn(),setLatLng:vi.fn(),setIcon:vi.fn(),setZIndexOffset:vi.fn(),getElement:()=>({firstElementChild:element})};
  const map={fitBounds:vi.fn(),on:vi.fn(),removeLayer:vi.fn(),invalidateSize:vi.fn()};
- const L={map:()=>map,tileLayer:()=>({addTo:()=>({on:vi.fn()})}),marker:vi.fn(()=>marker),polyline:vi.fn(()=>line),divIcon:(x:unknown)=>x,latLngBounds:(x:unknown)=>x};
+ const L={map:()=>map,tileLayer:()=>({addTo:()=>({on:vi.fn()})}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),divIcon:(x:unknown)=>x};
  const window={ReactNativeWebView:{postMessage:vi.fn()},fleetReceive:undefined as undefined|((message:unknown)=>void)};
  runInNewContext(sources[1][1],{L,window,setTimeout:vi.fn()});
- const point={kind:'marker',coordinate:{latitude:28,longitude:76},title:'<img src=x onerror=alert(1)>'};
+ const point={kind:'marker',coordinate:{latitude:28,longitude:76},svg:getVehicleSvg('car','running'),iconSize:[36,68],rotation:0};
+ window.fleetReceive!({type:'layers',layers:[['car',point]]});
+ expect(L.marker.mock.calls[0][1]).toMatchObject({icon:{className:'',iconAnchor:[18,34],iconSize:[36,68],html:expect.stringContaining('#22c55e')}});
+ window.fleetReceive!({type:'updates',layers:[['car',{...point,coordinate:{latitude:29,longitude:76},rotation:90}]],removed:[]});
+ expect(marker.setIcon).not.toHaveBeenCalled();expect(element.style.transform).toBe('rotate(90deg)');expect(L.marker).toHaveBeenCalledOnce();
+ window.fleetReceive!({type:'updates',layers:[['car',{...point,svg:getVehicleSvg('car','idle')}]],removed:[]});
+ expect(marker.setIcon).toHaveBeenCalledOnce();
+});
+it('moves existing markers, preserves the route during marker updates, and removes stale layers',()=>{
+ const sources=[...mapHtml().matchAll(/<script>([\s\S]*?)<\/script>/g)];
+ const marker={addTo:vi.fn().mockReturnThis(),on:vi.fn(),setLatLng:vi.fn(),setIcon:vi.fn(),setZIndexOffset:vi.fn(),getPopup:()=>false,bindPopup:vi.fn()};
+ const line={addTo:vi.fn().mockReturnThis(),setLatLngs:vi.fn()};
+ const map={fitBounds:vi.fn(),on:vi.fn(),removeLayer:vi.fn(),invalidateSize:vi.fn()};
+ const L={map:()=>map,tileLayer:()=>({addTo:()=>({on:vi.fn()})}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),polyline:vi.fn(()=>line),divIcon:(x:unknown)=>x,latLngBounds:(x:unknown)=>x};
+ const window={ReactNativeWebView:{postMessage:vi.fn()},fleetReceive:undefined as undefined|((message:unknown)=>void)};
+ runInNewContext(sources[1][1],{L,window,setTimeout:vi.fn()});
+ const point={kind:'marker',coordinate:{latitude:28,longitude:76},title:'<img src=x onerror=alert(1)>',iconType:'bike',zIndexOffset:3000,color:'#22c55e'};
  window.fleetReceive!({type:'layers',layers:[['bike',point],['route',{kind:'line',coordinates:[point.coordinate]}]]});
  window.fleetReceive!({type:'updates',layers:[['bike',{...point,coordinate:{latitude:29,longitude:77}}]],removed:[]});
  expect(L.marker).toHaveBeenCalledOnce();expect(marker.setLatLng).toHaveBeenCalledWith([29,77]);
+ expect(L.marker.mock.calls[0][1]).toMatchObject({zIndexOffset:3000,icon:expect.objectContaining({iconSize:[42,58]})});expect(marker.setZIndexOffset).toHaveBeenCalledWith(3000);
  expect(marker.bindPopup).toHaveBeenCalledWith('&lt;img src=x onerror=alert(1)&gt;');
  expect(L.polyline).toHaveBeenCalledOnce();expect(line.setLatLngs).not.toHaveBeenCalled();
  expect(map.removeLayer).not.toHaveBeenCalled();

@@ -6,7 +6,7 @@ import { ShareSheet } from '../../components/fleet/ShareSheet';
 import { useAccount } from '../../services/api/mobile';
 import { capabilities } from '../../features/account/capabilities';
 import { useLiveVehicleStore } from '../../store/liveVehicleStore';
-import { router } from 'expo-router';
+import { router,useLocalSearchParams } from 'expo-router';
 import { VehicleVisual } from '../../components/fleet/VehicleVisual';
 import { vehicleDetails } from '../../features/profile/vehicle-details';
 import { Loading, ErrorState } from '../../components/StateViews';
@@ -15,6 +15,8 @@ import { config } from '../../constants/config';
 import type { VehicleCardDetail } from '../../features/profile/types';
 
 export default function VehiclesScreen() {
+  const {mode}=useLocalSearchParams<{mode?:string}>();
+  const playback=mode==='playback';
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const account=useAccount(),caps=capabilities(account.data);
@@ -36,9 +38,9 @@ export default function VehiclesScreen() {
   }, [vehicles, search]);
 
   const renderCard = ({ item }: { item: VehicleCardDetail }) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${item.vehicle_number}`} onPress={()=>setSelected(item)} style={styles.card}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${playback?'Playback':'Actions'} for ${item.vehicle_number}`} onPress={()=>playback?router.push({pathname:'/(app)/playback',params:{vehicleId:item.id,vehicleNumber:item.vehicle_number}}):setSelected(item)} style={styles.card}>
       <View style={styles.cardHeader}>
-        <VehicleVisual visual={item.visual} />
+        <VehicleVisual visual={item.visual} state={item.state} />
         <View style={styles.headerRight}>
           <Text style={styles.plateText}>{item.vehicle_number}</Text>
           <Text style={styles.timestampText}>{item.timestamp}</Text>
@@ -105,7 +107,7 @@ export default function VehiclesScreen() {
         >
           <Feather name="arrow-left" size={24} color="#111" />
         </Pressable>
-        <Text style={styles.headerTitle}>Vehicle List</Text>
+        <Text style={styles.headerTitle}>{playback?'Select vehicle for playback':'Vehicle List'}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Toggle search"
@@ -138,7 +140,7 @@ export default function VehiclesScreen() {
         ListEmptyComponent={<Text style={styles.empty}>{search.trim() ? 'No vehicles match your search.' : 'No vehicles available.'}</Text>}
         ListFooterComponent={query.hasNextPage?<Pressable accessibilityRole="button" disabled={query.isFetchingNextPage} onPress={()=>void query.fetchNextPage()} style={{padding:16,alignItems:'center'}}><Text>Load more vehicles</Text></Pressable>:null}
       />}
-      {caps.addVehicle?<Pressable accessibilityRole="button" accessibilityLabel="Add Vehicle" onPress={()=>router.push('/(app)/add-vehicle')} style={{position:'absolute',bottom:28,right:20,minWidth:52,minHeight:52,alignItems:'center',justifyContent:'center',backgroundColor:'#fff',borderRadius:28,elevation:4}}><FontAwesome6 name="circle-plus" size={48} color="#ee0509"/></Pressable>:null}
+      {caps.addVehicle&&!playback?<Pressable accessibilityRole="button" accessibilityLabel="Add Vehicle" onPress={()=>router.push('/(app)/add-vehicle')} style={{position:'absolute',bottom:28,right:20,minWidth:52,minHeight:52,alignItems:'center',justifyContent:'center',backgroundColor:'#fff',borderRadius:28,elevation:4}}><FontAwesome6 name="circle-plus" size={48} color="#ee0509"/></Pressable>:null}
       <VehicleActions vehicle={selected} onClose={()=>setSelected(null)} onShare={()=>{setShare(selected);setSelected(null)}}/>
       <ShareSheet vehicleNumber={share?.vehicle_number??null} vehicleId={share?.id} onClose={()=>setShare(null)}/>
     </View>

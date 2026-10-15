@@ -8,11 +8,16 @@ import {
   formatDuration,
   calculateRouteStats,
   generateDemoHistory,
-  normalizeRoute, routeIndex, routeTime,
+  normalizeRoute, routeIndex, routeTime,seekRecording,coveredDistances,
 } from './route';
 import type { Location } from '../../types/models';
 
 describe('route utilities and math', () => {
+  it('seeks by recorded time rather than pretending sparse points have equal intervals',()=>{
+    const points=[0,10,100].map((seconds,index)=>({latitude:28+index*.001,longitude:76,speed:10,server_received_at:new Date(Date.UTC(2026,9,14)+seconds*1000).toISOString()}));
+    expect(seekRecording(points,.5)).toBe(1);expect(seekRecording(points,1)).toBe(2);expect(seekRecording(points,-1)).toBe(0);
+    const distances=coveredDistances(points);expect(distances[0]).toBe(0);expect(distances[2]).toBeCloseTo(calculateRouteStats(points).kmTravelled);
+  });
   it('computes haversine distance correctly', () => {
     // Distance between Delhi (28.6139, 77.2090) and Rohtak (28.8955, 76.6066) ~ 66 km
     const dist = haversineDistance(28.6139, 77.2090, 28.8955, 76.6066);
@@ -43,6 +48,8 @@ describe('route utilities and math', () => {
     expect(parseDateTime('32/09/2026', '00:00')).toBeNull();
     expect(parseDateTime('13/13/2026', '00:00')).toBeNull();
     expect(parseDateTime('invalid', '00:00')).toBeNull();
+    expect(parseDateTime('14abc/09/2026', '00:00')).toBeNull();
+    expect(parseDateTime('14/09/2026', '12:00junk')).toBeNull();
     expect(parseDateTime('13/09/2026', '25:00')).toBeNull();
     expect(parseDateTime('13/09/2026', '12:65')).toBeNull();
     expect(parseDateTime('13/09/2026', 'not-a-time')).toBeNull();

@@ -31,6 +31,7 @@ export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2
  * Returns null if the input format or date values are invalid.
  */
 export function parseDateTime(dateStr: string, timeStr: string): Date | null {
+  if(!/^\d{1,2}[/.-]\d{1,2}[/.-]\d{4}$/.test(dateStr.trim())||!/^\d{1,2}:\d{2}(:\d{2})?$/.test(timeStr.trim()))return null;
   const dateParts = dateStr.trim().split(/[/.-]/);
   if (dateParts.length !== 3) return null;
   const [dayStr, monthStr, yearStr] = dateParts;
@@ -108,6 +109,22 @@ export function routeIndex(points: Location[], time: number): number {
     else high = middle - 1;
   }
   return result;
+}
+
+export function seekRecording(points:Location[],fraction:number){
+ if(points.length<2)return 0;
+ const clamped=Math.max(0,Math.min(1,Number.isFinite(fraction)?fraction:0));
+ return routeIndex(points,routeTime(points[0])+(routeTime(points[points.length-1])-routeTime(points[0]))*clamped);
+}
+export function coveredDistances(points:Location[]){
+ let total=0;
+ return points.map((point,index)=>{
+  if(index){const previous=points[index-1],seconds=(routeTime(point)-routeTime(previous))/1000;
+   const distance=haversineDistance(previous.latitude!,previous.longitude!,point.latitude!,point.longitude!);
+   if(seconds>0&&distance<=seconds*(200/3600)&&(distance>=.01||(point.speed??0)>5||(previous.speed??0)>5))total+=distance;
+  }
+  return Math.round(total*100)/100;
+ });
 }
 
 /**
