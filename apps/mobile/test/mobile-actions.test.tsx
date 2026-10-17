@@ -15,6 +15,7 @@ vi.mock('../constants/config',()=>({config:{demoMode:false}}));
 vi.mock('expo-router',()=>({router:{push:vi.fn(),replace:vi.fn(),back:vi.fn()}}));
 vi.mock('@expo/vector-icons',()=>({Feather:'Icon',FontAwesome6:'Icon',MaterialCommunityIcons:'Icon'}));
 vi.mock('../components/fleet/Sheet',()=>({Sheet:({visible,children}:{visible:boolean;children:React.ReactNode})=>visible?<>{children}</>:null,NoticeSheet:()=>null}));
+vi.mock('../components/fleet/NearbySheet',()=>({NearbySheet:(props:Record<string,unknown>)=>React.createElement('Nearby',props)}));
 vi.mock('../components/fleet/StreetViewSheet',()=>({StreetViewSheet:(props:Record<string,unknown>)=>React.createElement('StreetView',props)}));
 vi.mock('react-native',()=>({View:'View',Text:'Text',Pressable:'Pressable',ScrollView:'ScrollView',TextInput:'TextInput',KeyboardAvoidingView:'KeyboardAvoidingView',ActivityIndicator:'ActivityIndicator',Platform:{OS:'android'},StyleSheet:{create:(s:unknown)=>s}}));
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
@@ -28,4 +29,9 @@ it('opens Street View for the selected vehicle through existing list actions',as
  const close=vi.fn(),r=await render(<VehicleActions vehicle={{id:'vehicle-id',vehicle_number:'OWN'}} onClose={close} onShare={vi.fn()}/>);
  await act(async()=>r.tree.root.findByProps({accessibilityLabel:'Street View'}).props.onPress());
  expect(close).toHaveBeenCalledOnce();expect(r.tree.root.findByType('StreetView' as React.ElementType).props.vehicle).toEqual({id:'vehicle-id',vehicle_number:'OWN'});await r.close();
+});
+it('opens Nearby for the same selected vehicle through list actions',async()=>{
+ const close=vi.fn(),r=await render(<VehicleActions vehicle={{id:'vehicle-id',vehicle_number:'OWN'}} onClose={close} onShare={vi.fn()}/>);
+ await act(async()=>r.tree.root.findByProps({accessibilityLabel:'Nearby'}).props.onPress());
+ expect(close).toHaveBeenCalledOnce();expect(r.tree.root.findByType('Nearby' as React.ElementType).props.vehicle.id).toBe('vehicle-id');await r.close();
 });

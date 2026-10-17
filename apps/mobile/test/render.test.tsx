@@ -11,6 +11,7 @@ const boundary = vi.hoisted(() => ({ animate: vi.fn(), renders: new Map<string, 
   { id: 'a', vehicle_number: 'A', alias: null, vehicle_type: null, odometer: null, active: true },
   { id: 'b', vehicle_number: 'B', alias: null, vehicle_type: null, odometer: null, active: true },
 ] }));
+vi.mock('../components/fleet/NearbySheet',()=>({NearbySheet:(props:Record<string,unknown>)=>React.createElement('Nearby',props)}));
 vi.mock('../components/fleet/StreetViewSheet',()=>({StreetViewSheet:(props:Record<string,unknown>)=>React.createElement('StreetView',props)}));
 vi.mock('react-native', () => ({ View: 'View', Text: 'Text', Pressable: 'Pressable', ActivityIndicator: 'ActivityIndicator', StyleSheet: { create: (styles: unknown) => styles } }));
 vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
@@ -49,6 +50,9 @@ describe('rendered mobile integration (native UI boundaries only mocked)', () =>
     expect(tree.root.findAllByType('Marker' as React.ElementType)[0].props.pinColor).toBe('#3b82f6');
     expect(tree.root.findAllByType('Marker' as React.ElementType)[0].props.zIndexOffset).toBe(1000);
     expect(useVehicleStore.getState().selectedVehicleId).toBe('a'); expect(boundary.animate).toHaveBeenCalledOnce();
+    await act(async()=>tree.root.findByProps({accessibilityLabel:'Selected vehicle Nearby'}).props.onPress());
+    expect(tree.root.findByType('Nearby' as React.ElementType).props.vehicle.id).toBe('a');
+    await act(async()=>tree.root.findByType('Nearby' as React.ElementType).props.onClose());
     await act(async()=>tree.root.findByProps({accessibilityLabel:'Selected vehicle Street View'}).props.onPress());
     expect(tree.root.findByType('StreetView' as React.ElementType).props.vehicle.id).toBe('a');
     await act(async()=>tree.root.findByType('StreetView' as React.ElementType).props.onClose());

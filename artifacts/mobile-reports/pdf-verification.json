@@ -1,0 +1,14 @@
+[
+  {
+    "report": "distance",
+    "pdfValid": true,
+    "valueAndFilterTextVerified": true,
+    "pages": 1
+  },
+  {
+    "report": "travel-summary",
+    "pdfValid": true,
+    "valueAndFilterTextVerified": true,
+    "pages": 1
+  }
+]

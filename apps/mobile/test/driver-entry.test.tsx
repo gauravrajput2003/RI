@@ -1,0 +1,32 @@
+import React from 'react';
+import {act,create,type ReactTestRenderer} from 'react-test-renderer';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {expect,it,vi} from 'vitest';
+import Dashboard from '../app/(app)/index';
+const mock=vi.hoisted(()=>({vehicles:[{id:'vehicle-a',vehicle_number:'FIRST',alias:null,vehicle_type:'bike',odometer:null,active:true},{id:'vehicle-b',vehicle_number:'SECOND',alias:null,vehicle_type:'car',odometer:null,active:true}],live:{byVehicleId:{}}}));
+vi.mock('../components/fleet/Header',()=>({FleetHeader:()=>null}));
+vi.mock('../components/fleet/BikeCard',()=>({BikeCard:(props:Record<string,unknown>)=>React.createElement('BikeCard',props)}));
+vi.mock('../components/fleet/DriverSheet',()=>({DriverSheet:(props:Record<string,unknown>)=>React.createElement('DriverSheet',props)}));
+vi.mock('../components/fleet/NearbySheet',()=>({NearbySheet:()=>null}));
+vi.mock('../components/fleet/StreetViewSheet',()=>({StreetViewSheet:()=>null}));
+vi.mock('../components/fleet/ShareSheet',()=>({ShareSheet:()=>null}));
+vi.mock('../components/fleet/Sheet',()=>({Sheet:({visible,children}:{visible:boolean;children:React.ReactNode})=>visible?<>{children}</>:null,NoticeSheet:()=>null}));
+vi.mock('../features/vehicles/queries',()=>({useVehicles:()=>({data:{data:mock.vehicles}}),useLatestLocation:()=>({data:null})}));
+vi.mock('../store/liveVehicleStore',()=>({useLiveVehicleStore:(select:(state:typeof mock.live)=>unknown)=>select(mock.live)}));
+vi.mock('../services/api/mobile',()=>({useAccount:()=>({data:{role:'CLIENT',permissions:[]}})}));
+vi.mock('../services/api/announcements',()=>({announcementInboxKey:['inbox']}));
+vi.mock('../constants/config',()=>({config:{demoMode:false}}));
+vi.mock('@expo/vector-icons',()=>({FontAwesome6:'Icon'}));
+vi.mock('expo-router',()=>({router:{push:vi.fn()}}));
+vi.mock('react-native',()=>({View:'View',Text:'Text',Pressable:'Pressable',TextInput:'TextInput',ScrollView:'ScrollView',ActivityIndicator:'ActivityIndicator',StyleSheet:{create:(s:unknown)=>s},FlatList:({data,renderItem}:{data:unknown[];renderItem:(i:{item:unknown})=>React.ReactNode})=><>{data.map((item,index)=><React.Fragment key={index}>{renderItem({item})}</React.Fragment>)}</>}));
+Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+it('the existing dashboard Driver icon opens the red-modal workflow for the selected actual vehicle ID',async()=>{
+ const cache=new QueryClient();let tree!:ReactTestRenderer;await act(async()=>{tree=create(<QueryClientProvider client={cache}><Dashboard/></QueryClientProvider>)});
+ for(const [index,id] of ['vehicle-a','vehicle-b'].entries()){
+  await act(async()=>tree.root.findAllByType('BikeCard' as React.ElementType)[index].props.onPress());
+  await act(async()=>tree.root.findByProps({accessibilityLabel:'Driver'}).props.onPress());
+  expect(tree.root.findByType('DriverSheet' as React.ElementType).props.vehicle.id).toBe(id);
+  await act(async()=>tree.root.findByType('DriverSheet' as React.ElementType).props.onClose());expect(tree.root.findByType('DriverSheet' as React.ElementType).props.vehicle).toBeNull();
+ }
+ await act(async()=>tree.unmount());cache.clear();
+});

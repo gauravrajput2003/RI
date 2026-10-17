@@ -17,6 +17,7 @@ export default function Profile(){
  const name=demo?.name??account.data?.name??account.data?.username??(account.isLoading?'Loading profile…':'Profile unavailable');
  const entries:Entry[]=[
   ...(caps.dashboard||demo?[{label:'Dashboard',icon:'monitor-dashboard' as const,path:'/(app)' as Href}]:[]),
+  ...(caps.vehicles||caps.dashboard?[{label:'Driver List',icon:'account-tie' as const,path:{pathname:'/(app)/drivers',params:{vehicleId:'',vehicleNumber:''}} as Href}]:[]),
   ...(caps.playback||demo?[{label:'Playback',icon:'map-marker-path' as const,path:{pathname:'/(app)/vehicles',params:{mode:'playback'}} as Href}]:[]),
   ...(caps.announcements?[{label:'Announcement',icon:'bullhorn-outline' as const,path:'/(app)/announcements' as Href}]:[]),
   {label:'Privacy Policy',icon:'shield-check',notice:'Privacy policy unavailable.'},

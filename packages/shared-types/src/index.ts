@@ -15,3 +15,6 @@ export interface NormalizedDeviceStatus { deviceId:string|null; protocol:DeviceP
 
 export * from './geofences.js';
 export * from './permissions.js';
+export * from './nearby.js';
+export * from './drivers.js';
+export * from './mobile-reports.js';

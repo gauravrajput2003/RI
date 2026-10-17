@@ -1,0 +1,12 @@
+import {Router,type Router as RouterType,type Response,type NextFunction} from 'express';
+import rateLimit from 'express-rate-limit';
+import {z} from 'zod';
+import {nearbyCategoryIds} from '@fleet/shared-types';
+import type {AuthRequest} from '../middleware/auth.js';
+import {nearbySearch,nearbyDetails} from '../modules/nearby/service.js';
+const route=(fn:(req:AuthRequest,res:Response)=>Promise<void>)=>(req:AuthRequest,res:Response,next:NextFunction)=>fn(req,res).catch(next);
+export const nearbyApi:RouterType=Router();
+const limit=rateLimit({windowMs:60000,max:30,keyGenerator:req=>(req as AuthRequest).user!.id,standardHeaders:true,legacyHeaders:false,message:{success:false,error:{code:'RATE_LIMITED',message:'Too many nearby requests. Please wait a minute and retry.'}}});
+const search=z.object({category:z.enum(nearbyCategoryIds),radius:z.coerce.number().int().min(500).max(10000).default(5000)}).strict();
+nearbyApi.get('/vehicles/:id/nearby',limit,route(async(req,res)=>{const q=search.parse(req.query),id=z.string().uuid().parse(req.params.id);res.set('Cache-Control','no-store');res.json({success:true,data:await nearbySearch(req.user!.id,id,q.category,q.radius)})}));
+nearbyApi.get('/vehicles/:id/nearby/details',limit,route(async(req,res)=>{const q=z.object({category:z.enum(nearbyCategoryIds),placeId:z.string().min(1).max(600)}).strict().parse(req.query);res.set('Cache-Control','no-store');res.json({success:true,data:await nearbyDetails(req.user!.id,z.string().uuid().parse(req.params.id),q.category,q.placeId)})}));

@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { router,useLocalSearchParams } from 'expo-router';
 import { FleetHeader } from '../../components/fleet/Header';
 import { NoticeSheet } from '../../components/fleet/Sheet';
 import { searchReports } from '../../features/reports/catalog';
 import { config } from '../../constants/config';
 export default function Reports() {
   const [search, setSearch] = useState(''); const [list, setList] = useState(false); const [message, setMessage] = useState<string | null>(null);
-  const { vehicleNumber } = useLocalSearchParams<{ vehicleNumber?: string }>();
+  const { vehicleNumber,vehicleId } = useLocalSearchParams<{ vehicleNumber?: string;vehicleId?:string }>();
   const reports = useMemo(() => searchReports(search), [search]);
   return <View style={styles.page}><FleetHeader title="Reports" />
     <View style={styles.searchRow}><View style={styles.searchBox}><Feather name="search" size={24} color="#555" /><TextInput accessibilityLabel="Search reports" value={search} onChangeText={setSearch} placeholder="Search" placeholderTextColor="#888" style={styles.input} /></View>
@@ -16,7 +16,7 @@ export default function Reports() {
     </View>
     {vehicleNumber ? <Text style={styles.context}>Reports for {vehicleNumber}</Text> : null}
     <FlatList key={list ? 'list' : 'grid'} data={reports} numColumns={list ? 1 : 2} keyExtractor={item => item.id} contentContainerStyle={styles.content} columnWrapperStyle={list ? undefined : styles.columns}
-      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={() => setMessage((config.demoMode ? 'Demo preview: ' : '') + item.title + ' needs the reports API. No report has been generated.')} style={[styles.card, list && styles.listCard]}>
+      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={item.title} onPress={() => {if(item.id==='distance'||item.id==='travel'){router.push({pathname:'/(app)/report',params:{kind:item.id==='distance'?'distance':'travel-summary',vehicleId:vehicleId??'',vehicleNumber:vehicleNumber??''}});return;}setMessage((config.demoMode ? 'Demo preview: ' : '') + item.title + ' needs the reports API. No report has been generated.');}} style={[styles.card, list && styles.listCard]}>
         {['distance','travel','idle','stoppage'].includes(item.id) ? <Text style={styles.emoji}>{item.id === 'distance' ? '📝' : item.icon}</Text> : <MaterialCommunityIcons name={item.symbol} size={55} color={item.color} />}
         <Text style={styles.label}>{item.title}</Text></Pressable>}
       ListEmptyComponent={<Text style={styles.empty}>No reports match your search.</Text>} />

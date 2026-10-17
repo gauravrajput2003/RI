@@ -6,6 +6,9 @@ import { FleetHeader } from '../../components/fleet/Header';
 import { BikeCard } from '../../components/fleet/BikeCard';
 import { BikeActions, type BikeAction } from '../../components/fleet/BikeActions';
 import { NoticeSheet } from '../../components/fleet/Sheet';
+import {ReportSheet} from '../../components/fleet/ReportSheet';
+import {DriverSheet} from '../../components/fleet/DriverSheet';
+import {NearbySheet} from '../../components/fleet/NearbySheet';
 import {StreetViewSheet,type StreetVehicle} from '../../components/fleet/StreetViewSheet';
 import { ShareSheet } from '../../components/fleet/ShareSheet';
 import { demoCardExtras, liveCardExtras, fleetFilters, matchesFilter, visibleVehicles, type FleetFilter } from '../../features/dashboard/model';
@@ -29,6 +32,9 @@ export default function Dashboard() {
   const query = useVehicles(); const vehicles = useMemo(() => query.data?.data ?? [], [query.data]);
   const [filter, setFilter] = useState<FleetFilter>('All'); const [search, setSearch] = useState(''); const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<Vehicle | null>(null); const [message, setMessage] = useState<string | null>(null);
+  const [reportVehicle,setReportVehicle]=useState<Vehicle|null>(null);
+  const [driverVehicle,setDriverVehicle]=useState<StreetVehicle|null>(null);
+  const [nearbyVehicle,setNearbyVehicle]=useState<StreetVehicle|null>(null);
   const [streetVehicle,setStreetVehicle]=useState<StreetVehicle|null>(null);
   const [shareVehicle, setShareVehicle] = useState<Vehicle | null>(null);
   const ids = useLiveVehicleStore(useShallow(state => visibleVehicles(vehicles, state.byVehicleId, filter, search).map(vehicle => vehicle.id)));
@@ -42,11 +48,13 @@ export default function Dashboard() {
     const vehicle = selected; setSelected(null);
     if (name === 'Live Map') { useVehicleStore.getState().setSelected(vehicle.id); router.push('/(app)/map'); }
     else if (name === 'Play Back') { router.push({ pathname: '/(app)/playback' as never, params: { vehicleId: vehicle.id, vehicleNumber: vehicle.vehicle_number } }); }
+    else if (name === 'Driver') { setDriverVehicle(vehicle); }
+    else if (name === 'NearBy') { setNearbyVehicle(vehicle); }
     else if (name === 'Street View') { setStreetVehicle(vehicle); }
     else if (name === 'Share') { setShareVehicle(vehicle); }
     else if (name === 'Edit') router.push({pathname:'/(app)/edit-vehicle',params:{vehicleId:vehicle.id}});
     else if (name === 'Notification') router.push({pathname:'/(app)/notifications',params:{vehicleId:vehicle.id}});
-    else if (name === 'Report') router.push({ pathname: '/(app)/reports', params: { vehicleNumber: vehicle.vehicle_number, vehicleId: vehicle.id } });
+    else if (name === 'Report') setReportVehicle(vehicle);
     else setMessage((config.demoMode ? 'Demo preview: ' : '') + name + ' for ' + vehicle.vehicle_number + ' is not connected yet. No command was sent and no data was shared.');
   };
   return <View style={styles.page}><FleetHeader title="Dashboard" onSearch={() => setSearchOpen(!searchOpen)} />
@@ -59,6 +67,9 @@ export default function Dashboard() {
         ListFooterComponent={query.hasNextPage ? <Pressable accessibilityRole="button" disabled={query.isFetchingNextPage} onPress={() => { void query.fetchNextPage(); }} style={styles.more}><Text>Load more vehicles</Text></Pressable> : null} />}
     <BikeActions vehicle={selected?.vehicle_number ?? null} onClose={() => setSelected(null)} onAction={action} />
     <ShareSheet vehicleNumber={shareVehicle?.vehicle_number??null} vehicleId={shareVehicle?.id} onClose={() => setShareVehicle(null)} />
+    <ReportSheet visible={Boolean(reportVehicle)} onClose={()=>setReportVehicle(null)} onSelect={kind=>{if(!reportVehicle)return;const vehicle=reportVehicle;setReportVehicle(null);router.push({pathname:'/(app)/report',params:{kind,vehicleId:vehicle.id,vehicleNumber:vehicle.vehicle_number}});}}/>
+    <DriverSheet vehicle={driverVehicle} onClose={()=>setDriverVehicle(null)}/>
+    <NearbySheet vehicle={nearbyVehicle} onClose={()=>setNearbyVehicle(null)}/>
     <StreetViewSheet vehicle={streetVehicle} onClose={()=>setStreetVehicle(null)} />
     <NoticeSheet message={message} onClose={() => setMessage(null)} />
   </View>;

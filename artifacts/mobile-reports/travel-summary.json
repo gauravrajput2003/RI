@@ -1,0 +1,101 @@
+{
+  "kind": "travel-summary",
+  "vehicle": {
+    "id": "aacfcb9e-30f7-437c-8351-0d8837cce967",
+    "vehicleNumber": "HR12AU6674",
+    "vehicleType": "Bike"
+  },
+  "filters": {
+    "start": "2026-10-12T18:30:00.000Z",
+    "end": "2026-10-15T18:30:00.000Z",
+    "timeZone": "Asia/Kolkata"
+  },
+  "rows": [
+    {
+      "id": "2026-10-13",
+      "date": "2026-10-13",
+      "pointCount": 2,
+      "gpsPointCount": 1,
+      "km": null,
+      "avgSpeed": 0,
+      "maxSpeed": 0,
+      "durationSeconds": 88,
+      "runningSeconds": null,
+      "idleSeconds": null,
+      "stoppedSeconds": null,
+      "unreachableSeconds": 0,
+      "halts": null,
+      "startTime": "2026-10-13T17:05:21.000Z",
+      "endTime": "2026-10-13T17:05:21.000Z",
+      "startLocation": {
+        "latitude": 28.867828888888887,
+        "longitude": 76.59420444444444
+      },
+      "endLocation": {
+        "latitude": 28.867828888888887,
+        "longitude": 76.59420444444444
+      },
+      "startAddress": null,
+      "endAddress": null,
+      "partial": true
+    },
+    {
+      "id": "2026-10-14",
+      "date": "2026-10-14",
+      "pointCount": 270,
+      "gpsPointCount": 265,
+      "km": 78.87373956244001,
+      "avgSpeed": 14.147169811320754,
+      "maxSpeed": 52,
+      "durationSeconds": 57615,
+      "runningSeconds": null,
+      "idleSeconds": null,
+      "stoppedSeconds": null,
+      "unreachableSeconds": 21023,
+      "halts": null,
+      "startTime": "2026-10-14T01:22:53.000Z",
+      "endTime": "2026-10-14T17:23:08.000Z",
+      "startLocation": {
+        "latitude": 28.867715555555556,
+        "longitude": 76.59425777777778
+      },
+      "endLocation": {
+        "latitude": 28.86778222222222,
+        "longitude": 76.59430222222223
+      },
+      "startAddress": null,
+      "endAddress": null,
+      "partial": true
+    },
+    {
+      "id": "2026-10-15",
+      "date": "2026-10-15",
+      "pointCount": 90,
+      "gpsPointCount": 90,
+      "km": 59.81939831901002,
+      "avgSpeed": 24.288888888888888,
+      "maxSpeed": 65,
+      "durationSeconds": 49627,
+      "runningSeconds": null,
+      "idleSeconds": null,
+      "stoppedSeconds": null,
+      "unreachableSeconds": 30718,
+      "halts": null,
+      "startTime": "2026-10-15T03:34:08.000Z",
+      "endTime": "2026-10-15T17:21:15.000Z",
+      "startLocation": {
+        "latitude": 28.867717777777777,
+        "longitude": 76.59415111111112
+      },
+      "endLocation": {
+        "latitude": 28.867764444444443,
+        "longitude": 76.59425777777778
+      },
+      "startAddress": null,
+      "endAddress": null,
+      "partial": true
+    }
+  ],
+  "generatedAt": "2026-10-16T16:43:52.701Z",
+  "snapshotId": null
+}

@@ -76,7 +76,8 @@ beforeEach(async () => {
     await q('INSERT INTO groups(id,name,owner_id) VALUES($1,$2,$3)', [group, label, user]);
     await q("INSERT INTO subscriptions(id,user_id,plan,status) VALUES($1,$2,'test','active')", [subscription, user]);
     await q("INSERT INTO events(id,device_id,vehicle_id,event_type) VALUES($1,$2,$3,'test')", [event, device, vehicle]);
-    await q("INSERT INTO locations(id,device_id,vehicle_id,tracker_timestamp,server_received_at,latitude,longitude,gps_valid,protocol) VALUES($1,$2,$3,'2026-06-01','2026-06-01',20,10,true,'TEST')", [location, device, vehicle]);
+    // A valid production GPS row also has the spatial point required by playback.
+    await q("INSERT INTO locations(id,device_id,vehicle_id,tracker_timestamp,server_received_at,latitude,longitude,gps_valid,position,protocol) VALUES($1,$2,$3,'2026-06-01','2026-06-01',20,10,true,point(10,20),'TEST')", [location, device, vehicle]);
   }
 });
 
@@ -293,13 +294,22 @@ describe('resource authorization with both customers persisted', () => {
     }
   });
   it('requires authentication on every resource route and method', async () => {
-    for (const path of ['/vehicles','/devices','/events','/groups','/subscriptions',`/vehicles/${va}`,`/vehicles/${va}/latest-location`,`/vehicles/${va}/history${historyQuery}`]) {
+    for (const path of ['/vehicles','/devices','/events','/groups','/subscriptions',`/vehicles/${va}`,`/vehicles/${va}/latest-location`,`/vehicles/${va}/history${historyQuery}`,`/vehicles/${va}/nearby?category=atm`,`/vehicles/${va}/nearby/details?category=atm&placeId=test`]) {
       await request(app).get('/api/v1'+path).expect(401);
       await request(app).get('/api/v1'+path).set('Authorization','Bearer invalid').expect(401);
     }
     for (const [method,path] of [['post','/vehicles'],['patch',`/vehicles/${va}`],['delete',`/vehicles/${va}`]] as const) {
       await request(app)[method]('/api/v1'+path).send({}).expect(401);
     }
+  });
+  it('validates Nearby selectors and scopes searches/details before contacting a provider',async()=>{
+    await get(a,`/vehicles/${va}/nearby?category=invalid`).expect(400);
+    await get(a,`/vehicles/${va}/nearby?category=atm&latitude=1&longitude=2`).expect(400);
+    await get(a,`/vehicles/${va}/nearby?category=atm&radius=10001`).expect(400);
+    await get(b,`/vehicles/${va}/nearby?category=atm`).expect(422);
+    await get(b,`/vehicles/${va}/nearby/details?category=atm&placeId=test`).expect(404);
+    await get(a,`/vehicles/${va}/nearby/details?category=atm&placeId=test`).expect(404);
+    await get(a,`/vehicles/${va}/nearby?category=atm`).expect(503); // No provider key in this integration environment.
   });
   it.each([[a,va,b], [b,vb,a]])('rejects client vehicle creation while preserving scoped updates/deletion for %s', async (user, own, other) => {
     await request(app).post('/api/v1/vehicles').set('Authorization',`Bearer ${token(user)}`)

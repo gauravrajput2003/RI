@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {NearbySheet} from '../../components/fleet/NearbySheet';
 import {StreetViewSheet,type StreetVehicle} from '../../components/fleet/StreetViewSheet';
 import MapView, { type Region,type MapHandle } from './LeafletMap';
 import {VehicleMarker} from '../../components/VehicleMarker';
@@ -19,6 +20,7 @@ const LiveVehicleMarker = memo(function LiveVehicleMarker({ id, vehicle, selecte
   return <VehicleMarker vehicle={{id,vehicle_number:vehicle?.vehicle_number,vehicle_type:vehicle?.vehicle_type,latitude:point.latitude,longitude:point.longitude,course:point.course,state:vehicle?stateForVehicle(vehicle,point):point.state,speed:(vehicle?currentSpeedForVehicle(vehicle,point):point.current_speed)??point.speed,ignition:point.ignition,lastSeen:point.last_seen_at??vehicle?.last_seen_at??point.server_received_at}} onPress={select} selected={selected}/>;
 });
 export default function LiveMap() {
+  const [nearbyVehicle,setNearbyVehicle]=useState<StreetVehicle|null>(null);
   const [streetVehicle,setStreetVehicle]=useState<StreetVehicle|null>(null);
   const map = useRef<MapHandle>(null);
   const vehicles = useVehicles();
@@ -50,6 +52,7 @@ export default function LiveMap() {
   </MapView><View style={styles.panel}><Text>{markerIds.length} visible/selected last-known positions</Text>
     {selected ? <Pressable accessibilityRole="button" accessibilityLabel="Toggle follow selected vehicle" onPress={() => useVehicleStore.getState().setFollow(!follow)}><Text style={styles.follow}>{follow ? 'Following selected vehicle' : 'Follow selected vehicle'}</Text></Pressable> : <Text>Select a marker to follow it</Text>}
     {selected&&records.get(selected)?<Pressable accessibilityRole="button" accessibilityLabel="Selected vehicle Street View" onPress={()=>setStreetVehicle(records.get(selected!)!)}><Text style={styles.follow}>Street View · {records.get(selected)?.vehicle_number}</Text></Pressable>:null}
-  </View><StreetViewSheet vehicle={streetVehicle} onClose={()=>setStreetVehicle(null)}/></View>;
+    {selected&&records.get(selected)?<Pressable accessibilityRole="button" accessibilityLabel="Selected vehicle Nearby" onPress={()=>setNearbyVehicle(records.get(selected!)!)}><Text style={styles.follow}>Nearby · {records.get(selected)?.vehicle_number}</Text></Pressable>:null}
+  </View><NearbySheet vehicle={nearbyVehicle} onClose={()=>setNearbyVehicle(null)}/><StreetViewSheet vehicle={streetVehicle} onClose={()=>setStreetVehicle(null)}/></View>;
 }
 const styles = StyleSheet.create({ page: { flex: 1 }, map: { flex: 1 }, panel: { padding: 12, backgroundColor: '#fff', gap: 6 }, follow: { color: '#0f766e', fontWeight: '800' } });

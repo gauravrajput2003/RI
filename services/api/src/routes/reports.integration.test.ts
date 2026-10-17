@@ -16,3 +16,27 @@ describe('vehicle session reports',()=>{it('returns a real running session and u
 describe('vehicle report validation',()=>{it('rejects unsupported status and sort values',async()=>{const base=`?start=2026-09-17T00:00:00.000Z&end=2026-09-18T00:00:00.000Z&timeZone=UTC`;await get('/reports/status'+base+'&status=MADE_UP').expect(400);await get('/reports/running'+base+'&sort=DROP_TABLE').expect(400)})});
 describe('coin distribution report',()=>{const path='/reports/coin-distribution?start=2026-09-17T00:00:00.000Z&end=2026-09-18T00:00:00.000Z';it('returns scoped ledger rows and admin options',async()=>{const token=jwt.sign({id:owner,role:'SUPER_ADMIN'},secret),headers={Authorization:`Bearer ${token}`};const response=await request(app).get('/api/v1'+path).set(headers).expect(200);expect(response.body.data).toEqual([expect.objectContaining({username:'root',counterParty:'regional',amount:'12.00',type:'DISTRIBUTED'})]);expect(response.body.pagination.total).toBe(1);await state.db!.query("UPDATE users SET name='Regional Operator' WHERE id=$1",[admin]);const options=await request(app).get('/api/v1/reports/coin-admins').set(headers).expect(200);expect(options.body.data).toEqual(expect.arrayContaining([{id:admin,label:'Regional Operator'},{id:owner,label:'root'}]))});it('requires an admin role and validates its range',async()=>{const user=randomUUID();await state.db!.query("INSERT INTO users(id,email,password_hash,role,owner_id) VALUES($1,'ordinary@test.local','x','USER',$2)",[user,owner]);await request(app).get('/api/v1'+path).set('Authorization',`Bearer ${jwt.sign({id:user,role:'USER'},secret)}`).expect(403);const token=jwt.sign({id:owner,role:'SUPER_ADMIN'},secret);await request(app).get('/api/v1/reports/coin-distribution?start=2026-09-18&end=2026-09-17').set('Authorization',`Bearer ${token}`).expect(400)})});
 describe('distance report',()=>{it('returns daily columns and recorded vehicle distance for a 30-day window',async()=>{const response=await get('/reports/distance?start=2026-09-01T00:00:00.000Z&end=2026-10-01T00:00:00.000Z&timeZone=UTC').expect(200);expect(response.body.dates).toHaveLength(30);expect(response.body.data).toEqual([expect.objectContaining({vehicleNumber:'OWN-1',distances:expect.objectContaining({'2026-09-17':expect.any(Number)})})]);expect(response.body.data[0].distances['2026-09-17']).toBeGreaterThan(0)})});
+describe('mobile report APIs with isolated database fixtures',()=>{
+ const suffix=`?vehicleId=${vehicle}&start=2026-09-17T00:00:00Z&end=2026-09-18T00:00:00Z&timeZone=UTC`;
+ it('uses scoped persisted rows for both reports and a snapshot for real PDF/XLSX exports',async()=>{
+  // PGlite has no PostGIS: the point distance operator stands in only at this test boundary.
+  await state.db!.exec('CREATE OR REPLACE FUNCTION ST_Distance(point,point) RETURNS double precision LANGUAGE sql IMMUTABLE AS $$ SELECT $1 <-> $2 $$');
+  await state.db!.exec('UPDATE locations SET position=point(longitude,latitude)');
+  const distance=await get('/reports/mobile/distance'+suffix).expect(200),travel=await get('/reports/mobile/travel-summary'+suffix).expect(200);
+  expect(distance.body.data.rows).toHaveLength(1);expect(travel.body.data.rows).toEqual(distance.body.data.rows);
+  expect(distance.body.data.rows[0]).toMatchObject({pointCount:2,gpsPointCount:2,avgSpeed:10,maxSpeed:20,durationSeconds:600});
+  for(const format of ['pdf','xlsx']){
+   const response=await request(app).post('/api/v1/reports/mobile/distance/export').set('Authorization',`Bearer ${jwt.sign({id:owner},secret)}`).send({snapshotId:distance.body.data.snapshotId,format}).expect(200);
+   const bytes=Buffer.from(response.body.data.base64,'base64');expect(bytes.subarray(0,format==='pdf'?5:2).toString()).toBe(format==='pdf'?'%PDF-':'PK');
+  }
+  await request(app).post('/api/v1/reports/mobile/distance/export').set('Authorization',`Bearer ${jwt.sign({id:foreign},secret)}`).send({snapshotId:distance.body.data.snapshotId,format:'pdf'}).expect(409);
+  const forged=await request(app).post('/api/v1/reports/mobile/distance/export').set('Authorization',`Bearer ${jwt.sign({id:owner},secret)}`).send({snapshotId:randomUUID(),format:'xlsx'}).expect(409);expect(forged.body.error.code).toBe('REPORT_EXPIRED');
+ });
+ it('enforces ownership and validates date ranges rather than returning misleading empty results',async()=>{
+  await get('/reports/mobile/distance'+suffix.replace(vehicle,foreignVehicle)).expect(404);
+  await get('/reports/mobile/travel-summary'+suffix.replace('2026-09-18T00:00:00Z','2026-11-18T00:00:00Z')).expect(400);
+  await get('/reports/mobile/distance'+suffix.replace('timeZone=UTC','timeZone=Invalid%2FZone')).expect(400);
+  await request(app).get('/api/v1/reports/mobile/distance'+suffix).expect(401);
+  const empty=await get('/reports/mobile/travel-summary'+suffix.replace('2026-09-17','2026-09-18').replace('end=2026-09-18','end=2026-09-19')).expect(200);expect(empty.body.data.rows).toEqual([]);expect(empty.body.data.snapshotId).toBeNull();
+ });
+});

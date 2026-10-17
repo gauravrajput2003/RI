@@ -13,9 +13,14 @@ const reportKeys=permissionDefinitions.filter(d=>d.group==='Reports').map(d=>d.k
 /** All endpoint aliases and selector dependencies are covered here before any router runs. */
 export const permissionApiRules:Rule[]=[
   rule('GET|HEAD',/^\/dashboard\/vehicles$/,P.dashboardView),
+  rule('GET|HEAD',/^\/drivers$/,P.vehicleView,P.dashboardView),
+  rule('POST',/^\/drivers$/,P.vehicleEdit),
+  rule('GET|HEAD',/^\/vehicles\/[^/]+\/driver$/,P.vehicleView,P.dashboardView),
+  rule('PUT',/^\/vehicles\/[^/]+\/driver$/,P.vehicleEdit),
   rule('GET|HEAD',/^\/playback$/,P.playbackView),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/history$/,P.playbackView),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/latest-location$/,P.dashboardView,P.vehicleView),
+  rule('GET|HEAD',/^\/vehicles\/[^/]+\/nearby(?:\/details)?$/,P.dashboardView,P.vehicleView),
   ...crud(/^\/(?:vehicles|fleet-vehicles)(?:\/[^/]+)?$/,{view:P.vehicleView,add:P.vehicleAdd,edit:P.vehicleEdit,delete:P.vehicleDelete}),
   rule('GET|HEAD',/^\/vehicle-(?:admin|client|device)-options$/,P.vehicleView),
   rule('GET|HEAD',/^\/admin-owners$/,P.adminView),
@@ -33,6 +38,8 @@ export const permissionApiRules:Rule[]=[
   rule('POST',/^\/announcements\/[^/]+\/dismiss$/,P.announcementView),
   ...crud(/^\/announcements(?:\/[^/]+)?$/,{view:P.announcementView,add:P.announcementAdd,edit:P.announcementEdit,delete:P.announcementDelete}),
   rule('GET|HEAD',/^\/reports\/options$/,P.playbackView,...reportKeys),
+  rule('GET|HEAD|POST',/^\/reports\/mobile\/distance(?:\/export)?$/,P.reportDistance),
+  rule('GET|HEAD|POST',/^\/reports\/mobile\/travel-summary(?:\/export)?$/,P.reportTravelSummary),
   rule('GET|HEAD',/^\/reports\/(?:coin-admins|coin-distribution)$/,P.coinDistributionView),
   ...permissionDefinitions.filter(d=>d.group==='Reports').map(d=>rule('GET|HEAD',new RegExp(`^/reports/${d.resource.slice('reports.'.length)}$`),d.key)),
   rule('GET|HEAD',/^\/coin-flow$/,P.coinDistributionView),

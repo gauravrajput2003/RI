@@ -17,6 +17,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   ios: { ...config.ios, infoPlist: { ...config.ios?.infoPlist, NSAppTransportSecurity: {
     NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true,
   } } },
-  plugins: [...(config.plugins ?? []),'./plugins/with-lan-http.cjs','@react-native-community/datetimepicker',['expo-notifications',{enableBackgroundRemoteNotifications:true,sounds:['./assets/voice/vehicle-running.wav','./assets/voice/vehicle-idle.wav','./assets/voice/vehicle-stopped.wav']}]],
+  plugins: [...(config.plugins ?? []),'./plugins/with-lan-http.cjs','expo-sharing','@react-native-community/datetimepicker',['expo-notifications',{enableBackgroundRemoteNotifications:true,sounds:['./assets/voice/vehicle-running.wav','./assets/voice/vehicle-idle.wav','./assets/voice/vehicle-stopped.wav']}]],
   });
 };
