@@ -18,7 +18,7 @@ export const findVehicle=(id:string,owner:string)=>activityQuery(`
  * attributed to this vehicle, with activity status derived independently. */
 export const latestLocation=async(id:string,owner:string)=>{const result=await activityQuery(`
   ${userScopeCte}
-  SELECT l.vehicle_id,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,
+  SELECT l.vehicle_id,cell_latest.metadata AS cellular_metadata,cell_latest.protocol AS cell_protocol,cell_latest.server_received_at AS cell_observed_at,l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.course,
     NULLIF(l.metadata->>'address','') AS address,l.metadata->>'address_attribution' AS address_attribution,
     COALESCE(activity.current_ignition,l.ignition) AS ignition,l.gps_valid,l.satellites,l.battery_percent,l.gsm_signal,activity.*,today.today_distance_km,today.today_max_speed
   FROM vehicles v JOIN vehicle_device_assignments a ON a.vehicle_id=v.id AND a.unassigned_at IS NULL

@@ -22,7 +22,7 @@ export function Marker({coordinate,title,pinColor,rotation,children,onPress,icon
 export function Polyline({coordinates,strokeColor,strokeWidth}:{coordinates:Coordinate[];strokeColor?:string;strokeWidth?:number}){
  useLayer({kind:'line',coordinates,color:strokeColor??'#087ca7',width:strokeWidth??3});return null;
 }
-const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StyleProp<ViewStyle>;initialRegion?:Region;onMapReady?:()=>void;onRegionChangeComplete?:(region:Region)=>void;onPanDrag?:()=>void}>(function LeafletMap(props,ref){
+const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StyleProp<ViewStyle>;initialRegion?:Region;bottomInset?:number;onMapReady?:()=>void;onRegionChangeComplete?:(region:Region)=>void;onPanDrag?:()=>void}>(function LeafletMap(props,ref){
  const web=useRef<WebView>(null),layers=useRef(new Map<string,Layer>()),presses=useRef(new Map<string,()=>void>()),ready=useRef(false),pending=useRef<unknown[]>([]);
  const sent=useRef(new Map<string,Layer>());
  const [revision,bump]=useReducer(n=>n+1,0),[error,setError]=useState<string|null>(null),[reload,setReload]=useState(0);
@@ -32,6 +32,7 @@ const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StylePro
  const registry=useMemo<Registry>(()=>({put:(id,layer,press)=>{if(press)presses.current.set(id,press);const signature=JSON.stringify(layer);if(signatures.current.get(id)===signature)return;signatures.current.set(id,signature);layers.current.set(id,layer);bump();},remove:id=>{if(!layers.current.has(id))return;signatures.current.delete(id);layers.current.delete(id);presses.current.delete(id);bump();}}),[]);
  useImperativeHandle(ref,()=>({animateToRegion:region=>send({type:'region',region}),fitToCoordinates:coordinates=>send({type:'fit',coordinates})}),[send]);
  useEffect(()=>{if(ready.current){const changed=[...layers.current.entries()].filter(([id,layer])=>sent.current.get(id)!==layer);const removed=[...sent.current.keys()].filter(id=>!layers.current.has(id));if(changed.length||removed.length)send({type:'updates',layers:changed,removed});sent.current=new Map(layers.current);}},[revision,send]);
+ useEffect(()=>{if(props.bottomInset!==undefined)send({type:'padding',bottom:props.bottomInset});},[props.bottomInset,send]);
  const initial=useRef(props.initialRegion);
  const source=useMemo(()=>({html:mapHtml(initial.current)}),[]);
  return <View style={[{flex:1},props.style]}><Context.Provider value={registry}>{props.children}</Context.Provider>

@@ -21,10 +21,10 @@ export function useVehicles() {
   }) : undefined, [query.data]);
   return { ...query, data };
 }
-export function useLatestLocation(vehicleId: string) {
+export function useLatestLocation(vehicleId: string, enabled = true) {
   const query = useQuery({
     queryKey: vehicleKeys.latest(vehicleId), queryFn: ({ signal }) => getLatestLocation(vehicleId, signal),
-    staleTime: 30_000, refetchInterval: 15000, enabled: Boolean(vehicleId), retry: 1,
+    staleTime: 30_000, refetchInterval: 15000, enabled: Boolean(vehicleId) && enabled, retry: 1,
     refetchOnReconnect: false, refetchOnWindowFocus: false,
   });
   useEffect(() => { if (query.data) useLiveVehicleStore.getState().upsert(vehicleId, query.data); }, [vehicleId, query.data]);

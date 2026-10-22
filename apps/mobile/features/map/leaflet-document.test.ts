@@ -26,7 +26,7 @@ it('renders centered inline SVGs and rotates or moves a marker without replacing
 it('moves existing markers, preserves the route during marker updates, and removes stale layers',()=>{
  const sources=[...mapHtml().matchAll(/<script>([\s\S]*?)<\/script>/g)];
  const marker={addTo:vi.fn().mockReturnThis(),on:vi.fn(),setLatLng:vi.fn(),setIcon:vi.fn(),setZIndexOffset:vi.fn(),getPopup:()=>false,bindPopup:vi.fn()};
- const line={addTo:vi.fn().mockReturnThis(),setLatLngs:vi.fn()};
+ const line={addTo:vi.fn().mockReturnThis(),setLatLngs:vi.fn(),setStyle:vi.fn()};
  const map={fitBounds:vi.fn(),on:vi.fn(),removeLayer:vi.fn(),invalidateSize:vi.fn()};
  const L={map:()=>map,tileLayer:()=>({addTo:()=>({on:vi.fn()})}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),polyline:vi.fn(()=>line),divIcon:(x:unknown)=>x,latLngBounds:(x:unknown)=>x};
  const window={ReactNativeWebView:{postMessage:vi.fn()},fleetReceive:undefined as undefined|((message:unknown)=>void)};
@@ -38,6 +38,10 @@ it('moves existing markers, preserves the route during marker updates, and remov
  expect(L.marker.mock.calls[0][1]).toMatchObject({zIndexOffset:3000,icon:expect.objectContaining({iconSize:[42,58]})});expect(marker.setZIndexOffset).toHaveBeenCalledWith(3000);
  expect(marker.bindPopup).toHaveBeenCalledWith('&lt;img src=x onerror=alert(1)&gt;');
  expect(L.polyline).toHaveBeenCalledOnce();expect(line.setLatLngs).not.toHaveBeenCalled();
+ window.fleetReceive!({type:'updates',layers:[['route',{kind:'line',coordinates:[point.coordinate],color:'#eab308',width:4}]],removed:[]});
+ expect(line.setStyle).toHaveBeenCalledWith({color:'#eab308',weight:4});expect(L.polyline).toHaveBeenCalledOnce();
+ window.fleetReceive!({type:'padding',bottom:300});window.fleetReceive!({type:'region',region:{...point.coordinate,latitudeDelta:.1,longitudeDelta:.1}});
+ const lastFit=JSON.parse(JSON.stringify(map.fitBounds.mock.calls.at(-1)));expect(Array.isArray(lastFit[0])).toBe(true);expect(lastFit[1].paddingBottomRight).toEqual([0,300]);
  expect(map.removeLayer).not.toHaveBeenCalled();
  window.fleetReceive!({type:'updates',layers:[],removed:['bike']});expect(map.removeLayer).toHaveBeenCalledWith(marker);
 });

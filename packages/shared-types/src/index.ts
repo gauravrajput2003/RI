@@ -18,3 +18,4 @@ export * from './permissions.js';
 export * from './nearby.js';
 export * from './drivers.js';
 export * from './mobile-reports.js';
+export * from './live-map.js';

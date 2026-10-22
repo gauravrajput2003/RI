@@ -45,23 +45,28 @@ const AUTO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 130">
 export const STATUS_COLORS = {
   running:{main:'#22c55e',dark:'#15803d'},idle:{main:'#eab308',dark:'#a16207'},
   stopped:{main:'#ef4444',dark:'#b91c1c'},unreachable:{main:'#3b82f6',dark:'#1d4ed8'},
+  unknown:{main:'#64748b',dark:'#334155'},
 } as const;
 export const SVGS={bike:BIKE_SVG,scooty:SCOOTY_SVG,car:CAR_SVG,truck:TRUCK_SVG,auto:AUTO_SVG};
 export const ICON_SIZE={bike:[28,56],scooty:[28,56],car:[36,68],truck:[36,86],auto:[32,58]} as const;
 export type IconType=keyof typeof SVGS;
 export type IconStatus=keyof typeof STATUS_COLORS;
 const TYPES:Record<string,IconType>={bike:'bike',motorcycle:'bike',motorbike:'bike','motor bike':'bike',scooter:'scooty',scooty:'scooty',car:'car',sedan:'car',suv:'car',hatchback:'car',truck:'truck',lorry:'truck',auto:'auto',rickshaw:'auto'};
-const STATUSES:Record<string,IconStatus>={running:'running',moving:'running',overspeed:'running',idle:'idle',stopped:'stopped',unreachable:'unreachable',offline:'unreachable',disconnected:'unreachable',inactive:'unreachable',new:'unreachable'};
+const STATUSES:Record<string,IconStatus>={unknown:'unknown',online:'unknown',running:'running',moving:'running',overspeed:'running',idle:'idle',stopped:'stopped',unreachable:'unreachable',offline:'unreachable',disconnected:'unreachable',inactive:'unreachable',new:'unreachable'};
 const lookup=<T>(values:Record<string,T>,value:unknown)=>{const key=String(value??'').trim().toLowerCase();return Object.hasOwn(values,key)?values[key]:undefined;};
 export const normalizeType=(type?:string|null):IconType=>lookup(TYPES,type)??'bike';
 type Telemetry={fleet_status?:string|null;status?:string|null;state?:string|null;speed?:number|string|null;current_speed?:number|null;ignition?:boolean|number|string|null;lastSeen?:string|null;last_seen_at?:string|null};
-export function getVehicleStatus(vehicle:Telemetry,offlineMins=10):IconStatus{
+export function getVehicleStatus(vehicle:Telemetry,offlineMins=30):IconStatus{
  const backend=lookup(STATUSES,vehicle.fleet_status??vehicle.status??vehicle.state);
  if(backend)return backend;
  const lastSeen=vehicle.lastSeen??vehicle.last_seen_at,seen=new Date(lastSeen??'').getTime();
- if(!lastSeen||!Number.isFinite(seen)||Date.now()-seen>offlineMins*60000)return 'unreachable';
- if(Number(vehicle.speed??vehicle.current_speed??0)>0)return 'running';
- return vehicle.ignition===true||vehicle.ignition===1||vehicle.ignition==='on'?'idle':'stopped';
+ if(!lastSeen||!Number.isFinite(seen)||Date.now()-seen>=offlineMins*60000)return 'unreachable';
+ const speed=vehicle.current_speed!==undefined?vehicle.current_speed:vehicle.speed;
+ if(speed==null||!Number.isFinite(Number(speed))||Number(speed)<0)return 'unknown';
+ if(Number(speed)>5)return 'running';
+ if(vehicle.ignition===true||vehicle.ignition===1||vehicle.ignition==='on')return 'idle';
+ if(vehicle.ignition===false||vehicle.ignition===0||vehicle.ignition==='off')return 'stopped';
+ return 'unknown';
 }
 const cache=new Map<string,string>();
 export function getVehicleSvg(type?:string|null,status?:string):string{

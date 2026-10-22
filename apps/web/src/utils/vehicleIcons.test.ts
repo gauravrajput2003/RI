@@ -4,16 +4,16 @@ import {getVehicleIcon,getVehicleStatus,getVehicleSvg,STATUS_COLORS} from './veh
 
 afterEach(()=>vi.useRealTimers());
 describe('dashboard vehicle markers',()=>{
- it('uses backend status and falls back to telemetry with a ten-minute timeout',()=>{
+ it('uses backend status and falls back to telemetry with a thirty-minute timeout',()=>{
   vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-14T10:00:00Z'));
   expect(getVehicleStatus({fleet_status:'STOPPED',speed:40})).toBe('stopped');
   expect(getVehicleStatus({state:'MOVING'})).toBe('running');
   expect(getVehicleStatus({status:'OVERSPEED'})).toBe('running');
   expect(getVehicleStatus({speed:40})).toBe('unreachable');
   expect(getVehicleStatus({speed:40,lastSeen:'invalid'})).toBe('unreachable');
-  expect(getVehicleStatus({speed:40,lastSeen:'2026-10-14T09:49:59Z'})).toBe('unreachable');
+  expect(getVehicleStatus({speed:40,lastSeen:'2026-10-14T09:30:00Z'})).toBe('unreachable');
   const lastSeen='2026-10-14T09:59:00Z';
-  expect(getVehicleStatus({speed:1,ignition:false,lastSeen})).toBe('running');
+  expect(getVehicleStatus({speed:6,ignition:false,lastSeen})).toBe('running');
   expect(getVehicleStatus({speed:0,ignition:true,lastSeen})).toBe('idle');
   expect(getVehicleStatus({speed:0,ignition:false,lastSeen})).toBe('stopped');
  });

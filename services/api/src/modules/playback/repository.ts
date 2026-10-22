@@ -3,7 +3,7 @@ import { env } from '../../config/env.js';
 import { query } from '../../db/pool.js';
 import { userScopeCte } from '../authorization/scope.js';
 
-export const playbackPoints=(actorId:string,vehicleId:string,from:Date,to:Date,limit:number)=>query(`${userScopeCte}, scoped_points AS (
+export const playbackPoints=(actorId:string,vehicleId:string,from:Date,to:Date,limit:number,enrich=true)=>query(`${userScopeCte}, scoped_points AS (
   SELECT l.id,l.device_id,l.tracker_timestamp,l.server_received_at,l.latitude,l.longitude,l.speed,l.course,l.ignition,l.gps_valid,l.odometer,l.position,l.metadata,l.protocol,
     COALESCE(l.tracker_timestamp,l.server_received_at) AS observed_at
   FROM locations l JOIN vehicles v ON v.id=l.vehicle_id JOIN user_scope scope ON scope.id=v.owner_id
@@ -28,11 +28,11 @@ export const playbackPoints=(actorId:string,vehicleId:string,from:Date,to:Date,l
     THEN segment_metres/1000.0 ELSE 0 END AS segment_distance_km
   FROM segments
 )
-SELECT id,tracker_timestamp,server_received_at,latitude,longitude,speed,course,ignition,gps_valid,odometer,metadata,protocol,
+SELECT id,device_id,tracker_timestamp,server_received_at,latitude,longitude,speed,course,ignition,gps_valid,odometer,metadata,protocol,
   segment_distance_km,
   SUM(segment_distance_km) OVER(ORDER BY observed_at,server_received_at,id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_distance_km,
   (AVG(speed) FILTER(WHERE speed>=0) OVER())::double precision AS route_avg_speed,
   (MAX(speed) FILTER(WHERE speed>=0) OVER())::double precision AS route_max_speed,
   COUNT(*) OVER()::int AS route_point_count
 FROM route_points ORDER BY observed_at,server_received_at,id`,
-  [actorId,vehicleId,from,to,limit,env.MOVEMENT_THRESHOLD_KPH]).then(async result=>({...result,rows:await displayedAddresses(result.rows,true)}));
+  [actorId,vehicleId,from,to,limit,env.MOVEMENT_THRESHOLD_KPH]).then(async result=>({...result,rows:enrich?await displayedAddresses(result.rows,true):result.rows}));

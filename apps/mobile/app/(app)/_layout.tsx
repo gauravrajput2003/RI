@@ -34,7 +34,7 @@ export default function AppLayout() {
   if (!session) return <Redirect href="/(auth)/login" />;
   if (ready !== session) return <Loading />;
   return <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top','left','right']}>
-    {!config.demoMode ? <ConnectionBanner /> : null}
+    {!config.demoMode && pathname!=='/map' ? <ConnectionBanner /> : null}
     <Tabs
       initialRouteName="index"
       screenOptions={{ headerShown: false }}

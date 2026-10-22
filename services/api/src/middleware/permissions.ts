@@ -20,6 +20,7 @@ export const permissionApiRules:Rule[]=[
   rule('GET|HEAD',/^\/playback$/,P.playbackView),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/history$/,P.playbackView),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/latest-location$/,P.dashboardView,P.vehicleView),
+  rule('GET|HEAD',/^\/vehicles\/[^/]+\/live-map$/,P.dashboardView,P.vehicleView),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/nearby(?:\/details)?$/,P.dashboardView,P.vehicleView),
   ...crud(/^\/(?:vehicles|fleet-vehicles)(?:\/[^/]+)?$/,{view:P.vehicleView,add:P.vehicleAdd,edit:P.vehicleEdit,delete:P.vehicleDelete}),
   rule('GET|HEAD',/^\/vehicle-(?:admin|client|device)-options$/,P.vehicleView),
