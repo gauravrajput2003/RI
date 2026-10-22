@@ -1,3 +1,6 @@
+import {processParkingModes} from './modules/parking/service.js';
+import {withParkingDelivery} from './modules/parking/delivery.js';
+import {publishVehicleParking} from './realtime/socket-server.js';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { app } from './app.js';
@@ -19,11 +22,12 @@ app.locals.publishVehicleLocation=async(vehicleId:string,payload:Record<string,u
   const activity=(await publishedVehicleActivity(vehicleId)).rows[0];
   if(activity){const combined:Record<string,unknown>={...payload,...activity,ignition:payload.ignition??(activity as typeof activity & {current_ignition?:boolean|null}).current_ignition??null,fleet_status:activity.state==='MOVING'?'RUNNING':activity.state};const published=env.ADDRESS_SOURCE==='cell'?(await displayedAddresses([combined]))[0]:combined;await publishVehicleLocation(io,vehicleId,published);for(const notification of await processVehicleTelemetry(vehicleId,combined as TelemetryAlertInput))await publishVehicleNotification(io,vehicleId,notification as unknown as Record<string,unknown>)}
 };
+app.locals.publishParkingState=(vehicleId:string,payload:Record<string,unknown>)=>publishVehicleParking(io,vehicleId,payload);
 const unreachableSweep=setInterval(()=>{void processUnreachableVehicles().then(async notifications=>{for(const notification of notifications)await publishVehicleNotification(io,notification.vehicleId,notification as unknown as Record<string,unknown>)}).catch(error=>logger.error({err:error},'unreachable alert sweep failed'))},60_000);unreachableSweep.unref();
 const subscriptionSweep=setInterval(()=>{void processSubscriptionAlerts().then(async notifications=>{for(const notification of notifications)await publishUserNotification(io,notification.recipientUserId,notification as unknown as Record<string,unknown>)}).catch(error=>logger.error({err:error},'subscription alert sweep failed'))},60_000);subscriptionSweep.unref();
 let mobileAlertBusy=false;
 const mobileAlertSweep=setInterval(()=>{if(mobileAlertBusy)return;mobileAlertBusy=true;
- void (async()=>{await collectTransitions((userId,payload)=>io.to(`user:${userId}`).emit('mobile:vehicle-alert',payload));await flushPushOutbox();})()
+ void (async()=>{await collectTransitions((userId,payload)=>io.to(`user:${userId}`).emit('mobile:vehicle-alert',payload));for(const notification of await processParkingModes()){await withParkingDelivery(notification as unknown as Record<string,unknown>,()=>publishVehicleNotification(io,notification.vehicleId,notification as unknown as Record<string,unknown>));await publishVehicleParking(io,notification.vehicleId,{vehicleId:notification.vehicleId});}await flushPushOutbox();})()
  .catch(error=>logger.error({err:error},'mobile push sweep failed')).finally(()=>{mobileAlertBusy=false});
 },5000);mobileAlertSweep.unref();
 const port=env.PORT??env.API_PORT;

@@ -8,6 +8,8 @@ import { BikeActions, type BikeAction } from '../../components/fleet/BikeActions
 import { NoticeSheet } from '../../components/fleet/Sheet';
 import {ReportSheet} from '../../components/fleet/ReportSheet';
 import {DriverSheet} from '../../components/fleet/DriverSheet';
+import {ParkingSheet} from '../../components/fleet/ParkingSheet';
+import {RelaySheet} from '../../components/fleet/RelaySheet';
 import {NearbySheet} from '../../components/fleet/NearbySheet';
 import {StreetViewSheet,type StreetVehicle} from '../../components/fleet/StreetViewSheet';
 import { ShareSheet } from '../../components/fleet/ShareSheet';
@@ -34,6 +36,8 @@ export default function Dashboard() {
   const [selected, setSelected] = useState<Vehicle | null>(null); const [message, setMessage] = useState<string | null>(null);
   const [reportVehicle,setReportVehicle]=useState<Vehicle|null>(null);
   const [driverVehicle,setDriverVehicle]=useState<StreetVehicle|null>(null);
+  const [parkingVehicle,setParkingVehicle]=useState<StreetVehicle|null>(null);
+  const [relayVehicle,setRelayVehicle]=useState<StreetVehicle|null>(null);
   const [nearbyVehicle,setNearbyVehicle]=useState<StreetVehicle|null>(null);
   const [streetVehicle,setStreetVehicle]=useState<StreetVehicle|null>(null);
   const [shareVehicle, setShareVehicle] = useState<Vehicle | null>(null);
@@ -49,6 +53,8 @@ export default function Dashboard() {
     if (name === 'Live Map') { useVehicleStore.getState().setSelected(vehicle.id); router.push('/(app)/map'); }
     else if (name === 'Play Back') { router.push({ pathname: '/(app)/playback' as never, params: { vehicleId: vehicle.id, vehicleNumber: vehicle.vehicle_number } }); }
     else if (name === 'Driver') { setDriverVehicle(vehicle); }
+    else if (name === 'Parking') { setParkingVehicle(vehicle); }
+    else if (name === 'Lock') { setRelayVehicle(vehicle); }
     else if (name === 'NearBy') { setNearbyVehicle(vehicle); }
     else if (name === 'Street View') { setStreetVehicle(vehicle); }
     else if (name === 'Share') { setShareVehicle(vehicle); }
@@ -69,6 +75,8 @@ export default function Dashboard() {
     <ShareSheet vehicleNumber={shareVehicle?.vehicle_number??null} vehicleId={shareVehicle?.id} onClose={() => setShareVehicle(null)} />
     <ReportSheet visible={Boolean(reportVehicle)} onClose={()=>setReportVehicle(null)} onSelect={kind=>{if(!reportVehicle)return;const vehicle=reportVehicle;setReportVehicle(null);router.push({pathname:'/(app)/report',params:{kind,vehicleId:vehicle.id,vehicleNumber:vehicle.vehicle_number}});}}/>
     <DriverSheet vehicle={driverVehicle} onClose={()=>setDriverVehicle(null)}/>
+    <ParkingSheet vehicle={parkingVehicle} onClose={()=>setParkingVehicle(null)}/>
+    <RelaySheet vehicle={relayVehicle} onClose={()=>setRelayVehicle(null)}/>
     <NearbySheet vehicle={nearbyVehicle} onClose={()=>setNearbyVehicle(null)}/>
     <StreetViewSheet vehicle={streetVehicle} onClose={()=>setStreetVehicle(null)} />
     <NoticeSheet message={message} onClose={() => setMessage(null)} />

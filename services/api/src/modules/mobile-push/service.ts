@@ -1,3 +1,5 @@
+import type {PoolClient} from 'pg';
+import {withParkingDelivery} from '../parking/delivery.js';
 import {randomUUID,createHash} from 'node:crypto';
 import {query,transaction} from '../../db/pool.js';
 import {hasPermissionForUser} from '../authorization/permissions.js';
@@ -13,7 +15,7 @@ export function stateAlert(state:string,vehicleNumber:string) {
 export const refreshHash=(token:string)=>createHash('sha256').update(token).digest('hex');
 
 // Recheck ownership, active login and notification permission at delivery time.
-async function recipients(vehicleId:string) {
+export async function recipients(vehicleId:string) {
  const result=await query<{id:string;user_id:string;expo_token:string|null;platform:string;sound:boolean;vibration:boolean;voice:boolean;voice_vehicles:string[];enabled_at:Date|string}>(`
  WITH RECURSIVE owners AS (SELECT owner_id id FROM vehicles WHERE id=$1
  UNION ALL SELECT u.owner_id FROM users u JOIN owners o ON u.id=o.id WHERE u.owner_id IS NOT NULL)
@@ -55,8 +57,13 @@ export async function collectTransitions(emit:(userId:string,payload:Record<stri
  }
 }
 
+export async function enqueueParkingPush(client:PoolClient,vehicleId:string,sequence:number,payload:Record<string,unknown>){
+ for(const device of (await recipients(vehicleId)).filter(device=>device.expo_token))await client.query(`INSERT INTO mobile_push_outbox(event_id,device_id,vehicle_id,source,sequence,payload) VALUES($1,$2,$3,'parking',$4,$5) ON CONFLICT DO NOTHING`,[payload.id,device.id,vehicleId,sequence,JSON.stringify(payload)]);
+}
+
 export function pushMessages(device:{expo_token:string|null;platform:string;sound:boolean;vibration:boolean;voice:boolean;user_id:string;voice_vehicles?:string[]},payload:Record<string,unknown>) {
  const data={...payload,userId:device.user_id};
+ if(String(payload.eventType).startsWith('PARKING_'))return [{to:device.expo_token,title:'Parking Movement Alert',body:payload.message,data,sound:device.sound||device.voice?'default':undefined,channelId:`vehicle-alerts-${device.sound||device.voice?'sound':'silent'}-${device.vibration?'vibrate':'quiet'}`,priority:'high',ttl:120}];
  const kind=String(payload.eventType??'VEHICLE_RUNNING').replace('VEHICLE_','').toLowerCase();
  const genericSound=`vehicle-${kind}.wav`;
  const plate=String(payload.vehicleNumber??'').replace(/[^A-Za-z0-9]/g,'').slice(0,16).toLowerCase();
@@ -76,11 +83,12 @@ let busy=false;
 export async function flushPushOutbox(fetcher:typeof fetch=fetch){
  if(busy)return;busy=true;
  try{
-  const pending=await query<{id:string;vehicle_id:string;device_id:string;payload:Record<string,unknown>;attempts:number}>(`UPDATE mobile_push_outbox SET next_attempt_at=now()+interval '90 seconds' WHERE id IN (SELECT id FROM mobile_push_outbox WHERE sent_at IS NULL AND expires_at>now() AND next_attempt_at<=now() ORDER BY next_attempt_at LIMIT 5 FOR UPDATE SKIP LOCKED) RETURNING *`);
+  const pending=await query<{id:string;vehicle_id:string;device_id:string;payload:Record<string,unknown>;source:string;attempts:number}>(`UPDATE mobile_push_outbox SET next_attempt_at=now()+interval '90 seconds' WHERE id IN (SELECT id FROM mobile_push_outbox WHERE sent_at IS NULL AND cancelled_at IS NULL AND expires_at>now() AND next_attempt_at<=now() ORDER BY next_attempt_at LIMIT 5 FOR UPDATE SKIP LOCKED) RETURNING *`);
   for(const row of pending.rows){
    const device=(await recipients(row.vehicle_id)).find(item=>item.id===row.device_id);
    if(!device){await query('UPDATE mobile_push_outbox SET sent_at=now(),receipt_checked=true WHERE id=$1',[row.id]);continue;}
    try{
+    const deliver=async()=>{
     const response=await fetcher('https://exp.host/--/api/v2/push/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pushMessages(device,row.payload)),signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw new Error('Push transport failed');
     const body=await response.json() as {data?:{status:string;id?:string;details?:{error?:string}}[]};
@@ -88,9 +96,12 @@ export async function flushPushOutbox(fetcher:typeof fetch=fetch){
     if(!tickets?.length)throw new Error('Push ticket missing');
     if(tickets.some(ticket=>ticket.details?.error==='DeviceNotRegistered'))await query('UPDATE mobile_push_devices SET enabled=false WHERE id=$1',[device.id]);
     if(tickets[0].status!=='ok')throw new Error('Push ticket rejected');
-    await query('UPDATE mobile_push_outbox SET sent_at=now(),ticket_id=$2 WHERE id=$1',[row.id,tickets[0].id??null]);
+    await query('UPDATE mobile_push_outbox SET sent_at=now(),ticket_id=$2,last_error=NULL WHERE id=$1',[row.id,tickets[0].id??null]);
+    };
+    if(row.source==='parking'){if(!await withParkingDelivery(row.payload,deliver))await query("UPDATE mobile_push_outbox SET cancelled_at=now(),last_error='Parking disabled, changed, stale, reassigned or returned inside' WHERE id=$1",[row.id]);}
+    else await deliver();
    }catch{
-    await query(`UPDATE mobile_push_outbox SET attempts=attempts+1,next_attempt_at=now()+($2::int*interval '1 second') WHERE id=$1`,[row.id,Math.min(120,5*2**Math.min(row.attempts,5))]);
+    await query(`UPDATE mobile_push_outbox SET attempts=attempts+1,last_error='Push transport failed or ticket rejected',next_attempt_at=now()+($2::int*interval '1 second') WHERE id=$1`,[row.id,Math.min(120,5*2**Math.min(row.attempts,5))]);
     logger.warn('Vehicle push delivery deferred');
    }
   }
@@ -100,7 +111,7 @@ export async function flushPushOutbox(fetcher:typeof fetch=fetch){
    if(response.ok){const body=await response.json() as {data?:Record<string,{status:string;details?:{error?:string}}>};
     for(const row of receipts.rows){const receipt=body.data?.[row.ticket_id];if(!receipt)continue;
      if(receipt.details?.error==='DeviceNotRegistered')await query('UPDATE mobile_push_devices SET enabled=false WHERE id=$1',[row.device_id]);
-     if(receipt.status==='error')logger.warn('Vehicle push receipt reports delivery failure');
+     if(receipt.status==='error'){logger.warn('Vehicle push receipt reports delivery failure');await query("UPDATE mobile_push_outbox SET last_error='Push receipt reports delivery failure' WHERE id=$1",[row.id]);}
      await query('UPDATE mobile_push_outbox SET receipt_checked=true WHERE id=$1',[row.id]);
     }
    }

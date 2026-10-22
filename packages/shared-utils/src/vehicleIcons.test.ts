@@ -12,7 +12,7 @@ it('prioritizes backend state, then checks freshness before motion and ignition'
  expect(getVehicleStatus({speed:20,lastSeen:'2026-10-14T09:30:01Z'})).toBe('running');
 });
 it('normalizes aliases and shares cached five-type SVGs with a fixed status palette',()=>{
- for(const [raw,type] of [['Motorcycle','bike'],['SCOOTER','scooty'],['Hatchback','car'],['Lorry','truck'],['Rickshaw','auto'],['unknown','bike']] as const)expect(normalizeType(raw)).toBe(type);
+ for(const [raw,type] of [['Motorcycle','bike'],['SCOOTER','scooty'],['Hatchback','car'],['EVCar','car'],['EV-Car','car'],['Jeep','car'],['E-Rickshaw','auto'],['Three Wheeler','auto'],['Lorry','truck'],['Rickshaw','auto'],['unknown','bike']] as const)expect(normalizeType(raw)).toBe(type);
  for(const type of Object.keys(SVGS) as (keyof typeof SVGS)[]){const svg=getVehicleSvg(type,'idle');expect(svg).toContain(STATUS_COLORS.idle.main);expect(svg).toContain(STATUS_COLORS.idle.dark);expect(svg).toContain('opacity="0.18"');expect(svg).not.toContain('{{');expect(ICON_SIZE[type][1]).toBeGreaterThan(ICON_SIZE[type][0]);}
  expect(getVehicleSvg('Bike','running')).toBe(getVehicleSvg('Motorcycle','MOVING'));
 });

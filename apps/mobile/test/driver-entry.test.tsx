@@ -6,6 +6,7 @@ import Dashboard from '../app/(app)/index';
 const mock=vi.hoisted(()=>({vehicles:[{id:'vehicle-a',vehicle_number:'FIRST',alias:null,vehicle_type:'bike',odometer:null,active:true},{id:'vehicle-b',vehicle_number:'SECOND',alias:null,vehicle_type:'car',odometer:null,active:true}],live:{byVehicleId:{}}}));
 vi.mock('../components/fleet/Header',()=>({FleetHeader:()=>null}));
 vi.mock('../components/fleet/BikeCard',()=>({BikeCard:(props:Record<string,unknown>)=>React.createElement('BikeCard',props)}));
+vi.mock('../components/fleet/RelaySheet',()=>({RelaySheet:(props:Record<string,unknown>)=>React.createElement('RelaySheet',props)}));
 vi.mock('../components/fleet/DriverSheet',()=>({DriverSheet:(props:Record<string,unknown>)=>React.createElement('DriverSheet',props)}));
 vi.mock('../components/fleet/NearbySheet',()=>({NearbySheet:()=>null}));
 vi.mock('../components/fleet/StreetViewSheet',()=>({StreetViewSheet:()=>null}));
@@ -16,6 +17,7 @@ vi.mock('../store/liveVehicleStore',()=>({useLiveVehicleStore:(select:(state:typ
 vi.mock('../services/api/mobile',()=>({useAccount:()=>({data:{role:'CLIENT',permissions:[]}})}));
 vi.mock('../services/api/announcements',()=>({announcementInboxKey:['inbox']}));
 vi.mock('../constants/config',()=>({config:{demoMode:false}}));
+vi.mock('../components/fleet/VehicleActionIcon',()=>({VehicleActionIcon:(props:Record<string,unknown>)=>React.createElement('ActionIcon',props)}));
 vi.mock('@expo/vector-icons',()=>({FontAwesome6:'Icon'}));
 vi.mock('expo-router',()=>({router:{push:vi.fn()}}));
 vi.mock('react-native',()=>({View:'View',Text:'Text',Pressable:'Pressable',TextInput:'TextInput',ScrollView:'ScrollView',ActivityIndicator:'ActivityIndicator',StyleSheet:{create:(s:unknown)=>s},FlatList:({data,renderItem}:{data:unknown[];renderItem:(i:{item:unknown})=>React.ReactNode})=><>{data.map((item,index)=><React.Fragment key={index}>{renderItem({item})}</React.Fragment>)}</>}));
@@ -24,9 +26,15 @@ it('the existing dashboard Driver icon opens the red-modal workflow for the sele
  const cache=new QueryClient();let tree!:ReactTestRenderer;await act(async()=>{tree=create(<QueryClientProvider client={cache}><Dashboard/></QueryClientProvider>)});
  for(const [index,id] of ['vehicle-a','vehicle-b'].entries()){
   await act(async()=>tree.root.findAllByType('BikeCard' as React.ElementType)[index].props.onPress());
+  const icons=tree.root.findAllByType('ActionIcon' as React.ElementType);
+  expect(icons.map(icon=>icon.props.action).slice(0,10)).toEqual(['Live Map','Play Back','Share','Notification','Report','NearBy','Parking','Street View','Lock','Driver']);
   await act(async()=>tree.root.findByProps({accessibilityLabel:'Driver'}).props.onPress());
   expect(tree.root.findByType('DriverSheet' as React.ElementType).props.vehicle.id).toBe(id);
   await act(async()=>tree.root.findByType('DriverSheet' as React.ElementType).props.onClose());expect(tree.root.findByType('DriverSheet' as React.ElementType).props.vehicle).toBeNull();
+  await act(async()=>tree.root.findAllByType('BikeCard' as React.ElementType)[index].props.onPress());
+  await act(async()=>tree.root.findByProps({accessibilityLabel:'Lock'}).props.onPress());
+  expect(tree.root.findByType('RelaySheet' as React.ElementType).props.vehicle.id).toBe(id);
+  await act(async()=>tree.root.findByType('RelaySheet' as React.ElementType).props.onClose());
  }
  await act(async()=>tree.unmount());cache.clear();
 });

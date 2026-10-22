@@ -22,7 +22,7 @@ export function Marker({coordinate,title,pinColor,rotation,children,onPress,icon
 export function Polyline({coordinates,strokeColor,strokeWidth}:{coordinates:Coordinate[];strokeColor?:string;strokeWidth?:number}){
  useLayer({kind:'line',coordinates,color:strokeColor??'#087ca7',width:strokeWidth??3});return null;
 }
-const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StyleProp<ViewStyle>;initialRegion?:Region;bottomInset?:number;onMapReady?:()=>void;onRegionChangeComplete?:(region:Region)=>void;onPanDrag?:()=>void}>(function LeafletMap(props,ref){
+const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StyleProp<ViewStyle>;initialRegion?:Region;bottomInset?:number;mapType?:'street'|'satellite';onMapReady?:()=>void;onRegionChangeComplete?:(region:Region)=>void;onPanDrag?:()=>void}>(function LeafletMap(props,ref){
  const web=useRef<WebView>(null),layers=useRef(new Map<string,Layer>()),presses=useRef(new Map<string,()=>void>()),ready=useRef(false),pending=useRef<unknown[]>([]);
  const sent=useRef(new Map<string,Layer>());
  const [revision,bump]=useReducer(n=>n+1,0),[error,setError]=useState<string|null>(null),[reload,setReload]=useState(0);
@@ -33,6 +33,8 @@ const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StylePro
  useImperativeHandle(ref,()=>({animateToRegion:region=>send({type:'region',region}),fitToCoordinates:coordinates=>send({type:'fit',coordinates})}),[send]);
  useEffect(()=>{if(ready.current){const changed=[...layers.current.entries()].filter(([id,layer])=>sent.current.get(id)!==layer);const removed=[...sent.current.keys()].filter(id=>!layers.current.has(id));if(changed.length||removed.length)send({type:'updates',layers:changed,removed});sent.current=new Map(layers.current);}},[revision,send]);
  useEffect(()=>{if(props.bottomInset!==undefined)send({type:'padding',bottom:props.bottomInset});},[props.bottomInset,send]);
+ const mapType=props.mapType??'street';
+ useEffect(()=>{if(ready.current)send({type:'map-type',mapType});},[mapType,send]);
  const initial=useRef(props.initialRegion);
  const source=useMemo(()=>({html:mapHtml(initial.current)}),[]);
  return <View style={[{flex:1},props.style]}><Context.Provider value={registry}>{props.children}</Context.Provider>
@@ -40,7 +42,7 @@ const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StylePro
    applicationNameForUserAgent="RI-GPS-Tracker/0.1 (com.example.fleettracker)" mixedContentMode="never"
    onShouldStartLoadWithRequest={request=>{if(request.url==='about:blank'||request.url.startsWith('data:text/html'))return true;if(request.url.startsWith('https://www.openstreetmap.org/'))void Linking.openURL(request.url);return false;}}
    onError={()=>setError('Unable to open the map. Check your internet connection.')} onMessage={event=>{
-    try{const message=JSON.parse(event.nativeEvent.data);if(message.type==='ready'){ready.current=true;setError(null);send({type:'layers',layers:[...layers.current.entries()]});sent.current=new Map(layers.current);for(const item of pending.current)send(item);pending.current=[];callbacks.current.onMapReady?.();}
+    try{const message=JSON.parse(event.nativeEvent.data);if(message.type==='ready'){ready.current=true;setError(null);send({type:'map-type',mapType:callbacks.current.mapType??'street'});send({type:'layers',layers:[...layers.current.entries()]});sent.current=new Map(layers.current);for(const item of pending.current)send(item);pending.current=[];callbacks.current.onMapReady?.();}
      else if(message.type==='region')callbacks.current.onRegionChangeComplete?.(message.region);
      else if(message.type==='pan')callbacks.current.onPanDrag?.();else if(message.type==='press')presses.current.get(message.id)?.();
      else if(message.type==='tiles-error')setError('Map tiles could not load. Check internet access and retry.');else if(message.type==='tiles-ok')setError(null);

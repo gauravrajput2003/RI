@@ -44,3 +44,12 @@ export async function publishVehicleNotification(io:Server,vehicleId:string,payl
   }
 }
 export async function publishUserNotification(io:Server,userId:string,payload:Record<string,unknown>):Promise<void>{const authorizer=authorizers.get(io);if(!authorizer)return;if(authorizer.canReceiveNotifications&&!await authorizer.canReceiveNotifications(userId))return;io.to(`user:${userId}`).emit('notification:new',payload)}
+
+export async function publishVehicleParking(io:Server,vehicleId:string,payload:Record<string,unknown>){
+ const authorizer=authorizers.get(io);if(!authorizer)return;
+ for(const socket of await io.in(`vehicle:${vehicleId}`).fetchSockets()){
+  const principal=socket.data.principal as SocketPrincipal|undefined;
+  if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId))socket.emit('parking:changed',payload);
+  else await socket.leave(`vehicle:${vehicleId}`);
+ }
+}

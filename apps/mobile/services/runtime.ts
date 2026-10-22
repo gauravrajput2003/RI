@@ -36,6 +36,7 @@ export function startRuntime(queryClient: QueryClient) {
     }) as unknown as SocketPort;
   }, {
     location: receive, status: receive, notification:publishMobileAlert,
+    parking:()=>{void queryClient.invalidateQueries({queryKey:['parking']});void queryClient.invalidateQueries({queryKey:['vehicles']});},
     connection: connected => useRuntimeStore.setState({ connected }),
     unauthorized: () => { void api.refreshSession().catch(() => undefined); },
     connected: () => {

@@ -12,7 +12,7 @@ it('renders centered inline SVGs and rotates or moves a marker without replacing
  const sources=[...mapHtml().matchAll(/<script>([\s\S]*?)<\/script>/g)];
  const element={style:{transform:''}},marker={addTo:vi.fn().mockReturnThis(),on:vi.fn(),setLatLng:vi.fn(),setIcon:vi.fn(),setZIndexOffset:vi.fn(),getElement:()=>({firstElementChild:element})};
  const map={fitBounds:vi.fn(),on:vi.fn(),removeLayer:vi.fn(),invalidateSize:vi.fn()};
- const L={map:()=>map,tileLayer:()=>({addTo:()=>({on:vi.fn()})}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),divIcon:(x:unknown)=>x};
+ const L={map:()=>map,tileLayer:()=>({addTo:vi.fn(),on:vi.fn()}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),divIcon:(x:unknown)=>x};
  const window={ReactNativeWebView:{postMessage:vi.fn()},fleetReceive:undefined as undefined|((message:unknown)=>void)};
  runInNewContext(sources[1][1],{L,window,setTimeout:vi.fn()});
  const point={kind:'marker',coordinate:{latitude:28,longitude:76},svg:getVehicleSvg('car','running'),iconSize:[36,68],rotation:0};
@@ -28,7 +28,7 @@ it('moves existing markers, preserves the route during marker updates, and remov
  const marker={addTo:vi.fn().mockReturnThis(),on:vi.fn(),setLatLng:vi.fn(),setIcon:vi.fn(),setZIndexOffset:vi.fn(),getPopup:()=>false,bindPopup:vi.fn()};
  const line={addTo:vi.fn().mockReturnThis(),setLatLngs:vi.fn(),setStyle:vi.fn()};
  const map={fitBounds:vi.fn(),on:vi.fn(),removeLayer:vi.fn(),invalidateSize:vi.fn()};
- const L={map:()=>map,tileLayer:()=>({addTo:()=>({on:vi.fn()})}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),polyline:vi.fn(()=>line),divIcon:(x:unknown)=>x,latLngBounds:(x:unknown)=>x};
+ const L={map:()=>map,tileLayer:()=>({addTo:vi.fn(),on:vi.fn()}),marker:vi.fn((...args:unknown[])=>{void args;return marker;}),polyline:vi.fn(()=>line),divIcon:(x:unknown)=>x,latLngBounds:(x:unknown)=>x};
  const window={ReactNativeWebView:{postMessage:vi.fn()},fleetReceive:undefined as undefined|((message:unknown)=>void)};
  runInNewContext(sources[1][1],{L,window,setTimeout:vi.fn()});
  const point={kind:'marker',coordinate:{latitude:28,longitude:76},title:'<img src=x onerror=alert(1)>',iconType:'bike',zIndexOffset:3000,color:'#22c55e'};
@@ -44,4 +44,27 @@ it('moves existing markers, preserves the route during marker updates, and remov
  const lastFit=JSON.parse(JSON.stringify(map.fitBounds.mock.calls.at(-1)));expect(Array.isArray(lastFit[0])).toBe(true);expect(lastFit[1].paddingBottomRight).toEqual([0,300]);
  expect(map.removeLayer).not.toHaveBeenCalled();
  window.fleetReceive!({type:'updates',layers:[],removed:['bike']});expect(map.removeLayer).toHaveBeenCalledWith(marker);
+});
+
+it('switches street and satellite imagery without changing camera or vehicle layers',()=>{
+ const source=[...mapHtml().matchAll(/<script>([\s\S]*?)<\/script>/g)][1][1];
+ const map={fitBounds:vi.fn(),on:vi.fn(),removeLayer:vi.fn(),invalidateSize:vi.fn()};
+ const tileLayers:{addTo:ReturnType<typeof vi.fn>;on:ReturnType<typeof vi.fn>}[]=[];
+ const L={map:()=>map,tileLayer:vi.fn((url:string,options:unknown)=>{void url;void options;const layer={addTo:vi.fn(),on:vi.fn()};tileLayers.push(layer);return layer;})};
+ const window={ReactNativeWebView:{postMessage:vi.fn()},fleetReceive:undefined as undefined|((message:unknown)=>void)};
+ runInNewContext(source,{L,window,setTimeout:vi.fn()});
+ map.fitBounds.mockClear();
+ window.fleetReceive!({type:'map-type',mapType:'satellite'});
+ expect(L.tileLayer.mock.calls[1]).toEqual([expect.stringContaining('World_Imagery'),expect.objectContaining({attribution:expect.stringContaining('Esri')})]);
+ expect(map.removeLayer).toHaveBeenCalledWith(tileLayers[0]);
+ expect(tileLayers[1].addTo).toHaveBeenCalledWith(map);
+ window.fleetReceive!({type:'map-type',mapType:'satellite'});
+ expect(L.tileLayer).toHaveBeenCalledTimes(2);
+ window.fleetReceive!({type:'map-type',mapType:'street'});
+ expect(L.tileLayer.mock.calls[2][0]).toContain('tile.openstreetmap.org');
+ expect(map.removeLayer).toHaveBeenLastCalledWith(tileLayers[1]);
+ expect(map.fitBounds).not.toHaveBeenCalled();
+ const staleError=tileLayers[1].on.mock.calls.find(([event])=>event==='tileerror')![1];
+ for(let i=0;i<3;i++)staleError();
+ expect(window.ReactNativeWebView.postMessage).not.toHaveBeenCalled();
 });

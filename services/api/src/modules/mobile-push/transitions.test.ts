@@ -15,11 +15,12 @@ beforeAll(async()=>{
  CREATE TABLE vehicles(id uuid PRIMARY KEY,owner_id uuid,vehicle_number text,active boolean DEFAULT true);
  CREATE TABLE devices(id uuid PRIMARY KEY,last_seen_at timestamptz DEFAULT now(),active boolean DEFAULT true);
  CREATE TABLE device_status(device_id uuid,state text,updated_at timestamptz DEFAULT now(),state_since_at timestamptz);
- CREATE TABLE vehicle_device_assignments(vehicle_id uuid,device_id uuid,assigned_at timestamptz,unassigned_at timestamptz);
+ CREATE TABLE vehicle_device_assignments(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),vehicle_id uuid,device_id uuid,assigned_at timestamptz,unassigned_at timestamptz);
+ CREATE TABLE locations(id uuid PRIMARY KEY,vehicle_id uuid,device_id uuid,server_received_at timestamptz);
  CREATE TABLE refresh_tokens(user_id uuid,token_hash text,revoked_at timestamptz,expires_at timestamptz);
  CREATE TABLE mobile_vehicle_notification_preferences(user_id uuid,vehicle_id uuid,muted boolean,updated_at timestamptz DEFAULT now());
  CREATE TABLE notification_history(id uuid,vehicle_id uuid,event_type text,message text,occurred_at timestamptz,dedup_key text,metadata jsonb);`);
- for(const name of ['025_mobile_voice_push.sql','026_mobile_cached_voice.sql'])await state.db.exec(await readFile(new URL(`../../../../../database/migrations/${name}`,import.meta.url),'utf8'));
+ for(const name of ['025_mobile_voice_push.sql','026_mobile_cached_voice.sql','029_parking_mode.sql'])await state.db.exec(await readFile(new URL(`../../../../../database/migrations/${name}`,import.meta.url),'utf8'));
 },30000);
 afterAll(async()=>state.db?.close());
 beforeEach(async()=>{

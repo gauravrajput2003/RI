@@ -3,7 +3,7 @@ export const spokenAlert=(alert:VehicleAlert)=>alert.message.replace(alert.vehic
 export function parseVehicleAlert(value:unknown):VehicleAlert|null {
  if(!value||typeof value!=='object')return null;
  const row=value as Record<string,unknown>;
- if(!['VEHICLE_RUNNING','VEHICLE_IDLE','VEHICLE_STOPPED'].includes(String(row.eventType)))return null;
+ if(!['VEHICLE_RUNNING','VEHICLE_IDLE','VEHICLE_STOPPED','PARKING_MOVEMENT','PARKING_REMINDER','PARKING_RETURNED'].includes(String(row.eventType)))return null;
  for(const key of ['id','vehicleId','vehicleNumber','message','occurredAt'])if(typeof row[key]!=='string'||!row[key])return null;
  const age=Date.now()-new Date(row.occurredAt as string).getTime();
  if(!Number.isFinite(age)||age< -60000||age>300000)return null;

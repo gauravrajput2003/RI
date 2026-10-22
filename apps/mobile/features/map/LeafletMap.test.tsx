@@ -21,5 +21,9 @@ it('initializes the map bridge and updates one marker without reloading its docu
  expect(state.inject).not.toHaveBeenCalled();
  await act(async()=>{for(const message of [{type:'press',id},{type:'pan'},{type:'region',region:{latitude:29,longitude:76,latitudeDelta:1,longitudeDelta:1}}])web.props.onMessage({nativeEvent:{data:JSON.stringify(message)}});});
  expect(press).toHaveBeenCalledOnce();expect(pan).toHaveBeenCalledOnce();expect(region).toHaveBeenCalledOnce();
+ state.inject.mockClear();
+ await act(async()=>tree.update(<MapView mapType="satellite"><Marker coordinate={{latitude:29,longitude:76}} title="Bike" onPress={press}/></MapView>));
+ expect(tree.root.findByType('WebView' as React.ElementType).props.source).toBe(source);
+ expect(state.inject.mock.calls.some(([script])=>script.includes('"type":"map-type","mapType":"satellite"'))).toBe(true);
  await act(async()=>tree.unmount());
 });

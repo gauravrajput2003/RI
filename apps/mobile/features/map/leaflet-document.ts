@@ -7,8 +7,17 @@ export function mapHtml(region?:Region){
  </style></head><body><div id="map"></div><script>${leafletJs}</script><script>
  const post=m=>window.ReactNativeWebView.postMessage(JSON.stringify(m));
  const map=L.map('map',{zoomControl:true,attributionControl:true});
- const tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
- let failed=0;tiles.on('tileerror',()=>{if(++failed>=3)post({type:'tiles-error'});});tiles.on('tileload',()=>{failed=0;post({type:'tiles-ok'});});
+ let tiles,tileType;
+ function setMapType(type){
+  const next=type==='satellite'?'satellite':'street';if(next===tileType)return;
+  if(tiles)map.removeLayer(tiles);tileType=next;
+  const satellite=next==='satellite';
+  const layer=L.tileLayer(satellite?'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}':'https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:satellite?'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community':'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'});
+  tiles=layer;let failed=0;
+  layer.on('tileerror',()=>{if(tiles===layer&&++failed>=3)post({type:'tiles-error'});});layer.on('tileload',()=>{if(tiles===layer){failed=0;post({type:'tiles-ok'});}});
+  layer.addTo(map);
+ }
+ setMapType('street');
  const valid=p=>p&&Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&Math.abs(p.latitude)<=90&&Math.abs(p.longitude)<=180;
  const latlng=p=>[p.latitude,p.longitude];
  let bottomInset=0;
@@ -17,6 +26,7 @@ export function mapHtml(region?:Region){
  const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function icon(p){if(p.svg&&Array.isArray(p.iconSize)){const [w,h]=p.iconSize;const angle=Number.isFinite(p.rotation)?p.rotation:0;return L.divIcon({className:'',iconSize:[w,h],iconAnchor:[w/2,h/2],html:'<div style="width:'+w+'px;height:'+h+'px;transform:rotate('+angle+'deg);transform-origin:50% 50%;">'+p.svg+'</div>'});}const color=/^#[0-9a-f]{6}$/i.test(p.color)?p.color:'#087ca7';const heading=Number.isFinite(p.rotation)?p.rotation:0;const label=escape(p.label);const large=p.iconType==='bike';return L.divIcon({className:'vehicle',iconSize:large?[42,58]:[30,42],iconAnchor:large?[21,29]:[15,21],html:label?'<div style="width:28px;height:28px;border:2px solid white;border-radius:50%;background:'+color+';color:white;text-align:center;line-height:28px;font:bold 16px sans-serif;box-shadow:0 1px 4px #555">'+label+'</div>':'<svg xmlns="http://www.w3.org/2000/svg" width="'+(large?42:30)+'" height="'+(large?58:42)+'" viewBox="0 0 30 42" style="overflow:visible;filter:drop-shadow(0 1px 2px #555);transform:rotate('+heading+'deg)"><ellipse cx="15" cy="22" rx="11" ry="18" fill="#000" opacity=".18"/><rect x="11" y="1" width="8" height="11" rx="3" fill="#1f2937"/><rect x="10" y="30" width="10" height="11" rx="3" fill="#1f2937"/><path d="M15 6 C6 8 5 15 8 24 L10 33 Q15 39 20 33 L22 24 C25 15 24 8 15 6Z" fill="'+color+'" stroke="white" stroke-width="1.5"/><rect x="11" y="22" width="8" height="11" rx="3" fill="#1f2937"/><path d="M6 10H24" stroke="#374151" stroke-width="3"/></svg>'});}
  window.fleetReceive=m=>{
+  if(m.type==='map-type')setMapType(m.mapType);
   if(m.type==='padding'){bottomInset=Math.max(0,Number(m.bottom)||0);const attribution=map.attributionControl?.getContainer?.();if(attribution)attribution.style.marginBottom=bottomInset+'px';}
   if(m.type==='region')region(m.region);
   if(m.type==='fit'){const points=m.coordinates.filter(valid).map(latlng);if(points.length)map.fitBounds(L.latLngBounds(points),{padding:[32,32],maxZoom:17,animate:false});}

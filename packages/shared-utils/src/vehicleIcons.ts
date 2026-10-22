@@ -51,10 +51,10 @@ export const SVGS={bike:BIKE_SVG,scooty:SCOOTY_SVG,car:CAR_SVG,truck:TRUCK_SVG,a
 export const ICON_SIZE={bike:[28,56],scooty:[28,56],car:[36,68],truck:[36,86],auto:[32,58]} as const;
 export type IconType=keyof typeof SVGS;
 export type IconStatus=keyof typeof STATUS_COLORS;
-const TYPES:Record<string,IconType>={bike:'bike',motorcycle:'bike',motorbike:'bike','motor bike':'bike',scooter:'scooty',scooty:'scooty',car:'car',sedan:'car',suv:'car',hatchback:'car',truck:'truck',lorry:'truck',auto:'auto',rickshaw:'auto'};
+const TYPES:Record<string,IconType>={bike:'bike',motorcycle:'bike',motorbike:'bike','motor bike':'bike',scooter:'scooty',scooty:'scooty',car:'car',sedan:'car',suv:'car',hatchback:'car',evcar:'car','ev car':'car','electric car':'car',jeep:'car',van:'car',truck:'truck',lorry:'truck',auto:'auto',rickshaw:'auto','three wheeler':'auto','e rickshaw':'auto',erickshaw:'auto'};
 const STATUSES:Record<string,IconStatus>={unknown:'unknown',online:'unknown',running:'running',moving:'running',overspeed:'running',idle:'idle',stopped:'stopped',unreachable:'unreachable',offline:'unreachable',disconnected:'unreachable',inactive:'unreachable',new:'unreachable'};
 const lookup=<T>(values:Record<string,T>,value:unknown)=>{const key=String(value??'').trim().toLowerCase();return Object.hasOwn(values,key)?values[key]:undefined;};
-export const normalizeType=(type?:string|null):IconType=>lookup(TYPES,type)??'bike';
+export const normalizeType=(type?:string|null):IconType=>lookup(TYPES,type?.trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' '))??'bike';
 type Telemetry={fleet_status?:string|null;status?:string|null;state?:string|null;speed?:number|string|null;current_speed?:number|null;ignition?:boolean|number|string|null;lastSeen?:string|null;last_seen_at?:string|null};
 export function getVehicleStatus(vehicle:Telemetry,offlineMins=30):IconStatus{
  const backend=lookup(STATUSES,vehicle.fleet_status??vehicle.status??vehicle.state);

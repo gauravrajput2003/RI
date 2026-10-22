@@ -4,13 +4,13 @@ The Live Map now renders the selected registration, actual GPS observation time,
 
 ## Layout
 
-The old screen had only a generic count/follow panel; the requested metric panel was absent. `LiveMapPanel.tsx` supplies address, themed speed gauge, Today/Total Km, four paired metric rows and all three bottom actions. The complete panel is the initial state.
+The old screen had only a generic count/follow panel; the requested metric panel was absent. `LiveMapPanel.tsx` supplies address, themed speed gauge, Today/Total Km, four paired metric rows and all three bottom actions. The panel starts collapsed each time Live Map gains focus: only the address and first row (speed gauge, Today Km and Total Km) are visible. Swipe up on that summary to reveal all metric rows and actions; swipe down to collapse. Tapping the summary also toggles it for accessibility. Horizontal map gestures are not captured by the summary.
 
-The panel overlays the map and is measured at runtime. On normal phone sizes it is an intrinsic-height view, **not a vertically scrolling container**. This avoids the unbounded-scroll/overflow problem. Under 600 logical pixels of available content height, rows become compact. Under 490 logical pixels, the panel is deliberately bounded to 70% of the map area and scrollable; lower rows are not silently clipped. Bottom safe-area insets keep actions above the system navigation area. Text scaling is bounded for the compact gauge/address to preserve layout.
+The panel overlays the map and is measured at runtime. On normal phone sizes it is an intrinsic-height view, **not a vertically scrolling container**. This avoids the unbounded-scroll/overflow problem. Under 600 logical pixels of available content height, rows become compact. Under 490 logical pixels, only the expanded details become height-bounded and scrollable; the address and first row remain available for the collapse gesture. Lower rows are not silently clipped. Bottom safe-area insets keep actions above the system navigation area. Text scaling is bounded for the compact gauge/address to preserve layout.
 
 The application-wide connection banner is hidden only on the map route, where the map header supplies state/GPS time and an explicit offline-cache indicator. Other screens retain their banner.
 
-The measured panel height is sent to Leaflet as camera padding, so recentering places the vehicle in the exposed map area rather than underneath the panel. Map attribution is moved above the overlay. Existing zoom controls remain accessible below the north-up indicator. Pan disables auto-centering; selecting a vehicle or pressing recenter restores it. The map remains mounted as data and status change.
+The measured panel height is sent to Leaflet as camera padding, so recentering places the vehicle in the exposed map area rather than underneath the panel. Expansion and collapse recenter the vehicle when Auto Center is enabled, while preserving a manually panned camera when it is disabled. Map attribution is moved above the overlay. Existing zoom controls remain accessible below the north-up indicator. Pan disables auto-centering; selecting a vehicle or pressing recenter restores it. The map remains mounted as data and status change. This vehicle-specific screen renders only the selected vehicle; other cached fleet GPS fixes never become markers, even when nearby or unreachable. Without a valid selected fix, no other vehicle is substituted. Missing vehicle types use the same car display default as the dashboard, and EVCar/Jeep aliases use the car SVG.
 
 ## Status and freshness
 
@@ -55,7 +55,7 @@ The displayed path is themed with the **current vehicle status**. It is not pres
 * Settings: Today Path and Auto Center are functional. Existing Nearby and Street View actions remain accessible here.
 * Play Back, Share and Notification use the selected vehicle ID and retain their existing routes/authorization flows.
 
-**Provider limitation:** current OpenStreetMap raster tiles have no configured live traffic or satellite feed. These two switches are explicitly disabled with an explanation; no traffic or imagery is fabricated and no new provider was introduced. The reference screenshots' Google traffic/satellite appearance cannot be supplied by the current OSM layer.
+**Map layers:** Street uses OpenStreetMap; Satellite now switches to the same Esri World Imagery tiles used by the React web dashboard, with source attribution. Switching replaces only the base tile layer, preserving the camera, selected marker and path. No Google key or native dependency is required. Traffic remains disabled because there is no configured traffic feed. Satellite tiles require internet access and imagery availability varies by location.
 
 ## Actual database verification — 22 October 2026
 
@@ -74,7 +74,7 @@ cd D:\RI
 
 ## Verification and manual checks
 
-Automated fixtures are isolated tests, separate from read-only real-database verification. Tests cover visible metric/action rows on initial render, no normal-height scroll container, marker updates without remounting, map pan/follow/recenter, selected-vehicle navigation, native/browser URL fallback, invalid destinations, polyline recoloring and camera padding. API tests cover scoped reads, missing-day null metrics, real history aggregation, path validity and existing heartbeat/ignition transitions.
+Automated fixtures are isolated tests, separate from read-only real-database verification. Tests cover collapsed initial render, upward/downward summary swipes, tap expansion/collapse, collapse on route refocus, horizontal/small gesture rejection, all metric/action rows after expansion, no normal-height scroll container, marker updates without remounting, map pan/follow/recenter, selected-vehicle navigation, native/browser URL fallback, invalid destinations, polyline recoloring and camera padding. API tests cover scoped reads, missing-day null metrics, real history aggregation, path validity and existing heartbeat/ignition transitions.
 
 Verification results: all 47 mobile test files / 186 tests passed; 85 targeted API tests passed; 5 shared utility tests and 2 web marker tests passed. Mobile TypeScript, API TypeScript build, targeted mobile/API ESLint and `git diff --check` passed. Android and iOS production JavaScript bundles exported successfully.
 
