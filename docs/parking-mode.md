@@ -1,5 +1,15 @@
 # Parking Mode implementation
 
+## Foreground popup, chime and voice
+
+Parking movement and each server-generated reminder enter the same mobile foreground notification runtime as running/idle/stopped alerts. The popup and voice use simple English: “Warning! Vehicle [number] has moved more than [radius] metres from its parking place. Please check your vehicle now.” Neither the popup nor speech includes coordinates or audit timestamps, even if the radius is missing. Event history retains that detail. A bundled three-second siren plays before speech when Sound is enabled; Voice Assistance and Vibration remain independently controlled by existing settings. The siren uses the SDK-compatible `expo-audio` package, works in Expo Go, and stops on acknowledgement, backgrounding, logout, disabling Sound/alerts or runtime cleanup. Audio failure does not suppress speech or the visual alert.
+
+A global red `ParkingAlertDialog` is mounted after the router and opens a separate native modal window above any RI screen or existing dialog. It stays until acknowledged or the vehicle is confirmed back inside; routine state banners cannot replace it. Acknowledgement stops the current alarm and speech without disabling parking or future server reminders. New reminders for that vehicle update the existing popup instead of stacking windows; warnings for other vehicles are retained in a bounded queue. Logout clears that queue. View vehicle on map opens the alert's exact vehicle. Duplicate socket/push deliveries retain event-ID deduplication. Reminders have distinct server event IDs, so every configured interval can alert again; no second phone reminder timer is created. This is an RI foreground dialog, not permission to draw over other apps.
+
+Parking socket delivery discovers current owner/ancestor user rooms and rechecks live vehicle access, notification permission and vehicle mute settings. It no longer depends on a vehicle-room subscription captured before a newly added vehicle existed. Configuration changes use the same current-recipient discovery. Detection, fresh-GPS safeguards, interval timing and cancellation stay on the server.
+
+Reload Metro after installing the new dependency. Expo Go supports the in-app popup, chime and speech only while RI is foregrounded. Installed builds need rebuilding to include `expo-audio`; background OS push still requires a registered token and native credentials. An Expo Go JavaScript update cannot enable background/lock-screen push.
+
 The dashboard's existing Parking icon now opens the selected vehicle's persisted Parking Mode dialog. It supports enable/disable with confirmation, radii 20/30/40/50 metres, reminders at 1/2/5/10 minutes, saved activation/reference timestamps, boundary state, monitoring availability, reference-location map, event history and Live Map navigation. An enabled vehicle shows `Parking ON` on its card. No tracker command, parser change, dependency, dummy vehicle, synthetic production GPS fix or fabricated notification was added.
 
 ## Architecture and persistence

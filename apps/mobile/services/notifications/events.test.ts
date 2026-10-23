@@ -25,3 +25,7 @@ it('accepts fresh parking movement/reminder/re-entry notifications with the actu
   expect(parseVehicleAlert(alert)).toEqual(alert);
  }
 });
+
+it('speaks parking movement and reminder concisely without audit timestamps or coordinates',()=>{
+ for(const eventType of ['PARKING_MOVEMENT','PARKING_REMINDER'])expect(spokenAlert({id:'event',vehicleId:'bike',vehicleNumber:'AB12',eventType,radius:50,message:'Long audit: time and coordinates',occurredAt:new Date().toISOString()})).toBe('Warning! Vehicle A B 1 2 has moved more than 50 metres from its parking place. Please check your vehicle now.');
+});

@@ -1,5 +1,11 @@
-export interface VehicleAlert {id:string;vehicleId:string;vehicleNumber:string;eventType:string;message:string;occurredAt:string;userId?:string;voiceOnly?:boolean}
-export const spokenAlert=(alert:VehicleAlert)=>alert.message.replace(alert.vehicleNumber,alert.vehicleNumber.replace(/\s/g,'').split('').join(' '));
+export interface VehicleAlert {id:string;vehicleId:string;vehicleNumber:string;eventType:string;message:string;occurredAt:string;userId?:string;voiceOnly?:boolean;radius?:number}
+export const isParkingWarning=(alert:VehicleAlert)=>alert.eventType==='PARKING_MOVEMENT'||alert.eventType==='PARKING_REMINDER';
+export function alertMessage(alert:VehicleAlert){
+ if(isParkingWarning(alert)){const distance=typeof alert.radius==='number'&&Number.isFinite(alert.radius)&&alert.radius>0?`more than ${alert.radius} metres from`:'away from';return `Warning! Vehicle ${alert.vehicleNumber} has moved ${distance} its parking place. Please check your vehicle now.`;}
+ if(alert.eventType==='PARKING_RETURNED')return `Vehicle ${alert.vehicleNumber} is back at its parking place.`;
+ return alert.message;
+}
+export const spokenAlert=(alert:VehicleAlert)=>alertMessage(alert).replace(alert.vehicleNumber,alert.vehicleNumber.replace(/\s/g,'').split('').join(' '));
 export function parseVehicleAlert(value:unknown):VehicleAlert|null {
  if(!value||typeof value!=='object')return null;
  const row=value as Record<string,unknown>;

@@ -41,3 +41,10 @@
 .sidebar-collapsed .sidebar .profile .profile-eyebrow,.sidebar-collapsed .sidebar .profile .profile-identity,.sidebar-collapsed .sidebar .profile .profile-contact,.sidebar-collapsed .profile-upload-error{display:none}
 
 .profile-identity>strong{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+
+/* The dashboard table can overflow its grid row. Keep desktop navigation bound
+   to the viewport so page scrolling cannot push its bottom above the screen. */
+@media(min-width:1024px){
+ .app-frame>.sidebar{position:fixed;inset:58px auto 0 0;width:236px;height:auto;overscroll-behavior-y:contain}
+ .app-frame.sidebar-collapsed>.sidebar{width:72px}
+}

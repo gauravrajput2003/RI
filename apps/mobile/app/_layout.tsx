@@ -9,6 +9,7 @@ import { CredentialWarning } from '../components/CredentialWarning';
 import { PreviewNotice } from '../components/PreviewNotice';
 import { DemoNotice } from '../components/DemoNotice';
 import {VehicleAlertBanner} from '../components/VehicleAlertBanner';
+import {ParkingAlertDialog} from '../components/ParkingAlertDialog';
 import {startNotificationRuntime} from '../services/notifications/runtime';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnReconnect: false } } });
 export default function RootLayout() {
@@ -18,5 +19,5 @@ export default function RootLayout() {
     void useAuthStore.getState().hydrate();
     return()=>{stopNotifications();stop();};
   }, []);
-  return <SafeAreaProvider><QueryClientProvider client={queryClient}><DemoNotice /><PreviewNotice /><CredentialWarning /><Stack screenOptions={{ headerShown: false }} /><VehicleAlertBanner/></QueryClientProvider></SafeAreaProvider>;
+  return <SafeAreaProvider><QueryClientProvider client={queryClient}><DemoNotice /><PreviewNotice /><CredentialWarning /><Stack screenOptions={{ headerShown: false }} /><VehicleAlertBanner/><ParkingAlertDialog/></QueryClientProvider></SafeAreaProvider>;
 }

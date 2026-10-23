@@ -38,18 +38,27 @@ export async function publishVehicleLocation(io:Server,vehicleId:string,payload:
 }
 export async function publishVehicleNotification(io:Server,vehicleId:string,payload:Record<string,unknown>):Promise<void>{
   const authorizer=authorizers.get(io);if(!authorizer)return;
-  for(const socket of await io.in(`vehicle:${vehicleId}`).fetchSockets()){
+  // Parking must also reach sessions opened before the vehicle was registered.
+  // Candidate user rooms are current; authorization is still checked per socket.
+  for(const socket of await vehicleCandidates(io,authorizer,vehicleId,String(payload.eventType).startsWith('PARKING_'))){
     const principal=socket.data.principal as SocketPrincipal|undefined;
-    try{if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId)){if(!authorizer.canReceiveNotifications||await authorizer.canReceiveNotifications(principal.id))socket.emit('notification:new',payload)}else await socket.leave(`vehicle:${vehicleId}`)}catch{await socket.leave(`vehicle:${vehicleId}`)}
+    try{if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId)){if(!authorizer.canReceiveNotifications||await authorizer.canReceiveNotifications(principal.id,vehicleId))socket.emit('notification:new',payload)}else await socket.leave(`vehicle:${vehicleId}`)}catch{await socket.leave(`vehicle:${vehicleId}`)}
   }
 }
 export async function publishUserNotification(io:Server,userId:string,payload:Record<string,unknown>):Promise<void>{const authorizer=authorizers.get(io);if(!authorizer)return;if(authorizer.canReceiveNotifications&&!await authorizer.canReceiveNotifications(userId))return;io.to(`user:${userId}`).emit('notification:new',payload)}
 
 export async function publishVehicleParking(io:Server,vehicleId:string,payload:Record<string,unknown>){
  const authorizer=authorizers.get(io);if(!authorizer)return;
- for(const socket of await io.in(`vehicle:${vehicleId}`).fetchSockets()){
+ for(const socket of await vehicleCandidates(io,authorizer,vehicleId,true)){
   const principal=socket.data.principal as SocketPrincipal|undefined;
   if(principal&&await authorizer.canAccessVehicle(principal.id,vehicleId))socket.emit('parking:changed',payload);
   else await socket.leave(`vehicle:${vehicleId}`);
  }
+}
+
+async function vehicleCandidates(io:Server,authorizer:VehicleAuthorizer,vehicleId:string,discover:boolean){
+ if(!discover)return io.in(`vehicle:${vehicleId}`).fetchSockets();
+ if(!authorizer.vehicleRecipientIds)return io.fetchSockets();
+ const ids=await authorizer.vehicleRecipientIds(vehicleId);
+ return ids.length?io.in(ids.map(id=>`user:${id}`)).fetchSockets():[];
 }

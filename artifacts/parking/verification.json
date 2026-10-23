@@ -3,7 +3,7 @@
     "029_parking_mode.sql",
     "030_parking_reference_accuracy.sql"
   ],
-  "verifiedAt": "2026-10-23T05:05:08.115Z",
+  "verifiedAt": "2026-10-23T15:17:48.663Z",
   "responses": [
     {
       "vehicleNumber": "1234",
@@ -42,6 +42,15 @@
       "message": "A fresh, valid GPS position from one active assigned tracker is required."
     },
     {
+      "vehicleNumber": "hrx03test",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
       "vehicleNumber": "pn804747",
       "enabled": false,
       "canEnable": false,
@@ -70,7 +79,7 @@
     }
   ],
   "push": {
-    "registered_devices": 12,
+    "registered_devices": 14,
     "enabled_push_tokens": 0
   },
   "counts": {

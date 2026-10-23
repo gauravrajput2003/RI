@@ -8,11 +8,12 @@ import {api} from '../api/client';
 import {useAuthStore} from '../../store/authStore';
 import {useSettingsStore} from '../../store/settingsStore';
 import {useNotificationStore} from '../../store/notificationStore';
-import {parseVehicleAlert,subscribeMobileAlerts,spokenAlert} from './events';
+import {parseVehicleAlert,subscribeMobileAlerts,spokenAlert,isParkingWarning} from './events';
 import {claimAlert,PUSH_SESSION,registerVoiceTask} from './background';
 import {voiceQueue,stopVoice} from './voice';
 import {config} from '../../constants/config';
 import {prepareIosVehicleSounds} from './ios-sounds';
+import {playParkingAlarm,stopParkingAlarm} from './parking-sound';
 
 export function startNotificationRuntime(queryClient?:QueryClient){
  if(config.demoMode)return()=>{};
@@ -76,24 +77,34 @@ export function startNotificationRuntime(queryClient?:QueryClient){
   const alert=parseVehicleAlert(payload),settings=useSettingsStore.getState(),auth=useAuthStore.getState();
   if(!alert||!auth.sessionKey||!settings.alertNotification||AppState.currentState!=='active')return;
   const expected=auth.sessionKey;
+  let chime:Promise<void>|undefined;
   if(alert.userId){const saved=JSON.parse(await AsyncStorage.getItem(PUSH_SESSION)??'null');if(saved?.userId!==alert.userId||saved.sessionKey!==expected)return;}
   if(!alert.voiceOnly&&await claimAlert(alert.id,'popup')){
-   if(disposed||useAuthStore.getState().sessionKey!==expected)return;
+   if(disposed||useAuthStore.getState().sessionKey!==expected||AppState.currentState!=='active')return;
+   const previous=useNotificationStore.getState().alert;
+   if(isParkingWarning(alert)||alert.eventType==='PARKING_RETURNED'&&previous?.vehicleId===alert.vehicleId){stopVoice();stopParkingAlarm();}
    useNotificationStore.getState().show(alert);
+   // Routine state announcements must not talk over an urgent parking siren.
+   if(!isParkingWarning(alert)&&isParkingWarning(useNotificationStore.getState().alert??alert))return;
    if(settings.vibration)Vibration.vibrate([0,250,100,250]);
-
+   if(settings.sound&&(alert.eventType==='PARKING_MOVEMENT'||alert.eventType==='PARKING_REMINDER'))chime=playParkingAlarm().catch(()=>{});
   }
+  // A siren failure must not suppress the popup or spoken warning.
+  await chime;
+  if(isParkingWarning(alert)&&useNotificationStore.getState().alert?.id!==alert.id)return;
   if(settings.voiceAssistance&&await claimAlert(alert.id,'voice')){
-   if(!disposed&&useAuthStore.getState().sessionKey===expected&&useSettingsStore.getState().voiceAssistance&&useSettingsStore.getState().alertNotification)voiceQueue.add(spokenAlert(alert));
+   if(!disposed&&AppState.currentState==='active'&&useAuthStore.getState().sessionKey===expected&&useSettingsStore.getState().voiceAssistance&&useSettingsStore.getState().alertNotification)voiceQueue.add(spokenAlert(alert));
   }
  };
  const stopEvents=subscribeMobileAlerts(payload=>{void receive(payload).catch(()=>{});});
  const stopSettings=useSettingsStore.subscribe((state,previous)=>{
   if(!state.voiceAssistance||!state.alertNotification)stopVoice();
+  if(!state.sound||!state.alertNotification)stopParkingAlarm();
+  if(!state.alertNotification)useNotificationStore.getState().clear();
   if(state.alertNotification!==previous.alertNotification||state.voiceAssistance!==previous.voiceAssistance||state.sound!==previous.sound||state.vibration!==previous.vibration)schedule();
  });
  const stopAuth=useAuthStore.subscribe((state,previous)=>{
-  if(state.sessionKey!==sessionKey){sessionKey=state.sessionKey;stopVoice();useNotificationStore.getState().dismiss();void AsyncStorage.removeItem(PUSH_SESSION);if(Notifications&&!state.sessionKey){void Notifications.unregisterForNotificationsAsync().catch(()=>{});void Notifications.dismissAllNotificationsAsync().catch(()=>{});}}
+  if(state.sessionKey!==sessionKey){sessionKey=state.sessionKey;stopVoice();stopParkingAlarm();useNotificationStore.getState().clear();void AsyncStorage.removeItem(PUSH_SESSION);if(Notifications&&!state.sessionKey){void Notifications.unregisterForNotificationsAsync().catch(()=>{});void Notifications.dismissAllNotificationsAsync().catch(()=>{});}}
   if(state.tokens!==previous.tokens||state.sessionKey!==previous.sessionKey)schedule();
  });
  let stopReceived:(()=>void)|undefined;
@@ -119,7 +130,7 @@ export function startNotificationRuntime(queryClient?:QueryClient){
   const signature=(snapshot?.pages?.flatMap(page=>page.data??[]).map(vehicle=>`${vehicle.id}:${vehicle.vehicle_number}`).sort()??[]).join('|');
   if(signature&&signature!==fleetSignature){fleetSignature=signature;schedule();}
  });
- const app=AppState.addEventListener('change',state=>{if(state==='active')schedule();else stopVoice();});
+ const app=AppState.addEventListener('change',state=>{if(state==='active')schedule();else{stopVoice();stopParkingAlarm();}});
  schedule();
- return()=>{disposed=true;generation++;clearTimeout(timer);stopEvents();stopSettings();stopAuth();stopReceived?.();stopFleet?.();app.remove();stopVoice();};
+ return()=>{disposed=true;generation++;clearTimeout(timer);stopEvents();stopSettings();stopAuth();stopReceived?.();stopFleet?.();app.remove();stopVoice();stopParkingAlarm();};
 }
