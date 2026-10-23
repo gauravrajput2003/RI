@@ -26,6 +26,7 @@ export function normalizeLocation(input: unknown): Location | null {
   return parsed.success ? parsed.data as Location : null;
 }
 export const vehicleSchema = z.object({
+  parking_enabled:z.boolean().optional(),
   ...activity,
   id: z.string(), vehicle_number: z.string(), alias: z.string().nullable().default(null),
   vehicle_type: z.string().nullable().default(null), odometer: numeric.nullable().default(null),

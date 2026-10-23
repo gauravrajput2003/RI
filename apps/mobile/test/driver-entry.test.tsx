@@ -6,6 +6,7 @@ import Dashboard from '../app/(app)/index';
 const mock=vi.hoisted(()=>({vehicles:[{id:'vehicle-a',vehicle_number:'FIRST',alias:null,vehicle_type:'bike',odometer:null,active:true},{id:'vehicle-b',vehicle_number:'SECOND',alias:null,vehicle_type:'car',odometer:null,active:true}],live:{byVehicleId:{}}}));
 vi.mock('../components/fleet/Header',()=>({FleetHeader:()=>null}));
 vi.mock('../components/fleet/BikeCard',()=>({BikeCard:(props:Record<string,unknown>)=>React.createElement('BikeCard',props)}));
+vi.mock('../components/fleet/ParkingSheet',()=>({ParkingSheet:(props:Record<string,unknown>)=>React.createElement('ParkingSheet',props)}));
 vi.mock('../components/fleet/RelaySheet',()=>({RelaySheet:(props:Record<string,unknown>)=>React.createElement('RelaySheet',props)}));
 vi.mock('../components/fleet/DriverSheet',()=>({DriverSheet:(props:Record<string,unknown>)=>React.createElement('DriverSheet',props)}));
 vi.mock('../components/fleet/NearbySheet',()=>({NearbySheet:()=>null}));
@@ -35,6 +36,10 @@ it('the existing dashboard Driver icon opens the red-modal workflow for the sele
   await act(async()=>tree.root.findByProps({accessibilityLabel:'Lock'}).props.onPress());
   expect(tree.root.findByType('RelaySheet' as React.ElementType).props.vehicle.id).toBe(id);
   await act(async()=>tree.root.findByType('RelaySheet' as React.ElementType).props.onClose());
+  await act(async()=>tree.root.findAllByType('BikeCard' as React.ElementType)[index].props.onPress());
+  await act(async()=>tree.root.findByProps({accessibilityLabel:'Parking'}).props.onPress());
+  expect(tree.root.findByType('ParkingSheet' as React.ElementType).props.vehicle.id).toBe(id);
+  await act(async()=>tree.root.findByType('ParkingSheet' as React.ElementType).props.onClose());
  }
  await act(async()=>tree.unmount());cache.clear();
 });

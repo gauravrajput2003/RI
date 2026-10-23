@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-10-22T15:58:39.616Z",
+  "verifiedAt": "2026-10-23T05:04:45.919Z",
   "pendingMigrations": [],
   "vehicles": [
     {
@@ -30,7 +30,7 @@
       "vehicle_number": "HR12AU6674",
       "vehicle_type": "Bike",
       "active": true,
-      "relay_configured": false,
+      "relay_configured": true,
       "protocol": "GT06",
       "model": null,
       "device_relay_capability": null,
@@ -120,12 +120,12 @@
     },
     {
       "vehicleNumber": "HR12AU6674",
-      "configured": false,
+      "configured": true,
       "state": "unknown",
       "canLock": false,
       "canUnlock": false,
-      "code": "RELAY_DISABLED",
-      "message": "Relay control is not enabled for this vehicle."
+      "code": "RELAY_UNSUPPORTED",
+      "message": "This tracker does not support verified remote relay control in this server. Its command syntax, safety restrictions and result handling have not been verified."
     },
     {
       "vehicleNumber": "HR12AX6674",

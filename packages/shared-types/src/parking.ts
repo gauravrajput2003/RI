@@ -6,6 +6,6 @@ export interface ParkingMode {
  radius:number;repeatMinutes:number;activatedAt:string|null;referenceAt:string|null;
  reference:{latitude:number;longitude:number}|null;
  boundaryState:'inside'|'outside'|'unknown';lastEvaluatedAt:string|null;distanceMeters:number|null;
- monitoring:boolean;message:string;canEnable:boolean;
+ pushAvailable?:boolean;monitoring:boolean;message:string;canEnable:boolean;
  history:Array<{id:string;eventType:string;message:string;occurredAt:string;metadata:Record<string,unknown>}>;
 }

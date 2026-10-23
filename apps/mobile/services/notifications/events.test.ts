@@ -18,3 +18,10 @@ describe('vehicle voice alerts',()=>{
   queue.add('New session');expect(speak.mock.calls[2][0]).toBe('New session');
  });
 });
+
+it('accepts fresh parking movement/reminder/re-entry notifications with the actual selected vehicle',()=>{
+ for(const eventType of ['PARKING_MOVEMENT','PARKING_REMINDER','PARKING_RETURNED']){
+  const alert={id:'parking-event',vehicleId:'selected',vehicleNumber:'SELECTED',eventType,message:'Actual parking event',occurredAt:new Date().toISOString()};
+  expect(parseVehicleAlert(alert)).toEqual(alert);
+ }
+});

@@ -20,7 +20,7 @@ beforeAll(async()=>{
  CREATE TABLE refresh_tokens(user_id uuid,token_hash text,revoked_at timestamptz,expires_at timestamptz);
  CREATE TABLE mobile_vehicle_notification_preferences(user_id uuid,vehicle_id uuid,muted boolean,updated_at timestamptz DEFAULT now());
  CREATE TABLE notification_history(id uuid,vehicle_id uuid,event_type text,message text,occurred_at timestamptz,dedup_key text,metadata jsonb);`);
- for(const name of ['025_mobile_voice_push.sql','026_mobile_cached_voice.sql','029_parking_mode.sql'])await state.db.exec(await readFile(new URL(`../../../../../database/migrations/${name}`,import.meta.url),'utf8'));
+ for(const name of ['025_mobile_voice_push.sql','026_mobile_cached_voice.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql'])await state.db.exec(await readFile(new URL(`../../../../../database/migrations/${name}`,import.meta.url),'utf8'));
 },30000);
 afterAll(async()=>state.db?.close());
 beforeEach(async()=>{

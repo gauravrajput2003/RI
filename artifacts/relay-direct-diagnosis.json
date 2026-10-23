@@ -1,0 +1,177 @@
+{
+  "verifiedAt": "2026-10-23T05:04:45.919Z",
+  "pendingMigrations": [],
+  "vehicles": [
+    {
+      "vehicle_number": "1234",
+      "vehicle_type": "Car",
+      "active": true,
+      "relay_configured": false,
+      "protocol": "GT06",
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": true,
+      "last_seen_at": null,
+      "last_gps_received": null
+    },
+    {
+      "vehicle_number": "DL675434",
+      "vehicle_type": "Car",
+      "active": true,
+      "relay_configured": false,
+      "protocol": "GT06",
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": true,
+      "last_seen_at": null,
+      "last_gps_received": null
+    },
+    {
+      "vehicle_number": "HR12AU6674",
+      "vehicle_type": "Bike",
+      "active": true,
+      "relay_configured": true,
+      "protocol": "GT06",
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": true,
+      "last_seen_at": "2026-10-15T18:30:11.924Z",
+      "last_gps_received": "2026-10-15T17:21:16.855Z"
+    },
+    {
+      "vehicle_number": "HR12AX6674",
+      "vehicle_type": "Bike",
+      "active": true,
+      "relay_configured": false,
+      "protocol": "GT06",
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": true,
+      "last_seen_at": "2026-10-09T05:44:37.709Z",
+      "last_gps_received": "2026-10-09T05:44:37.709Z"
+    },
+    {
+      "vehicle_number": "pn804747",
+      "vehicle_type": "Bike",
+      "active": true,
+      "relay_configured": false,
+      "protocol": "GT06",
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": true,
+      "last_seen_at": null,
+      "last_gps_received": null
+    },
+    {
+      "vehicle_number": "TEST-VEH-001",
+      "vehicle_type": "Truck",
+      "active": true,
+      "relay_configured": false,
+      "protocol": null,
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": null,
+      "last_seen_at": null,
+      "last_gps_received": null
+    },
+    {
+      "vehicle_number": "TEST-VEH-002",
+      "vehicle_type": "Car",
+      "active": true,
+      "relay_configured": false,
+      "protocol": null,
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": null,
+      "last_seen_at": null,
+      "last_gps_received": null
+    },
+    {
+      "vehicle_number": "TEST-VEH-003",
+      "vehicle_type": "Motorcycle",
+      "active": true,
+      "relay_configured": false,
+      "protocol": null,
+      "model": null,
+      "device_relay_capability": null,
+      "device_active": null,
+      "last_seen_at": null,
+      "last_gps_received": null
+    }
+  ],
+  "responses": [
+    {
+      "vehicleNumber": "1234",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    },
+    {
+      "vehicleNumber": "DL675434",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    },
+    {
+      "vehicleNumber": "HR12AU6674",
+      "configured": true,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_UNSUPPORTED",
+      "message": "This tracker does not support verified remote relay control in this server. Its command syntax, safety restrictions and result handling have not been verified."
+    },
+    {
+      "vehicleNumber": "HR12AX6674",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    },
+    {
+      "vehicleNumber": "pn804747",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    },
+    {
+      "vehicleNumber": "TEST-VEH-001",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    },
+    {
+      "vehicleNumber": "TEST-VEH-002",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    },
+    {
+      "vehicleNumber": "TEST-VEH-003",
+      "configured": false,
+      "state": "unknown",
+      "canLock": false,
+      "canUnlock": false,
+      "code": "RELAY_DISABLED",
+      "message": "Relay control is not enabled for this vehicle."
+    }
+  ],
+  "physicalCommandsSent": 0
+}

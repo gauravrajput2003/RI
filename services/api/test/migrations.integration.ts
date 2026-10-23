@@ -18,7 +18,7 @@ let created = false;
 let originalFleet: unknown;
 const tables = ['users','groups','devices','vehicles','vehicle_device_assignments','vehicle_groups',
   'device_status','locations','events','subscriptions','refresh_tokens','schema_migrations','geofences','geofence_vehicle_assignments',
-  'alert_configurations','alert_configuration_events','notification_history','alert_vehicle_event_state','alert_geofence_state','alert_subscription_event_state','announcements','announcement_dismissals','announcement_recipients','coin_transactions','password_access_audit','coin_sales','coin_batches','issuance_settings','permissions','admin_permissions','permission_change_audit'].sort();
+  'alert_configurations','alert_configuration_events','notification_history','alert_vehicle_event_state','alert_geofence_state','alert_subscription_event_state','announcements','announcement_dismissals','announcement_recipients','coin_transactions','password_access_audit','coin_sales','coin_batches','issuance_settings','permissions','admin_permissions','permission_change_audit','vehicle_share_sessions','mobile_vehicle_notification_preferences','announcement_reads','reverse_geocode_cache','cell_location_cache','mobile_push_devices','mobile_vehicle_transitions','mobile_push_outbox','drivers','vehicle_driver_assignments','vehicle_relay_commands','parking_modes'].sort();
 
 async function snapshot() {
   return {
@@ -88,7 +88,7 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   const resolved=fileURLToPath(new URL('../../../database/migrations/',import.meta.url));
   expect(await realpath(resolved)).toBe(await realpath(fileURLToPath(new URL('../../../database/migrations',import.meta.url))));
   const names=(await readdir(resolved)).filter(name=>name.endsWith('.sql')).sort();
-  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql','011_announcement_images.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql']);
+  expect(names).toEqual(['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','006_geofence_management.sql','007_alerts_and_announcements.sql','008_subscription_alerts.sql','009_coin_distribution.sql','010_announcement_recipients.sql','011_announcement_images.sql','011_user_avatars.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','019_mobile_actions.sql','020_announcement_reads.sql','021_reverse_geocoding.sql','022_cell_location_cache.sql','023_device_state_since.sql','024_gt06_gps_week_rollover.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','027_driver_management.sql','028_vehicle_relay_commands.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql']);
   console.info('MIGRATION TARGET',JSON.stringify({database,runner:fileURLToPath(runner),directory:resolved,names}));
   const migrate = async (cwd:string) => {
     const output=await exec(process.execPath,['--import','tsx',fileURLToPath(runner)],{
@@ -104,13 +104,15 @@ it('initializes a pristine real PostgreSQL/PostGIS database with the repository 
   expect(actualTables).toEqual([...tables,'spatial_ref_sys'].sort());
   expect((await verification.query("SELECT extname FROM pg_extension WHERE extname IN ('postgis','pgcrypto') ORDER BY extname")).rows.map(row=>row.extname)).toEqual(['pgcrypto','postgis']);
   const first = await snapshot();
+  expect(first.columns).toContainEqual(expect.objectContaining({table_name:'parking_modes',column_name:'reference_accuracy_m',is_nullable:'YES'}));
+  expect(first.constraints).toContainEqual(expect.objectContaining({table_name:'mobile_push_outbox',contype:'u',definition:'UNIQUE (device_id, vehicle_id, source, sequence)'}));
   expect(first.migrations.map(row=>row.name)).toEqual(names);
   expect(first.migrations.every(row=>row.applied_at instanceof Date)).toBe(true);
 
   // Assert all application primary keys and declared foreign-key relationships.
   const primary = Object.fromEntries(first.constraints.filter(row=>row.contype==='p' && tables.includes(row.table_name))
     .map(row=>[row.table_name,row.definition]));
-  const compositePrimary:Record<string,string>={permissions:'PRIMARY KEY (key)',admin_permissions:'PRIMARY KEY (admin_id, permission_key)',vehicle_groups:'PRIMARY KEY (vehicle_id, group_id)',device_status:'PRIMARY KEY (device_id)',schema_migrations:'PRIMARY KEY (name)',alert_configuration_events:'PRIMARY KEY (alert_id, event_type)',alert_vehicle_event_state:'PRIMARY KEY (vehicle_id, event_type)',alert_geofence_state:'PRIMARY KEY (geofence_id, vehicle_id)',alert_subscription_event_state:'PRIMARY KEY (subscription_id, event_type)',announcement_dismissals:'PRIMARY KEY (announcement_id, user_id)',announcement_recipients:'PRIMARY KEY (announcement_id, user_id)'};
+  const compositePrimary:Record<string,string>={vehicle_share_sessions:'PRIMARY KEY (token_hash)',mobile_vehicle_notification_preferences:'PRIMARY KEY (user_id, vehicle_id)',announcement_reads:'PRIMARY KEY (announcement_id, user_id)',reverse_geocode_cache:'PRIMARY KEY (coordinate_key)',cell_location_cache:'PRIMARY KEY (cell_key)',mobile_vehicle_transitions:'PRIMARY KEY (vehicle_id)',parking_modes:'PRIMARY KEY (vehicle_id)',permissions:'PRIMARY KEY (key)',admin_permissions:'PRIMARY KEY (admin_id, permission_key)',vehicle_groups:'PRIMARY KEY (vehicle_id, group_id)',device_status:'PRIMARY KEY (device_id)',schema_migrations:'PRIMARY KEY (name)',alert_configuration_events:'PRIMARY KEY (alert_id, event_type)',alert_vehicle_event_state:'PRIMARY KEY (vehicle_id, event_type)',alert_geofence_state:'PRIMARY KEY (geofence_id, vehicle_id)',alert_subscription_event_state:'PRIMARY KEY (subscription_id, event_type)',announcement_dismissals:'PRIMARY KEY (announcement_id, user_id)',announcement_recipients:'PRIMARY KEY (announcement_id, user_id)'};
   for (const table of tables) expect(primary[table]).toBe(compositePrimary[table]??'PRIMARY KEY (id)');
   const expectedForeign:Record<string,string[]> = {
     users:['FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT'],

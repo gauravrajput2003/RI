@@ -10,8 +10,8 @@ export function pointQuality(p:ParkingPoint,now:Date,radius:number,policy=PARKIN
  if(accuracy!=null&&(!Number.isFinite(Number(accuracy))||Number(accuracy)<0||Number(accuracy)>radius))return false;
  return true;
 }
-export function classification(p:ParkingPoint,origin:{latitude:number;longitude:number},radius:number,policy=PARKING_POLICY){
+export function classification(p:ParkingPoint,origin:{latitude:number;longitude:number;reference_accuracy_m?:number|null},radius:number,policy=PARKING_POLICY){
  const distance=distanceMeters(origin.latitude,origin.longitude,p.latitude!,p.longitude!);
- const accuracy=Number(p.metadata?.accuracyMeters??p.metadata?.accuracy_meters??p.metadata?.accuracy??0);
+ const accuracy=Number(p.metadata?.accuracyMeters??p.metadata?.accuracy_meters??p.metadata?.accuracy??0)+(origin.reference_accuracy_m??0);
  return {distance,outside:distance-accuracy>radius+policy.hysteresisMeters,inside:distance+accuracy<Math.max(0,radius-policy.hysteresisMeters)};
 }

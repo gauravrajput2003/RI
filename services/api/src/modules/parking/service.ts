@@ -1,6 +1,8 @@
+import {logger} from '../../lib/logger.js';
 import {randomUUID} from 'node:crypto';
 import type {PoolClient} from 'pg';
-import type {ParkingInput,ParkingMode} from '@fleet/shared-types';
+import {PERMISSIONS,type ParkingInput,type ParkingMode} from '@fleet/shared-types';
+import {hasPermissionForUser} from '../authorization/permissions.js';
 import {query,transaction} from '../../db/pool.js';
 import {env} from '../../config/env.js';
 import {AppError} from '../../lib/errors.js';
@@ -10,7 +12,7 @@ import {enqueueParkingPush} from '../mobile-push/service.js';
 
 export const parkingPolicy=()=>({maxAgeSeconds:env.PARKING_GPS_MAX_AGE_SECONDS??120,consecutive:env.PARKING_CONSECUTIVE_READINGS??3,hysteresisMeters:env.PARKING_HYSTERESIS_METERS??5});
 interface Vehicle {id:string;owner_id:string;vehicle_number:string;active:boolean;device_id:string|null;assignment_id:string|null;device_active:boolean|null;device_owner:string|null;last_seen_at:Date|null;assignment_count:number}
-export interface ParkingRow {vehicle_id:string;owner_id:string;device_id:string;assignment_id:string;enabled:boolean;version:number;activation_id:string;latitude:number;longitude:number;reference_at:Date;activated_at:Date;radius_m:number;repeat_minutes:number;boundary_state:'inside'|'outside'|'unknown';outside_count:number;inside_count:number;cursor_at:Date;cursor_id:string;last_gps_at:Date|null;last_point:ParkingPoint|null;last_distance_m:number|null;quality_ok:boolean;movement_id:string|null;last_movement_at:Date|null;last_alert_at:Date|null;alert_sequence:string}
+export interface ParkingRow {vehicle_id:string;owner_id:string;device_id:string;assignment_id:string;enabled:boolean;version:number;activation_id:string;latitude:number;longitude:number;reference_at:Date;activated_at:Date;radius_m:number;reference_accuracy_m:number|null;repeat_minutes:number;boundary_state:'inside'|'outside'|'unknown';outside_count:number;inside_count:number;cursor_at:Date;cursor_id:string;last_gps_at:Date|null;last_point:ParkingPoint|null;last_distance_m:number|null;quality_ok:boolean;movement_id:string|null;last_movement_at:Date|null;last_alert_at:Date|null;alert_sequence:string}
 async function scopedVehicle(client:PoolClient,actor:string,id:string,lock=false):Promise<Vehicle>{
  const row=(await client.query<Vehicle>(`${userScopeCte} SELECT v.id,v.owner_id,v.vehicle_number,v.active,
   a.id AS assignment_id,a.device_id,d.active AS device_active,d.owner_id AS device_owner,d.last_seen_at,
@@ -34,11 +36,15 @@ export async function parkingStatus(actor:string,id:string,now=new Date()):Promi
   const fix=assignmentReady(v)?await latest(client,v):undefined;
   const available=assignmentReady(v)&&online(v,now)&&Boolean(fix&&pointQuality(fix,now,p?.radius_m??20,parkingPolicy()));
   const monitoring=Boolean(p?.enabled&&assignmentReady(v,p)&&online(v,now)&&p.quality_ok&&p.last_point&&pointQuality(p.last_point,now,p.radius_m,parkingPolicy()));
+  const pushRegistered=Boolean((await client.query(`SELECT 1 FROM mobile_push_devices d WHERE d.user_id=$1 AND d.enabled AND d.expo_token IS NOT NULL
+   AND EXISTS(SELECT 1 FROM refresh_tokens t WHERE t.user_id=d.user_id AND t.token_hash=d.refresh_token_hash AND t.revoked_at IS NULL AND t.expires_at>now())
+   AND NOT EXISTS(SELECT 1 FROM mobile_vehicle_notification_preferences p WHERE p.user_id=$1 AND p.vehicle_id=$2 AND p.muted) LIMIT 1`,[actor,id])).rows[0]);
+  const pushAvailable=pushRegistered&&await hasPermissionForUser(actor,PERMISSIONS.notificationsView);
   const history=(await client.query<ParkingMode['history'][number]>(`SELECT id,event_type AS "eventType",message,occurred_at AS "occurredAt",metadata FROM notification_history WHERE vehicle_id=$1 AND event_type IN ('PARKING_MOVEMENT','PARKING_REMINDER','PARKING_RETURNED') AND metadata->>'ownerId'=$2 ORDER BY occurred_at DESC,id DESC LIMIT 20`,[id,v.owner_id])).rows;
   return {vehicleId:id,vehicleNumber:v.vehicle_number,enabled:p?.enabled??false,version:saved?.version??null,radius:p?.radius_m??20,repeatMinutes:p?.repeat_minutes??1,
    activatedAt:iso(p?.activated_at??null),referenceAt:iso(p?.reference_at??null),reference:p&&p.owner_id===v.owner_id?{latitude:p.latitude,longitude:p.longitude}:null,
    boundaryState:p?.boundary_state??'unknown',lastEvaluatedAt:iso(p?.last_gps_at??null),distanceMeters:p?.last_distance_m??null,monitoring,
-   canEnable:available,message:p?.enabled?(monitoring?'Monitoring fresh GPS readings.':'Monitoring paused: fresh, reliable GPS and the original assigned tracker are required.'):(available?'Ready to capture the latest vehicle GPS position.':'A fresh, valid GPS position from one active assigned tracker is required.'),history};
+   pushAvailable,canEnable:available,message:p?.enabled?(monitoring?'Monitoring fresh GPS readings.':'Monitoring paused: fresh, reliable GPS and the original assigned tracker are required.'):(available?'Ready to capture the latest vehicle GPS position.':'A fresh, valid GPS position from one active assigned tracker is required.'),history};
  });
 }
 async function cancelQueued(client:PoolClient,id:string){await client.query("UPDATE mobile_push_outbox SET cancelled_at=now(),last_error='Parking configuration changed' WHERE vehicle_id=$1 AND source='parking' AND sent_at IS NULL AND cancelled_at IS NULL",[id]);}
@@ -52,18 +58,19 @@ export async function saveParking(actor:string,id:string,input:ParkingInput,now=
   if(!input.enabled){
    if(p)await client.query('UPDATE parking_modes SET enabled=false,version=version+1,updated_by=$2,updated_at=$3 WHERE vehicle_id=$1',[id,actor,now]);
   }else if(owned?.enabled){
+   if(owned.reference_accuracy_m!=null&&owned.reference_accuracy_m>input.radius)throw new AppError(409,'PARKING_ACCURACY','The saved parking reference is not accurate enough for this radius. Disable and enable again with a more precise GPS fix.');
    if(!assignmentReady(v,owned))throw new AppError(409,'PARKING_ASSIGNMENT_CHANGED','Tracker assignment changed. Disable Parking Mode and enable it again with a fresh position.');
    await client.query("UPDATE parking_modes SET radius_m=$2,repeat_minutes=$3,version=version+1,boundary_state='unknown',outside_count=0,inside_count=0,movement_id=NULL,last_alert_at=NULL,updated_by=$4,updated_at=$5 WHERE vehicle_id=$1",[id,input.radius,input.repeatMinutes,actor,now]);
   }else{
    if(!assignmentReady(v))throw new AppError(409,'PARKING_DEVICE_UNAVAILABLE','A single active tracker belonging to this vehicle must be assigned.');
    const point=await latest(client,v);
    if(!online(v,now)||!point||!pointQuality(point,now,input.radius,parkingPolicy()))throw new AppError(409,'PARKING_GPS_UNAVAILABLE','A fresh, valid GPS position is required. Parking Mode was not enabled.');
-   await client.query(`INSERT INTO parking_modes(vehicle_id,owner_id,device_id,assignment_id,enabled,activation_id,latitude,longitude,reference_at,activated_at,radius_m,repeat_minutes,cursor_at,cursor_id,last_gps_at,last_point,last_distance_m,updated_by)
-    VALUES($1,$2,$3,$4,true,$5,$6,$7,$8,$9,$10,$11,$12,$13,$8,$14,0,$15)
+   await client.query(`INSERT INTO parking_modes(vehicle_id,owner_id,device_id,assignment_id,enabled,activation_id,latitude,longitude,reference_at,activated_at,radius_m,repeat_minutes,cursor_at,cursor_id,last_gps_at,last_point,last_distance_m,updated_by,reference_accuracy_m)
+    VALUES($1,$2,$3,$4,true,$5,$6,$7,$8,$9,$10,$11,$12,$13,$8,$14,0,$15,$16)
     ON CONFLICT(vehicle_id) DO UPDATE SET owner_id=EXCLUDED.owner_id,device_id=EXCLUDED.device_id,assignment_id=EXCLUDED.assignment_id,enabled=true,version=parking_modes.version+1,activation_id=EXCLUDED.activation_id,
-    latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude,reference_at=EXCLUDED.reference_at,activated_at=EXCLUDED.activated_at,radius_m=EXCLUDED.radius_m,repeat_minutes=EXCLUDED.repeat_minutes,
+    reference_accuracy_m=EXCLUDED.reference_accuracy_m,latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude,reference_at=EXCLUDED.reference_at,activated_at=EXCLUDED.activated_at,radius_m=EXCLUDED.radius_m,repeat_minutes=EXCLUDED.repeat_minutes,
     cursor_at=EXCLUDED.cursor_at,cursor_id=EXCLUDED.cursor_id,last_gps_at=EXCLUDED.last_gps_at,last_point=EXCLUDED.last_point,last_distance_m=0,quality_ok=true,boundary_state='inside',outside_count=0,inside_count=0,movement_id=NULL,last_movement_at=NULL,last_alert_at=NULL,updated_by=EXCLUDED.updated_by,updated_at=EXCLUDED.activated_at`,
-    [id,v.owner_id,v.device_id,v.assignment_id,randomUUID(),point.latitude,point.longitude,point.tracker_timestamp,now,input.radius,input.repeatMinutes,point.server_received_at,point.id,JSON.stringify(point),actor]);
+    [id,v.owner_id,v.device_id,v.assignment_id,randomUUID(),point.latitude,point.longitude,point.tracker_timestamp,now,input.radius,input.repeatMinutes,point.server_received_at,point.id,JSON.stringify(point),actor,point.metadata?.accuracyMeters??point.metadata?.accuracy_meters??point.metadata?.accuracy??null]);
   }
   await cancelQueued(client,id);
   await client.query(`INSERT INTO events(vehicle_id,device_id,event_type,occurred_at,payload) VALUES($1,$2,$3,$4,$5)`,[id,v.device_id,input.enabled?'PARKING_ENABLED':'PARKING_DISABLED',now,JSON.stringify({actorId:actor,radius:input.radius,repeatMinutes:input.repeatMinutes})]);
@@ -97,9 +104,9 @@ export async function processParkingVehicle(id:string,now=new Date()):Promise<Pa
    if(p.boundary_state!=='outside'&&p.outside_count>=parkingPolicy().consecutive){p.boundary_state='outside';p.movement_id=randomUUID();p.last_movement_at=now;p.last_alert_at=now;notifications.push(await notify(client,p,v,'PARKING_MOVEMENT',now,true));}
    else if(p.boundary_state!=='inside'&&p.inside_count>=parkingPolicy().consecutive){const wasOutside=p.boundary_state==='outside';p.boundary_state='inside';p.last_alert_at=null;if(wasOutside)notifications.push(await notify(client,p,v,'PARKING_RETURNED',now,false));p.movement_id=null;await cancelQueued(client,id);}
   }
-  if(p.boundary_state==='outside'&&p.quality_ok&&p.last_point&&pointQuality(p.last_point,now,p.radius_m,parkingPolicy())&&p.last_alert_at&&+now-+new Date(p.last_alert_at)>=p.repeat_minutes*60000){p.last_alert_at=now;notifications.push(await notify(client,p,v,'PARKING_REMINDER',now,true));}
+  if(p.boundary_state==='outside'&&p.outside_count>=parkingPolicy().consecutive&&p.quality_ok&&p.last_point&&pointQuality(p.last_point,now,p.radius_m,parkingPolicy())&&p.last_alert_at&&+now-+new Date(p.last_alert_at)>=p.repeat_minutes*60000){p.last_alert_at=now;notifications.push(await notify(client,p,v,'PARKING_REMINDER',now,true));}
   await client.query(`UPDATE parking_modes SET boundary_state=$2,outside_count=$3,inside_count=$4,cursor_at=$5,cursor_id=$6,last_gps_at=$7,last_point=$8,last_distance_m=$9,quality_ok=$10,movement_id=$11,last_movement_at=$12,last_alert_at=$13,alert_sequence=$14 WHERE vehicle_id=$1`,[id,p.boundary_state,p.outside_count,p.inside_count,p.cursor_at,p.cursor_id,p.last_gps_at,JSON.stringify(p.last_point),p.last_distance_m,p.quality_ok,p.movement_id,p.last_movement_at,p.last_alert_at,p.alert_sequence]);
   return notifications;
  });
 }
-export async function processParkingModes(){const active=await query<{vehicle_id:string}>('SELECT vehicle_id FROM parking_modes WHERE enabled ORDER BY vehicle_id');const notifications:ParkingNotification[]=[];for(const p of active.rows)notifications.push(...await processParkingVehicle(p.vehicle_id));return notifications;}
+export async function processParkingModes(){const active=await query<{vehicle_id:string}>('SELECT vehicle_id FROM parking_modes WHERE enabled ORDER BY vehicle_id');const notifications:ParkingNotification[]=[];for(const p of active.rows){try{notifications.push(...await processParkingVehicle(p.vehicle_id));}catch(error){logger.error({err:error,vehicleId:p.vehicle_id},'Parking evaluation failed; persisted state retained');}}return notifications;}

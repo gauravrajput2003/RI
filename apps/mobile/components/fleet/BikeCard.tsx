@@ -15,7 +15,7 @@ export const BikeCard = memo(function BikeCard({ vehicle, live, extra, onPress }
   const currentSpeed=currentSpeedForVehicle(vehicle,live);
   return <Pressable accessibilityRole="button" accessibilityLabel={'Open actions for ' + vehicle.vehicle_number} onPress={onPress} style={styles.card}>
     <View style={styles.top}>
-      <View style={styles.identity}><VehicleIcon type={vehicle.vehicle_type??extra?.visual} state={state} size={45}/><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text><Text style={styles.alias}>{statusLabel(state)}</Text></View>
+      <View style={styles.identity}><VehicleIcon type={vehicle.vehicle_type??extra?.visual} state={state} size={45}/><Text style={styles.number}>{vehicle.vehicle_number}</Text><Text numberOfLines={2} style={styles.alias}>({vehicle.alias ?? 'Vehicle'})</Text><Text style={styles.alias}>{statusLabel(state)}</Text>{vehicle.parking_enabled?<Text style={{fontSize:11,color:'#16834a',fontWeight:'600'}}>Parking ON</Text>:null}</View>
       <View style={styles.metrics}>
         <Metric label="KM" value={extra?.distance ?? '—'} icon="distance" />
         <Metric label="Fuel" value={extra?.fuel ?? '—'} icon="fuel" />

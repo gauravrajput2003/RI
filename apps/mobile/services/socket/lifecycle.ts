@@ -40,7 +40,7 @@ export function createSocketLifecycle(factory: (token: string) => SocketPort, ca
       current.on('vehicle:location', guard(callbacks.location));
       current.on('vehicle:status', guard(callbacks.status));
       if(callbacks.notification)current.on('mobile:vehicle-alert',guard(callbacks.notification));
-      current.on('notification:new',guard(payload=>{if(payload&&typeof payload==='object'&&'eventType' in payload&&String(payload.eventType).startsWith('PARKING_'))callbacks.notification?.(payload);}));
+      if(callbacks.notification)current.on('notification:new',guard(payload=>{if(payload&&typeof payload==='object'&&'eventType' in payload&&String(payload.eventType).startsWith('PARKING_'))callbacks.notification?.(payload);}));
       if(callbacks.parking)current.on('parking:changed',guard(callbacks.parking));
       current.on('connect', guard(() => { callbacks.connection(true); callbacks.connected(); }));
       current.on('disconnect', guard(() => callbacks.connection(false)));

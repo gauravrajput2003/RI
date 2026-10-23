@@ -1,0 +1,81 @@
+{
+  "migrations": [
+    "029_parking_mode.sql",
+    "030_parking_reference_accuracy.sql"
+  ],
+  "verifiedAt": "2026-10-23T05:03:37.639Z",
+  "responses": [
+    {
+      "vehicleNumber": "1234",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
+      "vehicleNumber": "DL675434",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
+      "vehicleNumber": "HR12AU6674",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
+      "vehicleNumber": "HR12AX6674",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
+      "vehicleNumber": "pn804747",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
+      "vehicleNumber": "TEST-VEH-001",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    },
+    {
+      "vehicleNumber": "TEST-VEH-002",
+      "enabled": false,
+      "canEnable": false,
+      "monitoring": false,
+      "pushAvailable": false,
+      "reference": null,
+      "message": "A fresh, valid GPS position from one active assigned tracker is required."
+    }
+  ],
+  "push": {
+    "registered_devices": 12,
+    "enabled_push_tokens": 0
+  },
+  "counts": {
+    "parking_configurations": 0,
+    "parking_events": 0
+  },
+  "verification": "Read-only persisted configuration and scoped service reads; no activation, telemetry writes or notification sends."
+}

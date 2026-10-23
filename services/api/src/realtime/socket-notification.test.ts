@@ -2,7 +2,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {createServer,type Server as HttpServer} from 'node:http';
 import {Server} from 'socket.io';
 import {io,type Socket} from 'socket.io-client';
-import {configureSockets,publishVehicleNotification,publishUserNotification,publishVehicleLocation} from './socket-server.js';
+import {configureSockets,publishVehicleNotification,publishUserNotification,publishVehicleLocation,publishVehicleParking} from './socket-server.js';
 
 let http:HttpServer|undefined,server:Server|undefined,sockets:Socket[]=[];
 afterEach(async()=>{for(const socket of sockets)socket.close();sockets=[];await server?.close();await new Promise<void>(resolve=>http?.close(()=>resolve()))});
@@ -36,5 +36,8 @@ describe('realtime alert isolation',()=>{
   await publishVehicleLocation(server,'vehicle-a',{speed:20});
   await expect.poll(()=>telemetry).toEqual([{speed:20}]);
   expect(received).toEqual(['allowed:private']);
+  const parking:unknown[]=[];allowed.on('parking:changed',payload=>parking.push(payload));denied.on('parking:changed',()=>parking.push('leaked'));
+  await publishVehicleParking(server,'vehicle-a',{vehicleId:'vehicle-a',enabled:true});
+  await expect.poll(()=>parking).toEqual([{vehicleId:'vehicle-a',enabled:true}]);
  });
 });

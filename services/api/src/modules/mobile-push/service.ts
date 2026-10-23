@@ -57,8 +57,9 @@ export async function collectTransitions(emit:(userId:string,payload:Record<stri
  }
 }
 
+async function parkingReadPermission(userId:string){return await hasPermissionForUser(userId,PERMISSIONS.dashboardView)||await hasPermissionForUser(userId,PERMISSIONS.vehicleView)||await hasPermissionForUser(userId,PERMISSIONS.vehicleEdit);}
 export async function enqueueParkingPush(client:PoolClient,vehicleId:string,sequence:number,payload:Record<string,unknown>){
- for(const device of (await recipients(vehicleId)).filter(device=>device.expo_token))await client.query(`INSERT INTO mobile_push_outbox(event_id,device_id,vehicle_id,source,sequence,payload) VALUES($1,$2,$3,'parking',$4,$5) ON CONFLICT DO NOTHING`,[payload.id,device.id,vehicleId,sequence,JSON.stringify(payload)]);
+ for(const device of (await recipients(vehicleId)).filter(device=>device.expo_token))if(await parkingReadPermission(device.user_id))await client.query(`INSERT INTO mobile_push_outbox(event_id,device_id,vehicle_id,source,sequence,payload) VALUES($1,$2,$3,'parking',$4,$5) ON CONFLICT DO NOTHING`,[payload.id,device.id,vehicleId,sequence,JSON.stringify(payload)]);
 }
 
 export function pushMessages(device:{expo_token:string|null;platform:string;sound:boolean;vibration:boolean;voice:boolean;user_id:string;voice_vehicles?:string[]},payload:Record<string,unknown>) {
@@ -86,7 +87,7 @@ export async function flushPushOutbox(fetcher:typeof fetch=fetch){
   const pending=await query<{id:string;vehicle_id:string;device_id:string;payload:Record<string,unknown>;source:string;attempts:number}>(`UPDATE mobile_push_outbox SET next_attempt_at=now()+interval '90 seconds' WHERE id IN (SELECT id FROM mobile_push_outbox WHERE sent_at IS NULL AND cancelled_at IS NULL AND expires_at>now() AND next_attempt_at<=now() ORDER BY next_attempt_at LIMIT 5 FOR UPDATE SKIP LOCKED) RETURNING *`);
   for(const row of pending.rows){
    const device=(await recipients(row.vehicle_id)).find(item=>item.id===row.device_id);
-   if(!device){await query('UPDATE mobile_push_outbox SET sent_at=now(),receipt_checked=true WHERE id=$1',[row.id]);continue;}
+   if(!device||(row.source==='parking'&&!await parkingReadPermission(device.user_id))){await query('UPDATE mobile_push_outbox SET sent_at=now(),receipt_checked=true WHERE id=$1',[row.id]);continue;}
    try{
     const deliver=async()=>{
     const response=await fetcher('https://exp.host/--/api/v2/push/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pushMessages(device,row.payload)),signal:AbortSignal.timeout(10000)});

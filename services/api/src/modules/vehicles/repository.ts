@@ -6,13 +6,13 @@ import {activityQuery, vehicleActivityJoin, usableLocationOrder} from './activit
 import {userScopeCte} from '../authorization/scope.js';
 export const listVehicles=(owner:string,limit:number,cursor?:string)=>activityQuery(`
   ${userScopeCte}
-  SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.odometer,v.active,v.created_at,v.remark,v.mileage,v.overspeed_limit,v.billing_start,v.billing_due,activity.*
+  SELECT EXISTS(SELECT 1 FROM parking_modes p WHERE p.vehicle_id=v.id AND p.owner_id=v.owner_id AND p.enabled) AS parking_enabled,v.id,v.vehicle_number,v.alias,v.vehicle_type,v.odometer,v.active,v.created_at,v.remark,v.mileage,v.overspeed_limit,v.billing_start,v.billing_due,activity.*
   FROM vehicles v ${vehicleActivityJoin}
   JOIN user_scope scope ON scope.id=v.owner_id
   WHERE ($2::uuid IS NULL OR v.id>$2) ORDER BY v.id LIMIT $3`,[owner,cursor??null,limit]);
 export const findVehicle=(id:string,owner:string)=>activityQuery(`
   ${userScopeCte}
-  SELECT v.id,v.vehicle_number,v.alias,v.vehicle_type,v.image_url,v.remark,v.mileage,v.odometer,v.overspeed_limit,v.active,v.created_at,v.updated_at,activity.*
+  SELECT EXISTS(SELECT 1 FROM parking_modes p WHERE p.vehicle_id=v.id AND p.owner_id=v.owner_id AND p.enabled) AS parking_enabled,v.id,v.vehicle_number,v.alias,v.vehicle_type,v.image_url,v.remark,v.mileage,v.odometer,v.overspeed_limit,v.active,v.created_at,v.updated_at,activity.*
   FROM vehicles v ${vehicleActivityJoin} JOIN user_scope scope ON scope.id=v.owner_id WHERE v.id=$2`,[owner,id]);
 /** Device-wide cached coordinates can survive reassignment. Read only a location
  * attributed to this vehicle, with activity status derived independently. */
