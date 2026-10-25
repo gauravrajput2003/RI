@@ -1,4 +1,5 @@
 /** Database/configuration protocol key. New adapters do not require shared-type changes. */
+export * from './relay-profiles.js';
 export type DeviceProtocol = string;
 export type DeviceState = 'ONLINE' | 'OFFLINE' | 'MOVING' | 'IDLE' | 'STOPPED' | 'UNKNOWN';
 export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'CLIENT' | 'USER';

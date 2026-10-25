@@ -6,11 +6,15 @@ export const gt06FamilyFramer = {
     const frames: Buffer[] = [];
     let remainder = data;
     while (remainder.length >= 3) {
-      const start = remainder.indexOf(Buffer.from([0x78, 0x78]));
+      const starts = [remainder.indexOf(Buffer.from([0x78,0x78])),remainder.indexOf(Buffer.from([0x79,0x79]))].filter(index=>index>=0);
+      const start = starts.length?Math.min(...starts):-1;
       if (start < 0) return { frames, remainder: remainder.subarray(Math.max(0, remainder.length - 1)) };
       if (start > 0) remainder = remainder.subarray(start);
-      const declaredLength = remainder[2];
-      const frameLength = declaredLength + 5;
+      const extended=remainder[0]===0x79;
+      if(extended&&remainder.length<4)break;
+      const declaredLength = extended?remainder.readUInt16BE(2):remainder[2];
+      const frameLength = declaredLength + (extended?6:5);
+      if(frameLength>16384){remainder=remainder.subarray(2);continue;}
       if (declaredLength < 5) { remainder = remainder.subarray(2); continue; }
       if (remainder.length < frameLength) break;
       const frame = remainder.subarray(0, frameLength);

@@ -32,7 +32,7 @@ function RelayDialog({vehicle,onClose}:{vehicle:StreetVehicle;onClose():void}){
   <ScrollView contentContainerStyle={styles.body}>
    <Text style={styles.number}>{data?.vehicleNumber??vehicle.vehicle_number}</Text><Text style={styles.muted}>{data?.vehicleType??'Vehicle type unavailable'}</Text>
    {config.demoMode?<Text style={styles.error}>Relay control is unavailable in demo mode. No command can be sent.</Text>:current.isLoading?<ActivityIndicator/>:current.isError?<><Text accessibilityRole="alert" style={styles.error}>{mobileMessage(current.error)}</Text><Pressable accessibilityRole="button" onPress={()=>void current.refetch()}><Text>Retry relay information</Text></Pressable></>:data?<>
-    <Text style={styles.state}>Relay state: Unknown</Text><Text style={styles.muted}>{data.stateMessage}</Text>
+    <Text style={styles.state}>Relay state: {data.state==='locked'?'Locked':data.state==='unlocked'?'Unlocked':'Unknown'}</Text><Text style={styles.muted}>{data.stateMessage}</Text>
     <Text>Relay configured: {data.configured?'Yes':'No'}</Text><Text>Tracker protocol: {data.protocol??'Unavailable'}</Text>
     <Text accessibilityRole="alert" style={styles.error}>{data.message}</Text>
    </>:null}

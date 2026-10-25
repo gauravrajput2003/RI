@@ -6,7 +6,7 @@ import {config} from '../../constants/config';
 import type {RelayAction,VehicleRelay} from '../../../../packages/shared-types/src/relay';
 export function useVehicleRelay(id:string){
  const session=useAuthStore(state=>state.sessionKey);
- return useQuery({queryKey:['vehicle-relay',session,id],enabled:Boolean(session&&id)&&!config.demoMode,retry:1,staleTime:0,refetchInterval:10000,
+ return useQuery<VehicleRelay>({queryKey:['vehicle-relay',session,id],enabled:Boolean(session&&id)&&!config.demoMode,retry:1,staleTime:0,refetchInterval:query=>query.state.data?.history.some(command=>command.status==='pending'||command.status==='sent')?1000:10000,
   queryFn:async({signal})=>{requireOnline();return (await api.get<{data:VehicleRelay}>(`/vehicles/${encodeURIComponent(id)}/relay`,{signal})).data.data;}});
 }
 export async function sendRelayRequest(id:string,action:RelayAction,idempotencyKey:string){

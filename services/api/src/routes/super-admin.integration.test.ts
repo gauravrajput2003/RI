@@ -18,7 +18,7 @@ beforeAll(async()=>{
   process.env.ACCOUNT_PASSWORD_ENCRYPTION_KEY='a'.repeat(64);
   process.env.DATABASE_URL='postgresql://unused:unused@localhost/unused';process.env.JWT_SECRET=secret;process.env.JWT_REFRESH_SECRET=secret+'-refresh';process.env.INTERNAL_TRACKER_SECRET=secret+'-internal';process.env.EXPECTED_PACKET_INTERVAL_SECONDS='10';process.env.NO_SIGNAL_TIMEOUT_MINUTES='30';
   state.db=new PGlite();
-  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','021_reverse_geocoding.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql']){
+  for(const name of ['001_initial.sql','002_current_device_state.sql','003_web_admin_foundation.sql','004_client_management.sql','005_vehicle_management.sql','009_coin_distribution.sql','012_vehicle_installation_info.sql','013_user_ownership_integrity.sql','014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','021_reverse_geocoding.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','028_vehicle_relay_commands.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql','031_gt06_relay_dispatch.sql','032_relay_wire_evidence.sql','033_relay_probe_heartbeat.sql']){
     let sql=await readFile(new URL(`../../../../database/migrations/${name}`,import.meta.url),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g,'').replace(/geography\(Point, 4326\)/g,'point').replace(/CREATE INDEX locations_position_gist[^;]+;/g,'');await state.db.exec(sql);
   }
   await state.db.exec(`CREATE DOMAIN geometry AS point; CREATE FUNCTION ST_Distance(geometry,geometry) RETURNS double precision LANGUAGE SQL AS 'SELECT 0::double precision';`);
@@ -201,9 +201,21 @@ it('limits client device lists and vehicle details to safe fields and exact owne
  const detail=await request(app).get(`/api/v1/web/client-vehicles/${vehicle}`).set(auth(client,'CLIENT')).expect(200);
  expect(detail.body.data).toMatchObject({id:vehicle,device_id:device});
  const list=await request(app).get('/api/v1/fleet-vehicles').set(auth(client,'CLIENT')).expect(200);
- for(const row of [...own.body.data,detail.body.data,...list.body.data])for(const field of ['imei','protocol','capabilities','coins','billing_start','owner_id','admin_id','relay_configured'])expect(row).not.toHaveProperty(field);
+ for(const row of [...own.body.data,detail.body.data,...list.body.data])for(const field of ['imei','protocol','capabilities','coins','billing_start','owner_id','admin_id','relay_configured','relay_profile'])expect(row).not.toHaveProperty(field);
  await request(app).get(`/api/v1/web/client-vehicles/${otherVehicle}`).set(auth(client,'CLIENT')).expect(404);
  await request(app).get('/api/v1/web/client-devices').set(auth(b,'ADMIN')).expect(403);
+});
+it('provisions relay profiles per device, preserves omitted settings and clears them on protocol changes',async()=>{
+ const path=`/api/v1/fleet-vehicles/${vehicle}`;
+ await request(app).put(path).set(auth()).send({...payload(),relayConfigured:true,relayProfile:'CONCOX_GT06_DYD'}).expect(200);
+ expect((await state.db!.query<{relay_profile:string|null}>('SELECT relay_profile FROM devices WHERE id=$1',[device])).rows[0].relay_profile).toBe('CONCOX_GT06_DYD');
+ expect((await state.db!.query<{relay_profile:string|null}>('SELECT relay_profile FROM devices WHERE id=$1',[otherDevice])).rows[0].relay_profile).toBeNull();
+ expect((await request(app).get(path).set(auth()).expect(200)).body.data.relay_profile).toBe('CONCOX_GT06_DYD');
+ await request(app).put(path).set(auth()).send({...payload(),relayConfigured:true}).expect(200);
+ expect((await state.db!.query<{relay_profile:string|null}>('SELECT relay_profile FROM devices WHERE id=$1',[device])).rows[0].relay_profile).toBe('CONCOX_GT06_DYD');
+ await request(app).put(path).set(auth(client,'CLIENT')).send({...payload(),relayProfile:'CONCOX_GT06_DYD'}).expect(403);
+ await request(app).put(path).set(auth()).send({...payload(),deviceProtocol:'W15',relayProfile:'CONCOX_GT06_DYD'}).expect(200);
+ expect((await state.db!.query<{relay_profile:string|null}>('SELECT relay_profile FROM devices WHERE id=$1',[device])).rows[0].relay_profile).toBeNull();
 });
 it('returns 404 for both sides of cross-client reassignment and for foreign SIM edits',async()=>{
  for(const [target,tracker] of [[vehicle,otherDevice],[otherVehicle,device]]){

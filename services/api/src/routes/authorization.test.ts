@@ -42,7 +42,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','028_vehicle_relay_commands.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql','031_gt06_relay_dispatch.sql','032_relay_wire_evidence.sql','033_relay_probe_heartbeat.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')

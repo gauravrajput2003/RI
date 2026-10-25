@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import {parseRelayModels} from '@fleet/shared-types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
@@ -17,6 +18,7 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   INTERNAL_TRACKER_SECRET: z.string().min(32),
+  GT06_RELAY_MODELS:z.string().default('{}'),
   OFFLINE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(600),
   PARKING_GPS_MAX_AGE_SECONDS:z.coerce.number().int().min(30).max(600).default(120),
   PARKING_CONSECUTIVE_READINGS:z.coerce.number().int().min(2).max(10).default(3),
@@ -36,3 +38,4 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
+export const relayModels=parseRelayModels(env.GT06_RELAY_MODELS);

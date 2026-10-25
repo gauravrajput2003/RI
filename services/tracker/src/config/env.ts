@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import {parseRelayModels} from '@fleet/shared-types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
@@ -15,6 +16,8 @@ export const env = z.object({
   INTERNAL_API_URL: z.string().url().default('http://localhost:3000/internal/v1/telemetry/location'),
   INTERNAL_TRACKER_SECRET: z.string().min(32),
   TRACKER_SOCKET_TIMEOUT_MS: z.coerce.number().positive().default(300000),
+  GT06_RELAY_MODELS: z.string().default('{}'),
   MOVEMENT_THRESHOLD_KPH: z.coerce.number().nonnegative().default(5),
 }).parse(process.env);
+export const relayModels=parseRelayModels(env.GT06_RELAY_MODELS);
 

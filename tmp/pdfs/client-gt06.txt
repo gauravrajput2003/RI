@@ -1,0 +1,1096 @@
+PAGE 1
+1
+GPS Locator
+communication protocol
+PAGE 2
+2
+Catalogs
+1.Communication protocols........................................................................................................ 4
+2.Terminology, definitions .......................................................................................................... 4
+3. Ground rules .......................................................................................................................... 5
+4. Packet format......................................................................................................................... 7
+4.1 . starting positions......................................................................................................... 7
+4.2. package length............................................................................................................. 7
+4.3. agreement no............................................................................................................... 7
+4.4 . Information content ..................................................................................................... 7
+4.5. message serial numbers ........................................................................................... 8
+4.6. Error checking.............................................................................................................. 8
+4.7 Stop bits ..................................................................................................................... 8
+5. Terminal sending packets to the server in detail.................................................................... 9
+5.1 logon Information Package (0x01)................................................................................ 9
+5.1.1. terminal sending packets to server................................................................... 9
+5.1.2. server response packets................................................................................. 10
+5.2. Positioning packets (GPS, LBS merged information packets: 0x12)......................... 11
+5.2.1. terminal sends location packet to server........................................................ 11
+5.3 Heartbeat kit............................................................................................................. 15
+5.3.1. terminal sends heartbeat packet to server (0x13).......................................... 15
+5.3.2. server response to heartbeat packets............................................................ 17
+5.4. Alarm package (0x16)................................................................................................ 19
+5.4.1. terminal sends alarm packet to server ........................................................... 19
+5.4.2. server sends alarm packet reply to terminal .................................................. 22
+5.5. LBS multi-base station positioning information (0x18) ............................................ 23
+5.7. LBS + WIFI information (0x2C) ............................................................................... 26
+5.8. terminal sends IMSI number to server (0x0x90) ..................................................... 28
+5.9. terminal sends ICCID number to server (x0x94)..................................................... 29
+5.10. Recording protocol package (0x8D)...................................................................... 30
+5.10.1. the terminal sends .................................................................................... 30
+5.10.2. the server responds to the terminal:.......................................................... 30
+6. Server sending packets to terminals.................................................................................... 31
+6.1. Server send command (0x0x80)................................................................................ 31
+6.1.1 Starting position............................................................................................. 31
+6.1.2 Packet length ................................................................................................... 31
+PAGE 3
+3
+6.1.3. protocol number.............................................................................................. 31
+6.1.4. Instruction length............................................................................................. 31
+6.1.5. server flag bits................................................................................................. 31
+6.1.6. Instruction contents......................................................................................... 31
+6.1.7 Information sequence numbers....................................................................... 32
+6.1.8 Error checking.................................................................................................. 32
+6.1.9 Stop bits ........................................................................................................... 32
+6.2. terminal return packet (0x0x15) ................................................................................. 32
+6.2.1 Starting bits ...................................................................................................... 32
+6.2.2 Packet length ................................................................................................... 32
+6.2.3. protocol number.............................................................................................. 32
+6.2.4. Instruction length............................................................................................. 32
+6.2.5. server flag bits................................................................................................. 33
+6.2.6. Instruction contents......................................................................................... 33
+6.2.7 Languages........................................................................................................ 33
+6.2.8 Information sequence numbers....................................................................... 33
+6.2.9 Error checking.................................................................................................. 33
+6.2.10 Stop bits.................................................................................... 33
+7. Attachment A A U CRC-ITU lookup table algorithm C C language code snippet ................ 36
+1. Communication protocols
+introductory
+This document defines the description of the application layer interface protocol for the
+vehicle GPS locator, positioning service platform. This interface protocol only applies to the
+interactive communication between the server platform and the positioning terminal.
+2. Terminology, definitions
+Terminology,
+abbreviations English Meaning Chinese Meaning
+CMPP China Mobile Peer to Peer China Mobile P2P protocol
+PAGE 4
+4
+GPS Global Positioning System Global Positioning System (GPS)
+GSM Global System for MobileCommunication Global System for Mobile Communications
+(GSM)
+GPRS General Packet Radio Service Universal Wireless Packet Service (UWPS)(computing)
+TCP Transport Control Protocol transmission control protocol
+LBS Location Based Services assisted location service
+IMEI International Mobile EquipmentIdentity International Mobile Equipment Identity(IMEI) (computing)
+MCC Mobile Country Code Mobile subscriber country code
+MNC Mobile Network Code Mobile network number
+LAC Location Area Code location area code
+Cell ID Cell Tower ID cell phone base station
+UDP User Datagram Protocol User Datagram Protocol
+SOS Save Our Ship/Save Our Souls distress signal
+CRC Cyclic Redundancy Check cyclic redundancy check
+NITZ Network Identity and TimeZone. time zones
+GIS Geographic InformationSystem Geographic Information System (GIS)
+PAGE 5
+5
+3. Ground rules
+1. The GPRS connection is successfully established and the first login packet is sent to the
+server. If a response packet is received from the server within 5 seconds, the connection is
+considered to be normal and the positioning information (GPS, LBS packet) will be sent, and a
+status packet will be sent after 3 minutes to confirm the normal communication at regular
+intervals;
+2. When the GPRS connection is not successfully established, the terminal cannot send the
+login information packet. When the GPRS connection fails 3 times, the terminal starts the timed
+restart function for 20 minutes. If the terminal successfully establishes a connection with the
+server and receives a packet from the server in response to the login information packet sent by
+the terminal within 20 minutes, the timed restart function is turned off and the terminal is not
+restarted, otherwise the terminal is restarted automatically after 20 minutes;
+3. The server needs to return the response packet to the terminal after it receives the login
+information sent by the terminal. If the terminal does not receive the return packet from the server
+for more than 5 seconds after it sends the login information packet or the status information
+packet, it considers that the current connection is established abnormally, starts the function of
+GPS positioning data retransmission, disconnects the current GPRS connection, establishes a
+new GPRS connection and sends the login information packet;
+4. The connection is judged to be abnormal, repeat 3 times to establish the connection after
+sending the login information packet or the status information packet can not receive the data
+packet of the server response, the terminal starts the timed restart function, and the timing time
+is 10 minutes, if the terminal successfully establishes the connection with the server and receives
+the data packet of the server response within 10 minutes, then the timed restart function is
+closed, and the terminal is not restarted, or the terminal will be restarted automatically after 10
+minutes. Otherwise, the terminal will restart automatically after 10 minutes;
+5. After the connection is normally established, the terminal sends a combined GPS and
+LBS information packet to the server at regular intervals after the GPS information is changed,
+and the server can set the default sending protocol by command;
+6. To ensure the validity of the connection, heartbeat packets are sent to the server at fixed
+intervals, and the server returns a response packet to confirm;
+7. For terminals without registered IMEI numbers, the server should reply to the login request
+response and heartbeat packet response, and do not disconnect directly. (If you disconnect
+directly or do not reply, it will cause the terminal to reconnect constantly and the GPRS traffic will
+be consumed seriously).
+PAGE 6
+6
+Data Flow Chart
+PAGE 7
+7
+4. Packet format
+Communication transfer is asynchronous and is measured in bytes.
+Total packet length: (10+N) Byte.
+specification Length (Byte)
+starting
+position
+2
+Packet length 1
+protocol
+number
+1
+Information
+content
+N
+Message
+Serial Number
+2
+error checking 2
+stop bit 2
+大于20分钟终端重启
+终端开机&重启
+—小于20分钟重连—
+大于20分钟重启
+GPRS建立连接
+重连时间判定失败
+成功
+发送登陆信息包
+重连时间判定
+小于20分钟重新连接
+-发送登陆包数据到服务器-
+服务器登陆包返回是否正确
+-服务器返回登陆包回馈数据-
+是
+连接成功
+报警状态
+后台数据服务器
+心跳包间隔
+定位数据包
+报警包
+心跳包
+定时上传
+发送报警数据包到服务器--
+发送定位数据包到服务器
+定位数据上传间隔
+---发送心跳包数据到服务器---
+连续5分钟未收到服务器
+一定时上传返回
+心跳包服务器返回是否正常
+是
+否
+---服务器返回心跳包回馈数据-
+Greater than 20 minutes of terminal restart
+Terminal boot & restart
+-Less than 20 min reconnection-
+Greater than 20 min to restart
+GPRS connection establishment
+Reconnection time determination failed
+success
+Send a login packet
+Re-connection time determination
+Less than 20 min to reconnect
+-Send the landing packet data to the server-
+Is the server landing package returned correctly
+-The server returns the landing package feedback data-
+Yes
+Connection success
+Alarm status
+Background data server
+Heartbeat interval
+Locate the packet
+The alarm package
+Heartbeat bag
+Timed upload
+Send an alarm data packet to the server- -
+Send the location packet to the server
+Location of the data upload interval
+---Send the heartbeat packet data to the server---
+Server not received for 5 minutes
+Always upload back
+Whether the heartbeat packet server returns is normal
+Yes
+NO
+---The server returns the heartbeat packet feedback
+PAGE 8
+8
+4.1 Starting position
+Fixed value, unified hex 0x78 0x78.
+Note: A small number of protocol numbers, beginning with 0x79 0x79
+4.2. package length
+Length = Protocol Number + Message Content + Message Sequence Number + Error
+Check, totaling (5+N) Byte, since the message content is an indeterminate length field.
+4.3. agreement number
+typology (be) worth
+login pack 0x01
+Positioning data (GPS/LBS merged) 0x12
+Status messages (heartbeat packets) 0x13
+String messages (in response to server-
+side commands) 0x15
+warning message 0x16
+Query address information (GPS) 0x1A
+ICCID number to report platform
+information
+0x94
+Recorded documents reporting platform
+information 0x8D
+issue instructions 0x80
+4.4 Information content
+According to the different applications, corresponding to the corresponding "protocol
+number", to determine the specific content.
+4.5. information sequence numbers
+The sequence number of the first GPRS data (including status packets and GPS, LBS,
+etc. packets) sent after power on is '1', and the sequence number of every data (including
+status packets and GPS, LBS packets) sent after that is automatically increased by 1.
+4.6 Error checking
+The terminal or server can use the check digit to determine whether the received
+information is wrong or not. In order to prevent data errors during transmission, an error check
+is added to prevent data misuse, which increases the safety and efficiency of the system. The
+error check code adopts the CRC-ITU calibration method.
+The CRC-ITU value of the data in the part of the protocol body from the "packet length" to
+the "message sequence number" (including the "packet length", "message sequence number",
+"packet length", "message sequence number" and "message sequence number"). ) in the
+protocol body from "Packet Length" to "Message Sequence Number" (including "Packet
+Length" and "Message Sequence Number").
+If the receiver receives a message with a CRC error in the calculation, it ignores it and
+discards the packet.
+PAGE 9
+9
+4.7 Stop bits
+Fixed value, unified hex 0x0D 0x0A.
+PAGE 10
+10
+5. Terminal to the server to send packets details
+Separate explanations of common packets sent and returned by the server
+5.1. Logon Information Package (0x01)
+5.1.1. terminal sends packet to server
+The login information packet is used to confirm to the server that the connection is
+established properly and submit the terminal ID to the server.
+specification Length
+(Byte) typical example
+Login
+Information
+Package
+(18 Byte)
+starting
+position 2 0x78 0x78
+Packet
+length 1 0x0D
+protocol
+number 1 0x01
+Terminal ID 8 0x01 0x23 0x45 0x67 0x89 0x01 0x23 0x45
+Message
+Serial
+Number
+2 0x00 0x01
+error
+checking 2 0x8C 0xDD
+stop bit 2 0x0D 0x0A
+5.1.1.1 Starting positions
+See packet format 4.1 for details
+5.1.1.2. package lengths
+See packet format 4.2 for details
+5.1.1.3. protocol no.
+See packet format 4.3 for details
+5.1.1.4 Terminal IDs
+The terminal ID uses a 15-digit IMEI number.
+e.g. 123456789012345.
+The terminal ID is: 0x01 0x23 0x45 0x67 0x89 0x01 0x23 0x45
+5.1.1.5 Information sequence numbers
+See packet format 4.5 for details
+5.1.1.6. error checking
+See packet format 4.6 for details
+5.1.1.7 Stop bits
+See packet format 4.7 for details
+5.1.2. server response packets
+specification Length (Byte) typical example
+response starting 2 0x78 0x78
+PAGE 11
+11
+kit
+(10 Byte)
+position
+Packet
+length 1 0x05
+protocol
+number 1 0x01
+Message
+Serial
+Number
+2 0x00 0x01
+error
+checking 2 0XD9 0xDC
+stop bit 2 0x0D 0x0A
+5.1.2.1 Starting positions
+See packet format 4.1 for details
+5.1.2.2. package lengths
+See packet format 4.2 for details
+5.1.2.3. agreement number
+The protocol number in the response packet is the same as the protocol number of the
+packet sent by the terminal
+5.1.2.4. information sequence numbers
+See packet format 4.5 for details
+5.1.2.5. error checking
+See packet format 4.6 for details
+5.1.2.6 Stop bits
+See packet format 4.7 for details
+5.2. Positioning packets (GPS, LBS combined packet: 0x12)
+5.2.1. terminal sending location packets to server
+specification Length (Byte) typical example
+Information
+content
+starting position 2 0x78 0x78
+Packet length 1 0x1F
+protocol number 1 0x12
+Date Time 6 0x13 0x08 0x1D 0x11 0x0C 0x10
+GPS
+information
+Number of
+GPS
+information
+satellites
+1 0xCB
+longitude 4 0x02 0x7A 0xCF 0xEB
+longitudes 4 0xCC 0x46 0x58 0x49
+tempo 1 0x10
+Heading, status 2 0x15 0x4C
+LBS
+information
+MCC 2 0x01 0xCC
+MNC 1 0x00
+PAGE 12
+12
+LAC 2 0x28 0x7D
+Cell ID 3 0x00 0x1F 0xB8
+product key (software) 2 0x00 0x03
+error checking 2 0x9D 0xDC
+end position 2 0x0D 0x0A
+5.2.1.1 Starting positions
+See packet format 4.1 for details
+5.2.1.2. package lengths
+See packet format 4.2 for details
+5.2.1.3. agreement number
+See packet format 4.3 for details
+5.2.1.4 Date and time
+specification Length
+(Byte)
+typical
+examplesurname
+Nian
+1 0x16
+moon 1 0x01
+date 1 0x1D
+hour 1 0x11
+ingredient 1 0x0C
+unit of angle
+or arc
+equivalent
+one sixtieth
+of a degree
+1 0x10
+e.g. January 29, 2022, 17:12:16
+Calculation: 22 (decimal) = 16 (hexadecimal)
+01 (decimal) = 01 (hexadecimal)
+29 (decimal) = 1D (hexadecimal)
+17 (decimal) = 11 (hexadecimal)
+12 (decimal) = 0C (hexadecimal)
+16 (decimal) = 10 (hexadecimal)
+Then the value is: 0x16 0x01 0x1D 0x11 0x0C 0x10
+GPS position packages with date time in 0 time zone
+5.2.1.5. Number of satellites involved in positioning
+1Byte converted to binary is 8Bit, the first 4Bit is the length of the GPS information, the last
+4Bit is the current number of satellites of the device, the maximum value of the number of
+satellites is 15, if more than 15, then 15 will be reported.
+Note: The length includes the 1Byte occupied by itself.
+Example: A value of 0xCB means that the length of the GPS message is 12 and the
+number of satellites involved in the positioning is 11.
+5.2.1.6. latitude
+Occupies 4 bytes and represents the latitude value of the location data. The value ranges
+from 0 to 162000000, indicating the range of 0 degrees to 90 degrees, and the conversion
+method is as follows.
+Convert the latitude and longitude values output from the GPS module into decimal
+PAGE 13
+13
+numbers in cents; then multiply the converted decimal numbers by 30,000 and convert the
+multiplication result into hexadecimal numbers.
+E.g. 22º 32.7658'=(22X60+32.7658)X30000=40582974, then convert to hexadecimal
+number
+40582974 (decimal) = 26B3F3E (hex)
+The last value is 0x02 0x6B 0x3F 0x3E.
+Note: The uploaded latitude and longitude are all positive numbers, if they are negative
+take the absolute value
+5.2.1.7 Longitude
+Occupies 4 bytes and represents the longitude value of the positioning data. The value
+ranges from 0 to 324000000, indicating a range of 0 degrees to 180 degrees.
+The conversion method is the same as that for latitude.
+5.2.1.8.
+Occupies 1 byte, indicates the operating speed of GPS, the value ranges from 0x00 to
+0xFF, which means the range is 0 to 255 kilometers per hour.
+As:
+0x00 represents 0 km/h;
+0x10 represents 16 km/h;
+0xFF stands for 255 kilometers per hour.
+5.2.1.9 Status heading
+Occupies 2 bytes, converted to binary, the first six bits of the first byte indicate the device
+status, the last two bits and the eight bits of the second byte indicate the running direction of
+the GPS, indicating the range of 0~360, the unit: degrees, with due north as 0 degrees,
+clockwise.
+The first six bits of the 8-bit binary of the first byte indicate the status, and the next two bits
+and the 8 bits of the second byte, totaling 10 bits of binary, indicate the heading degree.
+BYTE_1
+Bit7 No definition
+Bit6 (not in use or ACC ON/OFF)
+Bit5 GPS real-time/differential
+positioning
+Bit4 GPS positioning or not
+Bit3 Longitude East, Longitude West
+Bit2 South, North
+Bit1
+directiondirection (a ship or plane
+is heading in)
+Bit0
+BYTE_2
+Bit7
+Bit6
+Bit5
+Bit4
+PAGE 14
+14
+Bit3
+Bit2
+Bit1
+Bit0
+Note: The status information in the packet are all the status at the moment recorded by the
+time bit in the packet.
+For example, the value 0x15 0x4C becomes binary 00010101 01001100.
+BYTE_1 Bit7 0 (not defined yet)
+BYTE_1 Bit6 0 (ACC OFF) --0: ACC OFF, 1: ACC ON (some items do not use this
+bit)
+BYTE_1 Bit5 0 (real-time GPS) - 0: real-time GPS, 1: differential positioning
+BYTE_1 Bit4 1 (GPS positioned) - 0: GPS not positioned, 1: GPS positioned
+BYTE_1 Bit3 0 (east longitude) - 0: east longitude, 1: west longitude
+BYTE_1 Bit2 1 (north latitude) - 0: south latitude, 1: north latitude
+BYTE_1 Bit1 0
+BYTE_1 Bit0 1
+BYTE_2 Bit7 0
+BYTE_2 Bit6 1
+BYTE_2 Bit5 0 Heading 332° (0101001100 binary to decimal 332 )
+BYTE_2 Bit4 0
+BYTE_2 Bit3 1
+BYTE_2 Bit2 1
+BYTE_2 Bit1 0
+BYTE_2 Bit0 0
+This means that the GPS has been located and the real-time GPS, latitude, longitude, and
+heading is 332°.
+5.2.1.10 MCC
+Mobile Country Code (MCC).
+For example: China's mobile country number is 460 (decimal): 0x01 0xCC (decimal 460 to
+hexadecimal, hexadecimal less than four left complement 0).
+The range of values here is 0x0000 to 0x03E7.
+5.2.1.11 MNC
+Mobile Network Code(MNC)
+For example, 0x00 for China Mobile.
+5.2.1.12 LAC
+The Location Area Code (LAC) is contained in the LAI and consists of two bytes encoded
+in hexadecimal. The available range is 0x0001-0xFFFE, code groups 0x0000 and 0xFFFF are
+not available (see GSM specifications 03.03, 04.08 and 11.11). A location area can contain
+one or more cells.
+PAGE 15
+15
+5.2.1.13. Cell ID
+Mobile Base Station Cell Tower ID (Cell ID), value range 0x000000 to 0xFFFFFF
+5.2.1.14. information sequence numbers
+See packet format 4.5 for details
+5.2.1.15. error checking
+See packet format 4.6 for details
+5.2.1.16. Stop bits
+See packet format 4.7 for details
+5.2.2. server response
+The server does not need to respond to this message
+Note: 0x12 GPS/LBS information package will be saved when GSM signal is abnormal
+and then uploaded to the platform later; the uploading method is not real-time uploading, but
+uploading the retained positioning points after the device is stationary. The time in the
+positioning packet should be used for track playback, and the time in the positioning packet
+should not be displayed when the real-time display is less than 5 minutes from the current time.
+PAGE 16
+16
+5.3. Heartbeat kit
+Heartbeat packets are packets that maintain the connection between the terminal and the
+server
+5.3.1. terminal sends heartbeat packet to server (0x13)
+specification Length (Byte) typical example
+Information
+content
+starting position 2 0x78 0x78
+Packet length 1 0x0A
+protocol number 1 0x13
+status
+message
+Terminal
+Information 1 0x4E
+voltage level 1 0x06
+GSM signal
+strength 1 0x64
+External Voltage 1 0x0C
+multilingualism 1 0x02
+product key (software) 2 0x00 0x03
+error checking 2 0xFF 0x4F
+end position 2 0x0D 0x0A
+5.3.1.1 Starting positions
+See packet format 4.1 for details
+5.3.1.2. package lengths
+See packet format 4.2 for details
+5.3.1.3. protocol no.
+See packet format 4.3 for details
+5.3.1.4 Terminal information
+Occupies 1 byte, converted to binary, used to represent the status information of the terminal,
+1 byte is regarded as 8 bits, the lowest bit is 0 bit, the highest bit is 7 bit, the high bit is
+transmitted first, and then the low bit is transmitted. The specific meanings of each
+representative are as follows:
+classifier for
+honorific people Code Meaning
+BYTE
+Bit7 1: Oil-electric disconnection
+0: Oil and electricity connected
+Bit6 1: GPS has been located
+0: GPS not positioned
+Bit5-Bit3
+100: SOS alarm
+011: Low battery alarm
+010: Power failure alarm
+001: Vibration alarm
+000: Normal
+PAGE 17
+17
+Bit2
+1: Connected to external power
+supply
+0: No external power supply
+connected
+Bit1 1: ACC ON
+0: ACC OFF
+Bit0 1: Setting up defenses
+0: Disarming
+Example: 0x4E, the corresponding binary is 01001110
+Indicates that it is in the disarmed state, ACC ON, connected to external power, vibration
+alarm, GPS has been located, and oil and electricity are connected.
+5.3.1.5 Voltage classes
+There are 7 voltage levels in total, ranging from 0 to 6, indicating the voltage magnitude
+from low to high.
+0: Low power shutdown;
+1: Not enough power to make phone calls, text messages, etc;
+2: Low power is too low;
+3-6: All can be used normally, just depending on the amount of power.
+5.3.1.6. GSM signal strength
+Range of GSM information: 0-100; converted to decimal, the larger the value, the stronger
+the GSM signal
+0: Indicates no signal
+100: full signal
+5.3.1.7. external voltage + language
+Example: the external power supply voltage is 30 volts (30V), the current language
+bit of the terminal. :
+Chinese:0x1E 0x01;
+English:0x1E 0x02;
+Note: The reserved expansion bits of the S11/S11C/W15L are not used as language bits,
+but are used to identify the operating mode of the device and the device sleep state.
+Work mode:
+0x00 = Intelligent hibernation mode;
+0x01 = normal mode;
+0x02 = deep hibernation mode;
+0x03 = Timed return mode;
+0x04 = Remote switching mode;
+The device is dormant:
+0x00 for normal device operation;
+PAGE 18
+18
+When the device is hibernating, the device hibernation status bit is the same as the
+operating mode bit, for example, in deep hibernation mode, the reserved extended bit is 0x02
+0x02 when the device is hibernating.
+5.3.1.8 Information sequence numbers
+See packet format 4.5 for details
+5.3.1.9 Error checking
+See packet format 4.6 for details
+5.3.1.10. Stop bits
+See packet format 4.7 for details
+5.3.2. Server Response to Heartbeat Packets
+specification Length
+(Byte) typical example
+Information
+content
+starting position 2 0x78 0x78
+Packet length 1 0x05
+protocol number 1 0x13
+information sequence 2 0x00 0x01
+error checking 2 0xE9 0xF1
+stop bit 2 0x0D 0x0A
+The server responds to a packet with an empty message content after receiving the packet
+from the terminal.
+Note: The "message sequence number" in the packet must be the same as the "message
+sequence number" sent by the responding terminal.
+5.3.2.1 Starting positions
+See packet format 4.1 for details
+5.3.2.2 Package length
+See packet format 4.2 for details
+5.3.2.3 Protocol number
+See packet format 4.3 for details
+5.3.2.4 Information sequence numbers
+See packet format 4.5 for details
+5.3.2.5 Error checking
+See packet format 4.6 for details
+5.3.2.6 Stop bits
+See packet format 4.7 for details
+PAGE 19
+19
+PAGE 20
+20
+5.4. Alarm Package (0x16)
+5.4.1. terminal sends alarm packet to server
+Specification Length (Byte) Typical example
+Information
+content
+starting position 2 0x78 0x78
+packet length 1 0x25
+protocol number 1 0x16
+Date Time 6 0x13 0x08 0x1D 0x11 0x0C 0x10
+GPS
+information
+number of GPS
+information
+satellites
+1 0xCB
+longitude 4 0x02 0x7A 0xCF 0xEB
+longitudes 4 0xCC 0x46 0x58 0x49
+tempo 1 0x10
+heading, status 2 0x15 0x4C
+LBS
+information
+LBS length 1 0x09
+MCC 2 0x01 0xCC
+MNC 1 0x00
+LAC 2 0x28 0x7D
+Cell ID 3 0x00 0x1F 0xB8
+status
+message
+terminal
+Information 1 0x4E
+voltage level 1 0x04
+GSM signal
+strength 1 0x64
+give a warning 1 0x00
+multilingualism 1 0x02
+product key (software) 2 0x00 0x03
+error checking 2 0x8C 0x59
+end position 2 0x0D 0x0A
+5.4.1.1 Starting positions
+See packet format 4.1 for details
+5.4.1.2 Package length
+See packet format 4.2 for details
+5.4.1.3 Protocol number
+See packet format 4.3 for details
+5.4.1.4 Date time
+See packet format 5.2.1.4 for details.
+5.4.1.5 Number of GPS satellites
+See Packet Format 5.2.1.5 for details.
+5.4.1.6 Latitude
+See packet format 5.2.1.6 for details.
+5.4.1.7 Longitude
+See packet format 5.2.1.7 for details.
+5.4.1.8 Speed
+See packet format 5.2.1.8 for details.
+5.4.1.9 Heading, status
+See packet format 5.2.1.9 for details.
+PAGE 21
+21
+5.4.1.10 LBS lengths
+The length of the LBS message content, the length is fixed: 0x09
+5.4.1.11 MCC
+See packet format 5.2.1.10 for details.
+5.4.1.12 MNC
+See packet format 5.2.1.11 for details.
+5.4.1.13 LAC
+See packet format 5.2.1.12 for details.
+5.4.1.14 Cell ID
+See packet format 5.2.1.13 for details.
+5.4.1.15 Terminal information
+See packet format 5.3.1.4 for details.
+5.4.1.16 Battery voltage rating
+See packet format 5.3.1.5 for details.
+5.4.1.17 GSM signal strength
+See packet format 5.3.1.6 for details.
+5.4.1.18 Alarm types
+Alarm type
+0x00: Normal
+0x01: SOS alarm
+0x02: Power failure alarm
+0x03: Vibration alarm
+0x04: Into the fence alarm
+0x05: Out of fence alarm
+0x06:Speed alarm
+0x09:Displacement alarm
+0x0E:Low battery alarm
+0xFE:ACC flameout alarm
+0xFF:ACC Ignition Alarm
+5.4.1.19 Language
+Chinese: 0x01
+English: 0x02
+5.4.1.20 Information sequence numbers
+See packet format 4.5 for details
+5.4.1.21 Error checking
+See packet format 4.6 for details
+5.4.1.22 Stop bits
+See packet format 4.7 for details
+5.4.2. server sends alarm packet reply to terminal
+specification Length
+(Byte) typical example
+Information starting position 2 0x78 0x78
+PAGE 22
+22
+content Packet length 1 0x05
+protocol number 1 0x16
+information
+sequence 2 0x00 0x05
+error checking 2 0x96 0x68
+stop bit 2 0x0D 0x0A
+5.4.2.1 Starting positions
+See packet format 4.1 for details
+5.4.2.2 Package length
+See packet format 4.2 for details
+5.4.2.3 Protocol number
+See packet format 4.3 for details
+5.4.2.4 Information sequence numbers
+See packet format 4.5 for details
+5.4.2.5 Error checking
+See packet format 4.6 for details
+5.4.2.6 Stop bits
+See packet format 4.7 for details
+5.5. LBS multi-base station positioning information (0x18)
+specification Length (Byte)
+Information
+content
+Date Time 6
+LBS information
+MCC 2
+MNC 1
+LAC 2
+MCI 2
+MCISS 1
+MCI1 2
+MCISS1 1
+MCI2 2
+MCISS2 1
+PAGE 23
+23
+MCI3 2
+MCISS3 1
+MCI4 2
+MCISS4 1
+MCI5 2
+MCISS5 1
+MCI6 2
+MCISS6 1
+Reserve Expansion Position N
+5.5.1 Date and time
+Same as the previous protocol description.
+5.5.2 MCC
+Same MCC description as in the previous LBS message
+5.5.3 MNC
+Same MNC description as in the previous LBS message
+5.5.4 LAC
+Same LAC description as in the previous LBS message
+5.5.5 MCI (Main Cell ID)
+Mobile Base Station Cell Tower ID (Cell ID), value range 0x0000 to 0xFFFF.
+5.5.6. MCISS (Main Cell ID Signal Strength)
+Main cell signal strength, value range is 0x00~0xFF, 0x00 signal is the weakest, 0xFF signal
+is the strongest.
+5.6.7 MCI1-6 (Near Cell ID)
+Neighboring cell base station codes, 6 in total, with values ranging from 0x0000 to 0xFFFF.
+5.5.8. NCISS1-6 (Near Cell ID Signal Strength)
+Neighboring cell BTS signal strength, corresponding to each of the 6 neighboring cell BTS
+codes. The value range is 0x00 to 0xFF.
+The absolute value of the signal strength is used here, and the value should be taken with
+a negative sign attached.
+5.5.9 Reservation of expansion spaces
+This item is currently empty
+5.6. Query address (0x1A)5.6.1 Terminal sending query address packet to server
+specification Length (Byte) typical example
+PAGE 24
+24
+Information
+content
+starting position 2 0x78 0x78
+packet length 1 0x2E
+protocol number 1 0x1A
+GPS
+information
+date Time 6 0x13 0x01 0x08 0x09 0x1E 0x0A
+number of GPS
+information
+satellites
+1 0xCD
+longitudes 4 0x02 0x6B 0x3F 0x3E
+longitude 4 0x0C 0x45 0x49 0x53
+tempo 1 0x00
+Heading, bearing 2 0x14 0x8F
+telephone
+number
+telephone
+number 21
+0x31 0x33 0x38 0x30 0x30 0x31 0x39
+0x39 0x38 0x38 0x35 0x20 0x20 0x20
+0x20 0x20 0x20 0x20 0x20 0x20 0x20
+0x20 0x20 0x20 0x20 0x20 0x20 0x20
+0x20
+language
+state
+reserve 1 0x00
+language 1 0x02
+information sequence 2 0x00 0x06
+error checking 2 0x29 0xD1
+stop bit 2 0x0D 0x0A
+5.6.1.1 Starting positionsSee packet format 4.1 for details5.6.1.2 Package lengthSee packet format 4.2 for details5.6.1.3 Protocol numberSee packet format 4.3 for details5.6.1.4 Date timeSee packet format 5.2.1.4 for details.5.6.1.5 Number of GPS satellitesSee Packet Format 5.2.1.5 for details.5.6.1.6 LatitudeSee packet format 5.2.1.6 for details.5.6.1.7 LongitudeSee packet format 5.2.1.7 for details.5.6.1.8 SpeedSee packet format 5.2.1.8 for details.5.6.1.9 Heading, statusSee packet format 5.2.1.9 for details.5.6.1.10 Telephone numbers21 digits of the phone number, if less than 21 digits, fill in the space, i.e.:0x20Example: 13800138000, device reported: 0x31 0x33 0x38 0x30 0x30 0x31 0x33 0x380x30 0x30 0x30 0x30 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x20 0x205.6.1.11 Reservation + languageChinese: 0x00 0x01English: 0x00 0x025.4.1.20 Information sequence numbersSee packet format 4.5 for details5.4.1.21 Error checkingSee packet format 4.6 for details5.4.1.22 Stop bitsSee packet format 4.7 for details
+5.9. terminal sends ICCID number to server (0x94)
+specification
+Lengt
+h
+(Byte)
+descriptive
+Informatio
+n content
+starting position 2 Fixed value: 0x79 0x79
+Packet length 2 0x20, length = protocol number + message content + message sequence number +
+error checking
+protocol number 1 Fixed value: 0x94
+PAGE 25
+25
+Data
+conten
+t
+Type of
+information 1
+00 : External voltage
+01~03 : (Customized)
+04: Terminal state synchronization
+05: Door status
+08: Self-test parameters
+09: Positioning satellite information
+0A: ICCID information
+...... to be added
+Data
+content N The content varies depending on the type of information, 0A detailed in the table
+below
+ICCID 10 Example: If the ICCID number is 12345123456789123456, the terminal ID is: 0x12
+0x34 0x51 0x23 0x45 0x97 0x89 0x12 0x34 0x56
+Message Serial
+Number 2 Auto +1 for every data sent from power up
+error checking 2 CRC-ITU value from "packet length" to "message sequence number".
+end position 2 0x0D 0x0A
+When the type is 0A, in addition to transmitting ICCID information, the transmission is
+hexadecimal
+IMEI 8 Example: If the IMEI number is 123456789123456, the terminal
+ID is: 0x01 0x23 0x45 0x67 0x89 0x12 0x34 0x56
+IMSI 8 Example: IMSI number 123456789123456, then the terminal ID
+is: 0x01 0x23 0x45 0x67 0x89 0x12 0x34 0x56
+ICCID 10 Example: If the ICCID number is 12345123456789123456,
+then the terminal ID is: 0x12 0x34 0x51 0x23 0x45 0x97 0x89
+0x12 0x34 0x56
+Example of a device uploading an ICCID number:
+79790020940a03580910880015580460041990205313898607b91117301203130009a072
+0d0a
+7979 0020 94 0a 0358091088001558 0460041990205313
+Start Bit Length Protocol No. Type IMEI No. IMSI No.
+898607b9111730120313 0009 a072 0d0a
+ICCID number Message sequence Error check Stop bit
+Note: This agreement, the server does not need to reply
+5.10. Recording protocol package (0x8D)
+Send the recording packet to the server after the device recording, applicable to
+S709,S11,S11C,W15L devices
+5.10.1. the terminal sends a packet to the server:
+specification Length
+(Byte) descriptive
+PAGE 26
+26
+Information
+content
+starting position 2 Fixed value: 0x79 0x79
+Packet length 2 Length = protocol number + message content +
+message sequence number + error checking
+protocol number 1 Fixed value: 0x8D
+Content of
+recordings
+Document type 1 Fixed value: 0x00
+Total length of
+document 4 Total length of transmitted files
+Total number of
+packages 1 The total number of packages into which the
+file is transferred
+The current
+package
+sequence of the
+file
+1 The current package sequence of the transfer
+file
+Current content
+length 2 Length of data from the beginning of the
+transmission segmentation
+Data content M Segmented packet content
+Message Serial Number 2 Auto +1 for every data sent from power up
+error checking 2 CRC-ITU value from "packet length" to
+"message sequence number".
+end position 2 0x0D 0x0A
+5.10.2. the server responds to the terminal:
+specification Length(Byte) descriptive
+Information
+content
+starting position 2 Fixed value: 0x79 0x79
+Packet length 2 Length = protocol number + message content + message
+sequence number + error checking
+protocol number 1 Fixed value: 0x8D
+Receive Status
+Flag 1 0x00:receive normal 0x01:receive error
+Message Serial
+Number 2 Auto +1 for every data sent from power up
+error checking 2 CRC-ITU value from "packet length" to "message
+sequence number".
+end position 2 0x0D 0x0A
+Every time the device sends a recording file packet, it needs to receive a response from
+the server to receive it before it continues to send the next packet, if it sends the same packet
+for three times in a row and does not receive a response, it will give up this recording file
+sending.
+PAGE 27
+27
+6. Server sends packets to terminals
+6. 1. Server send command (0x80)
+specification Length (Byte)
+starting position 2
+Packet length 1
+protocol number 1
+Information
+content
+instruction length 1
+Server Flags 4
+Instruction content N
+Message Serial Number 2
+error checking 2
+stop bit 2
+6.1.1 Starting positions
+See packet format 4.1 for details
+6.1.2 Package length
+See packet format 4.2 for details
+6.1.3. protocol number
+Fixed value: 0x80
+6.1.4. Instruction length
+Instruction length = server flag bit + instruction content length
+For example, in terms of byte length, 0x0A, which means that the content of the instruction
+occupies 10 bytes
+6.1.5. server flag bits
+Reserved for server identification, the terminal returns the received data binary as is in the
+return packet
+6.1.6. command contents
+ASCII representation as a string, command content compatible with SMS commands
+6.1.7 Information sequence numbers
+See packet format 4.5 for details
+PAGE 28
+28
+6.1.8 Error checking
+See packet format 4.6 for details
+6.1.9 Stop bits
+See packet format 4.7 for details
+6.2. terminal return packet (0x15)
+specification Length
+(Byte)
+starting position 2
+Packet length 1
+protocol number 1
+Information
+content
+instruction length 1
+Server Flags 4
+Instruction content N
+multilingualism 2
+Message Serial Number 2
+error checking 2
+stop bit 2
+6.2.1 Starting position
+See packet format 4.1 for details
+6.2.2. package length
+See packet format 4.2 for details
+6.2.3. protocol number
+The terminal responds to the command sent by the server, and the packet format is the
+same as that of "Command sent by the server to the terminal", but the protocol number is
+different, and 0x15 is used.
+6.2.4. Instruction length
+Instruction length = server flag bit + instruction content length
+For example, in terms of byte length, 0x0A, which means that the content of the instruction
+occupies 10 bytes
+6.2.5. server flag bits
+The terminal returns the received data binary as is in the return packet
+6.2.6. command contents
+ASCII representation of a string
+6.2.7. languages
+Language of the terminal
+Chinese:0x00 0x01
+English:0x00 0x02
+PAGE 29
+29
+6.2.8 Information sequence numbers
+See packet format 4.5 for details
+6.2.9 Error checking
+See packet format 4.6 for details
+6.2.10 . Stop Bits
+See packet format 4.7 for details
+6.2.11 Example of Server Command Issuance6.2.11.1 Disconnection of oil and electricitySMS Command Format:DYD,000000#Function description: Cut off the vehicle fuel and electric control circuitsReturn information:Successful return: DYD=Success!Failure returns: DYD=Unvalued Fix!or DYD=Speed Limit, Speed 40km/hExample: platform down: 78 78 15 80 0F 00 01 A9 58 44 59 44 2C 30 30 30 30 30 30 3030 23 00 A0 DC F1 0D 0ABolded: DYD,000000#Device response: 78 78 18 15 10 00 01 A9 58 44 59 44 3D 53 75 63 63 65 73 73 21 00 0200 18 91 77 0D 0ABolded: DYS=Success!
+6.2.11.2 Restoration of oil and electricitySMS Command Format:HFYD, 000000#Function Description: Turns on the vehicle's fuel and electric control circuitsReturn information:Successful return: HFYD=Success!Failure to return: HFYD=Fail!Platform issuance and equipment response is similar to DYD
+6.2.11.3 Viewing locationsCommand Format:DWXX,000000#Functional Description:Get Location Information command. Both the cell phone user and the SMS server can use thiscommand to get location information.Return information:Successful return: DWXX=Lat:<South/North Latitude>,Lon:<East/WestLongitude>,Course:<Angle>,Speed:<Speed>,DateTime:<Time>Failure to return: DWXX=Command Error!Example:Lat:N23d5.1708m,Lon:E114d23.6212m,Course:120,Speed:53.02;DateTime:08-09-12 14:52:36Meaning: Latitude 23 degrees 5.1708 minutes North, Longitude 114 degrees 23.6212 minutesEast, Angle: 120 degrees, Speed: 53.02 kilometers per hour, Time and Date: 12/9/08 14:52:36seconds.Note: If the terminal is not positioned successfully, it returns:Lat:,Lon:,Course:,Speed:,DateTime:-:.Platform issuance and equipment response format similar to DYD
+Upload: 78 78 0D 01 08 68 02 00 41 12 74 64 00 1E A0 1E 0D 0ANext: 78 78 05 01 00 2B 57 84 0D 0AUploaded: 78 78 1F 12 16 06 11 07 38 35 CF 02 6C 6C F7 0C 37 15 20 0B 14 76 01 CC 00 2633 00 0E 81 00 1D B3 A8 0D 0AUpload: 78 78 0A 13 44 06 03 0B 02 00 1F B4 E2 0D 0ANext: 78 78 05 13 00 2B 67 A9 0D 0AUpload: 79 79 00 20 94 0A 08 68 02 00 41 12 74 64 04 60 04 04 21 92 04 69 89 86 02 B4 0319 C0 01 04 69 00 20 41 C9 0D 0AUpload: 78 78 25 16 16 06 11 08 12 25 C0 02 6C 69 7B 0C 37 1C 92 00 04 00 08 01 CC 00 2633 00 10 04 10 04 04 02 02 00 11 41 56 0D 0AUploaded: 78 78 25 18 16 06 11 08 10 34 01 CC 00 26 33 0E 8B 35 0F 5D 2B 10 04 2A 0E 892A 12 19 29 0F FC 27 12 17 26 00 0D 6E 60 0D 0A下发：78 78 2E 1A 16 06 11 08 15 1A CF 02 6C 6E E6 0C 37 14 0C 00 14 00 20 20 20 20 20
+20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 00 02 00 15 9F 3F 0D 0AUploaded: 78 78 15 80 0F 00 01 A9 58 44 59 44 2C 30 30 30 30 30 30 30 30 23 00 A0 DC F10D 0AUpload: 78 78 18 15 10 00 01 A9 58 44 59 44 3D 53 75 63 63 65 73 73 21 00 02 00 0A A2 E40D 0A
+PAGE 30
+30
+7. Attachment A A U CRC-ITU lookup table algorithm C C language code snippet
+CRC-ITU lookup table algorithm C code snippet
+static const U16 crctab16[] =
+{
+0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf.
+0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7.
+0x1081, 0x0108, 0x3393, 0x221A, 0x56a5, 0x472c, 0x75b7, 0x643e.
+0x9cc9, 0x8d40, 0xbfdb, 0xae52, 0xdaed, 0xcb64, 0xf9ff, 0xe876.
+0x2102, 0x308b, 0x0210, 0x1399, 0x6726, 0x76af, 0x4434, 0x55bd.
+0xad4a, 0xbcc3, 0x8e58, 0x9fd1, 0xeb6e, 0xfae7, 0xc87c, 0xd9f5.
+0x3183, 0x200a, 0x1291, 0x0318, 0x77a7, 0x662e, 0x54b5, 0x453c.
+0xbdcb, 0xac42, 0x9ed9, 0x8f50, 0xfbef, 0xea66, 0xd8fd, 0xc974.
+0x4204, 0x538d, 0x6116, 0x709f, 0x0420, 0x15a9, 0x2732, 0x36bb.
+0xce4c, 0xdfc5, 0xed5e, 0xfcd7, 0x8868, 0x99e1, 0xab7a, 0xbaf3.
+0x5285, 0x430c, 0x7197, 0x601E, 0x14a1, 0x0528, 0x37b3, 0x263a.
+0xdecd, 0xcf44, 0xfddf, 0xec56, 0x98e9, 0x8960, 0xbbfb, 0xaa72.
+0x6306, 0x728f, 0x4014, 0x519d, 0x2522, 0x34ab, 0x0630, 0x17b9.
+0xef4e, 0xfec7, 0xcc5c, 0xddd5, 0xa96a, 0xb8e3, 0x8a78, 0x9bf1.
+0x7387, 0x620e, 0x5095, 0x411c, 0x35a3, 0x242a, 0x16b1, 0x0738.
+0xffcf, 0xee46, 0xdcdd, 0xcd54, 0xb9eb, 0xa862, 0x9af9, 0x8b70.
+0x8408, 0x9581, 0xa71a, 0xb693, 0xc22c, 0xd3a5, 0xe13e, 0xf0b7.
+0x0840, 0x19c9, 0x2B52, 0x3adb, 0x4e64, 0x5fed, 0x6d76, 0x7cff.
+0x9489, 0x8500, 0xb79b, 0xa612, 0xd2ad, 0xc324, 0xf1bf, 0xe036.
+0x18c1, 0x0948, 0x3bd3, 0x2a5a, 0x5ee5, 0x4f6c, 0x7df7, 0x6c7e.
+0xa50a, 0xb483, 0x8618, 0x9791, 0xe32e, 0xf2a7, 0xc03c, 0xd1b5.
+0x2942, 0x38cb, 0x0a50, 0x1bd9, 0x6f66, 0x7eef, 0x4c74, 0x5dfd.
+0xb58b, 0xa402, 0x9699, 0x8710, 0xf3af, 0xe226, 0xd0bd, 0xc134.
+0x39c3, 0x284a, 0x1ad1, 0x0b58, 0x7fe7, 0x6e6e, 0x5cf5, 0x4d7c.
+0xc60c, 0xd785, 0xe51e, 0xf497, 0x8028, 0x91a1, 0xa33a, 0xb2b3.
+0x4a44, 0x5bcd, 0x6956, 0x78df, 0x0c60, 0x1de9, 0x2f72, 0x3efb.
+0xd68d, 0xc704, 0xf59f, 0xe416, 0x90a9, 0x8120, 0xb3bb, 0xa232.
+0x5ac5, 0x4b4c, 0x79d7, 0x685e, 0x1ce1, 0x0d68, 0x3ff3, 0x2e7a.
+0xe70e, 0xf687, 0xc41c, 0xd595, 0xa12a, 0xb0a3, 0x8238, 0x93b1.
+0x6b46, 0x7acf, 0x4854, 0x59dd, 0x2d62, 0x3ceb, 0x0e70, 0x1ff9.
+0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330.
+0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2C6a, 0x1ef1, 0x0f78.
+};
+// Calculate the 16-bit CRC for the given length of data.
+U16 GetCrc16(const U8* pData, int nLength)
+{
+PAGE 31
+31
+U16 fcs = 0xffff; // Initialization
+while(nLength>0){
+fcs = (fcs >> 8) ^ crctab16[(fcs ^ *pData) & 0xff];
+nLength --;
+pData++;
+}
+return ~fcs; // invert
+}

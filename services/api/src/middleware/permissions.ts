@@ -20,6 +20,8 @@ export const permissionApiRules:Rule[]=[
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/parking$/,P.vehicleView,P.dashboardView),
   rule('PUT',/^\/vehicles\/[^/]+\/parking$/,P.vehicleEdit),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/relay$/,P.vehicleView,P.dashboardView),
+  rule('GET|HEAD',/^\/vehicles\/[^/]+\/relay\/probe$/,P.vehicleEdit),
+  rule('GET|HEAD|DELETE',/^\/vehicles\/[^/]+\/relay\/commands\/[^/]+$/,P.vehicleEdit),
   rule('POST',/^\/vehicles\/[^/]+\/relay\/commands$/,P.vehicleEdit),
   rule('GET|HEAD',/^\/playback$/,P.playbackView),
   rule('GET|HEAD',/^\/vehicles\/[^/]+\/history$/,P.playbackView),
