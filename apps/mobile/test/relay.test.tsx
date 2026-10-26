@@ -51,3 +51,39 @@ it('shows rejected or transport failures without changing the relay state',async
  const tree=await render();await act(async()=>button(tree,'Lock Vehicle').props.onPress());expect(JSON.stringify(tree.toJSON())).toContain('interrupt the configured vehicle circuit');
  await act(async()=>button(tree,'Confirm relay command').props.onPress());expect(JSON.stringify(tree.toJSON())).toContain('Command was not sent.');expect(JSON.stringify(tree.toJSON())).toContain('Unknown');expect(state.refetch).toHaveBeenCalled();await act(async()=>tree.unmount());
 });
+it('tests only restore with an explicitly selected profile and shows the tracker reply',async()=>{
+ state.data={...fixture(),code:'RELAY_READY',canTestRestore:true,testConnectionId:'connection-one',testRestoreProfiles:[{name:'PDF_NO_PASS',languageField:false,hasPassword:false},{name:'V18_NO_PASS',languageField:true,hasPassword:false}]};
+ state.send.mockResolvedValue({id:'test-command'});
+ const tree=await render();expect(button(tree,'Test Restore').props.disabled).toBe(true);
+ await act(async()=>button(tree,'Test profile PDF_NO_PASS').props.onPress());await act(async()=>button(tree,'Test Restore').props.onPress());
+ expect(state.send).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('ignition may be ON');
+ await act(async()=>button(tree,'Confirm relay command').props.onPress());expect(state.send).toHaveBeenCalledWith('selected','unlock','server-key',{profile:'PDF_NO_PASS',connectionId:'connection-one'});
+ state.data={...state.data,state:'unlocked',history:[{id:'test-command',vehicleId:'selected',action:'unlock',status:'succeeded',code:'RELAY_CONFIRMED',message:'Tracker confirmed unlock.',createdAt:new Date().toISOString(),probeProfile:'PDF_NO_PASS',reply:'HFYD=Success!'}]};
+ await act(async()=>tree.update(<RelaySheet vehicle={vehicle} onClose={vi.fn()}/>));const text=JSON.stringify(tree.toJSON());expect(text).toContain('HFYD=Success!');expect(text).toContain('Tracker confirmed');expect(text).not.toContain('Result not confirmed');
+ await act(async()=>tree.unmount());
+});
+it('aborts a phone restore test if the tracker reconnects before confirmation',async()=>{
+ state.data={...fixture(),code:'RELAY_READY',canTestRestore:true,testConnectionId:'old',testRestoreProfiles:[{name:'PDF_NO_PASS',languageField:false,hasPassword:false}]};
+ const tree=await render();await act(async()=>button(tree,'Test profile PDF_NO_PASS').props.onPress());await act(async()=>button(tree,'Test Restore').props.onPress());
+ state.data={...state.data,testConnectionId:'new'};await act(async()=>tree.update(<RelaySheet vehicle={vehicle} onClose={vi.fn()}/>));await act(async()=>button(tree,'Confirm relay command').props.onPress());expect(state.send).not.toHaveBeenCalled();expect(JSON.stringify(tree.toJSON())).toContain('Tracker reconnected');
+ await act(async()=>tree.unmount());
+});
+it('keeps lock/unlock and confirmation usable during background refreshes',async()=>{
+ state.data={...fixture(),canLock:true,canUnlock:true};state.isFetching=true;state.send.mockResolvedValue(undefined);
+ const tree=await render();expect(button(tree,'Lock Vehicle').props.disabled).toBe(false);expect(button(tree,'Unlock Vehicle').props.disabled).toBe(false);
+ await act(async()=>button(tree,'Lock Vehicle').props.onPress());expect(button(tree,'Confirm relay command').props.disabled).toBe(false);
+ for(const fetching of [false,true,false,true]){state.isFetching=fetching;await act(async()=>tree.update(<RelaySheet vehicle={vehicle} onClose={vi.fn()}/>));expect(button(tree,'Confirm relay command').props.disabled).toBe(false);}
+ await act(async()=>button(tree,'Confirm relay command').props.onPress());expect(state.send).toHaveBeenCalledOnce();expect(state.send).toHaveBeenCalledWith('selected','lock','server-key');
+ await act(async()=>tree.unmount());
+});
+it('visibly blocks an open confirmation when eligibility changes instead of silently ignoring the tap',async()=>{
+ state.data={...fixture(),canLock:true,testConnectionId:'same'};const tree=await render();await act(async()=>button(tree,'Lock Vehicle').props.onPress());
+ state.data={...state.data,canLock:false,code:'RELAY_GPS_STALE',message:'Cut needs a current speed reading.'};
+ await act(async()=>tree.update(<RelaySheet vehicle={vehicle} onClose={vi.fn()}/>));expect(button(tree,'Confirm relay command').props.disabled).toBe(true);expect(JSON.stringify(tree.toJSON())).toContain('Cut needs a current speed reading.');
+ await act(async()=>button(tree,'Confirm relay command').props.onPress());expect(state.send).not.toHaveBeenCalled();await act(async()=>tree.unmount());
+});
+it('requires a new confirmation after a normal lock connection changes',async()=>{
+ state.data={...fixture(),canLock:true,testConnectionId:'old'};const tree=await render();await act(async()=>button(tree,'Lock Vehicle').props.onPress());
+ state.data={...state.data,testConnectionId:'new'};await act(async()=>tree.update(<RelaySheet vehicle={vehicle} onClose={vi.fn()}/>));expect(button(tree,'Confirm relay command').props.disabled).toBe(true);expect(JSON.stringify(tree.toJSON())).toContain('Tracker connection changed');
+ await act(async()=>button(tree,'Confirm relay command').props.onPress());expect(state.send).not.toHaveBeenCalled();await act(async()=>tree.unmount());
+});

@@ -55,7 +55,7 @@ export class RelayDispatcher {
     if(c.action!=='unlock'||!this.profileKey||createHmac('sha256',this.profileKey).update(relayProfileCanonical(this.models[c.probe_profile])).digest('hex')!==c.probe_profile_digest)throw new Error();
    }catch{return {code:'RELAY_PROBE_CONFIGURATION',message:'Restore probe profile differs between API and tracker. Command was not sent.'};}
   }
-  return relaySafety(s);
+  return relaySafety(s,new Date(),c.action);
  }
  private async fail(client:PoolClient,id:string,code:string,message:string,status='rejected'){await client.query('UPDATE vehicle_relay_commands SET status=$2,result_code=$3,result_message=$4,completed_at=now(),updated_at=now() WHERE id=$1 AND status IN (\'pending\',\'sent\')',[id,status,code,message]);}
  async tick(){

@@ -98,17 +98,27 @@ it('queues an explicit profile on the current connection, deduplicates retries a
  await mock.db!.query('UPDATE tracker_connections SET connection_id=$2 WHERE device_id=$1',[device,randomUUID()]);
  expect((await get()).body.data.state).toBe('unknown');
 });
-it.each(['offline','gps','moving','ignition'])('rejects a configured device with %s safety failure',async reason=>{
+it.each(['offline','gps','moving'])('rejects a configured cut command with %s safety failure',async reason=>{
  await ready();
  if(reason==='offline')await mock.db!.query('DELETE FROM tracker_connections');
  if(reason==='gps')await mock.db!.query("UPDATE locations SET tracker_timestamp=now()-interval '2 minutes'");
- if(reason==='moving')await mock.db!.query('UPDATE device_status SET current_speed=12');
- if(reason==='ignition')await mock.db!.query('UPDATE device_status SET current_ignition=true');
+ if(reason==='moving')await mock.db!.query('UPDATE device_status SET current_speed=20');
  const response=await post().expect(409);expect(response.body.data.status).toBe('rejected');
- expect(response.body.data.code).toBe(reason==='offline'?'RELAY_OFFLINE':reason==='gps'?'RELAY_GPS_STALE':'RELAY_NOT_STATIONARY');
+ expect(response.body.data.code).toBe(reason==='offline'?'RELAY_OFFLINE':reason==='gps'?'RELAY_GPS_STALE':'RELAY_SPEED_UNSAFE');
+});
+it('allows restore with ignition ON and old or unavailable GPS while cut remains blocked',async()=>{
+ await ready();await mock.db!.query('UPDATE device_status SET current_ignition=true,current_speed=NULL');await mock.db!.query("UPDATE locations SET tracker_timestamp=now()-interval '1 day',gps_valid=false,speed=NULL");
+ const phone=(await get().expect(200)).body.data;expect(phone).toMatchObject({canLock:false,canUnlock:true,canTestRestore:true});
+ const probe=(await request(app).get(`/api/v1/vehicles/${vehicle}/relay/probe`).set(auth()).expect(200)).body.data;expect(probe.availability.code).toBe('RELAY_READY');
+ expect((await post('unlock').expect(202)).body.data.status).toBe('pending');
+});
+it('allows cut with ignition ON and fresh speed below 20, but rejects 20 or more',async()=>{
+ await ready();await mock.db!.query('UPDATE device_status SET current_ignition=true,current_speed=19');await mock.db!.query('UPDATE locations SET speed=19');
+ expect((await get()).body.data.canLock).toBe(true);expect((await post('lock').expect(202)).body.data.status).toBe('pending');
 });
 it('accepts only scoped unlock probe overrides, captures the connection and never changes the device model',async()=>{
  await ready();
+ const phone=(await get().expect(200)).body.data;expect(phone).toMatchObject({canTestRestore:true,testRestoreProfiles:[{name:'PDF',languageField:false,hasPassword:false}]});expect(phone.testConnectionId).toBeTruthy();expect(JSON.stringify(phone)).not.toContain('lockSuccess');
  await mock.db!.query("UPDATE devices SET model='UNCHANGED_MODEL' WHERE id=$1",[device]);
  const current=(await request(app).get(`/api/v1/vehicles/${vehicle}/relay/probe`).set(auth()).expect(200)).body.data;
  const path=`/api/v1/vehicles/${vehicle}/relay/commands`;

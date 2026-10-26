@@ -14,7 +14,7 @@ try{
  const id=vehicles[0].id;
  const snapshot=(await pool.query<{snapshot:RelaySnapshot}>('SELECT relay_command_snapshot($1) snapshot',[id])).rows[0].snapshot;
  const recent=(await pool.query('SELECT status,result_code,created_at,sent_at,completed_at FROM vehicle_relay_commands WHERE vehicle_id=$1 ORDER BY created_at DESC LIMIT 5',[id])).rows;
- console.log(JSON.stringify({imei,vehicle:snapshot.vehicle_number,action,availability:relaySafety(snapshot),connectionId:snapshot.connection_id,connectionExpiresAt:snapshot.connection_expires_at,lastSeenAt:snapshot.last_seen_at,gpsAt:snapshot.tracker_timestamp,recent,readOnly:!args.includes('--send')},null,2));
+ console.log(JSON.stringify({imei,vehicle:snapshot.vehicle_number,action,availability:relaySafety(snapshot,new Date(),action as 'lock'|'unlock'),connectionId:snapshot.connection_id,connectionExpiresAt:snapshot.connection_expires_at,lastSeenAt:snapshot.last_seen_at,gpsAt:snapshot.tracker_timestamp,recent,readOnly:!args.includes('--send')},null,2));
  if(args.includes('--send')){
   if(!args.includes('--confirm'))throw new Error('--send requires --confirm: this controls a physical relay');
   const token=process.env.RI_RELAY_TEST_TOKEN;if(!token)throw new Error('RI_RELAY_TEST_TOKEN is required; do not put tokens in command arguments');

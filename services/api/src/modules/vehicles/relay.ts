@@ -1,6 +1,6 @@
 import type {PoolClient} from 'pg';
 import {randomUUID,createHmac} from 'node:crypto';
-import {relaySafety,parseRelayModels,validateProbeProfiles,relayProfileCanonical,type RelaySnapshot,type RelayAction,type RelayCommand,type VehicleRelay} from '@fleet/shared-types';
+import {relaySafety,parseRelayModels,validateProbeProfiles,relayProfileCanonical,relayProfileFormat,type RelaySnapshot,type RelayAction,type RelayCommand,type VehicleRelay} from '@fleet/shared-types';
 import {env} from '../../config/env.js';
 import {transaction} from '../../db/pool.js';
 import {AppError} from '../../lib/errors.js';
@@ -12,19 +12,21 @@ async function snapshot(client:PoolClient,actor:string,id:string,lock=false):Pro
  return (await client.query<{snapshot:RelaySnapshot}>('SELECT relay_command_snapshot($1) snapshot',[id])).rows[0].snapshot;
 }
 export const relayAvailability=relaySafety;
-const fields=`id,vehicle_id AS "vehicleId",action,status,result_code AS code,result_message AS message,created_at AS "createdAt",probe_profile AS "probeProfile"`;
+const fields=`id,vehicle_id AS "vehicleId",action,status,result_code AS code,result_message AS message,created_at AS "createdAt",probe_profile AS "probeProfile",response_text AS reply`;
 export async function vehicleRelay(actor:string,id:string):Promise<VehicleRelay>{
  return transaction(async client=>{
-  const v=await snapshot(client,actor,id),availability=relaySafety(v);
+  const v=await snapshot(client,actor,id),lockAvailability=relaySafety(v,new Date(),'lock'),unlockAvailability=relaySafety(v,new Date(),'unlock');
   const history=(await client.query<RelayCommand>(`SELECT ${fields} FROM vehicle_relay_commands WHERE vehicle_id=$1 ORDER BY created_at DESC,id DESC LIMIT 20`,[id])).rows;
   const latest=(await client.query<{status:string;action:RelayAction;assignment_id:string;connection_id:string;command_profile:string}>(`SELECT status,action,assignment_id,connection_id,command_profile FROM vehicle_relay_commands WHERE vehicle_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1`,[id])).rows[0];
   const confirmed=latest?.status==='succeeded'&&latest.assignment_id===v.assignment_id&&latest.connection_id===v.connection_id&&latest.command_profile===v.relay_profile;
   const state=confirmed?(latest.action==='lock'?'locked':'unlocked'):'unknown';
   const pending=history.some(command=>command.status==='pending'||command.status==='sent');
-  const reason=pending?{code:'RELAY_COMMAND_PENDING',message:'Waiting for the tracker response. Do not send a second command.'}:availability;
+  const reason=pending?{code:'RELAY_COMMAND_PENDING',message:'Waiting for the tracker response. Do not send a second command.'}:unlockAvailability.code==='RELAY_READY'&&lockAvailability.code!=='RELAY_READY'?{...lockAvailability,message:`Restore is available. ${lockAvailability.message}`}:unlockAvailability;
+  const profiles=parseRelayModels(env.GT06_RELAY_MODELS??'{}');
+  const testRestoreProfiles=Object.keys(profiles).filter(name=>{try{validateProbeProfiles(profiles,[name]);return true;}catch{return false;}}).map(name=>({name,...relayProfileFormat(profiles[name])}));
   return {vehicleId:v.id,vehicleNumber:v.vehicle_number,vehicleType:v.vehicle_type,configured:v.relay_configured,protocol:v.protocol,state,
    stateMessage:confirmed?'Tracker reported this result. Physical relay wiring is not independently measured.':'No matching successful tracker response for the current assignment and connection.',
-   canLock:reason.code==='RELAY_READY'&&state!=='locked',canUnlock:reason.code==='RELAY_READY'&&state!=='unlocked',...reason,history,requestKey:randomUUID()};
+   canLock:!pending&&lockAvailability.code==='RELAY_READY'&&state!=='locked',canUnlock:!pending&&unlockAvailability.code==='RELAY_READY'&&state!=='unlocked',...reason,history,requestKey:randomUUID(),testRestoreProfiles,testConnectionId:v.connection_id,canTestRestore:!pending&&unlockAvailability.code==='RELAY_READY'&&testRestoreProfiles.length>0};
  });
 }
 export async function requestRelay(actor:string,id:string,action:RelayAction,key:string,probe?:{profile:string;connectionId:string}):Promise<RelayCommand>{
@@ -43,7 +45,7 @@ export async function requestRelay(actor:string,id:string,action:RelayAction,key
   const previous=(await client.query<RelayCommand>(`SELECT ${fields} FROM vehicle_relay_commands WHERE actor_id=$1 AND vehicle_id=$2 AND idempotency_key=$3`,[actor,id,key])).rows[0];
   if(previous){if(previous.action!==action||(previous.probeProfile??null)!==(probe?.profile??null))throw new AppError(409,'IDEMPOTENCY_CONFLICT','This request key was already used for a different action or profile.');return previous;}
   const pending=(await client.query(`SELECT id FROM vehicle_relay_commands WHERE vehicle_id=$1 AND status IN ('pending','sent') LIMIT 1`,[id])).rows[0];
-  const reason=pending?{code:'RELAY_COMMAND_PENDING',message:'A command is already pending. Wait for its result.'}:relaySafety(v);
+  const reason=pending?{code:'RELAY_COMMAND_PENDING',message:'A command is already pending. Wait for its result.'}:relaySafety(v,new Date(),action);
   const ready=reason.code==='RELAY_READY';
   return (await client.query<RelayCommand>(`INSERT INTO vehicle_relay_commands(actor_id,vehicle_id,device_id,protocol,action,idempotency_key,status,result_code,result_message,assignment_id,owner_id,connection_id,command_profile,server_flag,dispatch_before,expires_at,probe_profile,probe_profile_digest)
    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,CASE WHEN $14 THEN nextval('relay_server_flag_seq') END,now()+interval '5 seconds',now()+interval '20 seconds',$15,$16) RETURNING ${fields}`,
@@ -52,7 +54,7 @@ export async function requestRelay(actor:string,id:string,action:RelayAction,key
 }
 export async function relayProbeContext(actor:string,id:string){return transaction(async client=>{
  const v=await snapshot(client,actor,id);
- return {vehicleId:id,vehicleNumber:v.vehicle_number,deviceId:v.device_id,assignmentId:v.assignment_id,connectionId:v.connection_id,availability:relaySafety(v),speed:v.speed,currentSpeed:v.current_speed,ignition:v.ignition,gpsValid:v.gps_valid,gpsAt:v.tracker_timestamp};
+ return {vehicleId:id,vehicleNumber:v.vehicle_number,deviceId:v.device_id,assignmentId:v.assignment_id,connectionId:v.connection_id,availability:relaySafety(v,new Date(),'unlock'),speed:v.speed,currentSpeed:v.current_speed,ignition:v.ignition,gpsValid:v.gps_valid,gpsAt:v.tracker_timestamp};
 });}
 export async function relayCommandEvidence(actor:string,id:string,commandId:string){return transaction(async client=>{
  await snapshot(client,actor,id);

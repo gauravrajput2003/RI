@@ -31,7 +31,7 @@ try{
  };
  const localContext=async():Promise<ProbeContext>=>{
   const v=(await pool.query<{snapshot:RelaySnapshot}>('SELECT relay_command_snapshot($1) snapshot',[vehicle])).rows[0].snapshot;
-  return {vehicleId:vehicle,deviceId:v.device_id,assignmentId:v.assignment_id,connectionId:v.connection_id,availability:relaySafety(v),speed:v.speed,currentSpeed:v.current_speed,ignition:v.ignition,gpsValid:v.gps_valid,gpsAt:v.tracker_timestamp};
+  return {vehicleId:vehicle,deviceId:v.device_id,assignmentId:v.assignment_id,connectionId:v.connection_id,availability:relaySafety(v,new Date(),'unlock'),speed:v.speed,currentSpeed:v.current_speed,ignition:v.ignition,gpsValid:v.gps_valid,gpsAt:v.tracker_timestamp};
  };
  const result=await runRestoreProbe({context:()=>send?request<ProbeContext>('/probe'):localContext(),submit:(profile,connectionId)=>request('/commands','POST',{action:'unlock',confirmed:true,idempotencyKey:randomUUID(),probeProfile:profile,probeConnectionId:connectionId}),status:id=>request<ProbeEvidence>(`/commands/${id}`),cancel:id=>request(`/commands/${id}`,'DELETE')},{profiles,models:relayModels,send,confirm:args.includes('--confirm'),hasToken:Boolean(token),action:arg('--action'),preview:profile=>{const config=relayModelCommand(relayModels,profile,'unlock');return relayWireEvidence(encodeRelay('unlock',1,config),config.text,profile).hex;},print:line=>console.log(line)});
  if(result.winner){

@@ -51,15 +51,22 @@ it('routes only to the intended one of two devices and confirms only a matching 
 it('sends restore separately and records an explicit negative reply without reporting success',async()=>{
  const id=await queue('A','unlock');await worker.tick();expect(errors).toEqual([]);const frame=socket.write.mock.calls[0][0] as unknown as Buffer;expect(frame.toString('ascii')).toContain('HFYD#');await worker.receive(connection,reply(frame.readUInt32BE(5),'HFYD=Fail!'));expect((await result(id)).status).toBe('failed');
 });
-it.each(['moving','stale','ignition','permission','assignment','expired'])('rechecks %s immediately before dispatch',async reason=>{
+it.each(['moving','stale','permission','assignment','expired'])('rechecks %s immediately before dispatch',async reason=>{
  const id=await queue();
- if(reason==='moving')await db.query('UPDATE locations SET speed=15 WHERE device_id=$1',[device]);
+ if(reason==='moving')await db.query('UPDATE locations SET speed=20 WHERE device_id=$1',[device]);
  if(reason==='stale')await db.query("UPDATE locations SET tracker_timestamp=now()-interval '5 minutes' WHERE device_id=$1",[device]);
- if(reason==='ignition')await db.query('UPDATE device_status SET current_ignition=true WHERE device_id=$1',[device]);
  if(reason==='permission')await db.query("UPDATE users SET role='ADMIN' WHERE id=$1",[owner]);
  if(reason==='assignment'){await db.query('UPDATE vehicle_device_assignments SET unassigned_at=now() WHERE id=$1',[assignment]);await db.query('INSERT INTO vehicle_device_assignments(id,vehicle_id,device_id) VALUES($1,$2,$3)',[randomUUID(),vehicle,device]);}
  if(reason==='expired')await db.query("UPDATE vehicle_relay_commands SET dispatch_before=now()-interval '1 second' WHERE id=$1",[id]);
  await worker.tick();expect(errors).toEqual([]);expect(socket.write).not.toHaveBeenCalled();expect((await result(id)).status).toBe('rejected');
+});
+it('dispatches restore despite stale GPS and ignition ON, but keeps the live connection guard',async()=>{
+ await db.query("UPDATE locations SET tracker_timestamp=now()-interval '1 day',gps_valid=false,speed=NULL WHERE device_id=$1",[device]);await db.query('UPDATE device_status SET current_ignition=true,current_speed=NULL WHERE device_id=$1',[device]);
+ const id=await queue('A','unlock');await worker.tick();expect(errors).toEqual([]);expect(socket.write).toHaveBeenCalledOnce();expect((await result(id)).status).toBe('sent');
+});
+it('permits a cut below 20 with ignition ON and rechecks the current speed',async()=>{
+ await db.query('UPDATE locations SET speed=19 WHERE device_id=$1',[device]);await db.query('UPDATE device_status SET current_ignition=true,current_speed=19 WHERE device_id=$1',[device]);
+ const id=await queue();await worker.tick();expect(errors).toEqual([]);expect(socket.write).toHaveBeenCalledOnce();expect((await result(id)).status).toBe('sent');
 });
 it('does not replay pending or sent commands on reconnect and ignores late replies',async()=>{
  const id=await queue();await worker.tick();const frame=socket.write.mock.calls[0][0] as unknown as Buffer;await worker.unbind(connection);

@@ -6,7 +6,9 @@ export interface ProbeAttempt {profile:string;format:ReturnType<typeof relayProf
 export interface ProbeOptions {profiles:string[];models:RelayModels;send?:boolean;confirm?:boolean;hasToken?:boolean;action?:string;preview(profile:string):string;print(text:string):void;now?:()=>number;sleep?:(ms:number)=>Promise<void>}
 export function probeBlockers(context:ProbeContext){
  const result=new Set<string>();if(context.availability.code!=='RELAY_READY')result.add(context.availability.code);
- if(!context.connectionId)result.add('RELAY_OFFLINE');if(context.speed!==0||context.currentSpeed!==0)result.add('SPEED_NOT_ZERO_OR_UNKNOWN');if(context.ignition!==false)result.add('IGNITION_ON_OR_UNKNOWN');if(context.gpsValid!==true)result.add('GPS_INVALID');return [...result];
+ // Restore-only probes do not cut the circuit. Ignition, speed and GPS remain
+ // visible context but are not restore blockers.
+ if(!context.connectionId)result.add('RELAY_OFFLINE');return [...result];
 }
 export function probeRecommendation(profile:RelayModel,showConfig=false){
  if(showConfig)return {...profile};
