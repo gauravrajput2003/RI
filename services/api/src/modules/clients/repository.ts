@@ -11,11 +11,12 @@ const withoutTotal = (row: Record<string, unknown>) => {
 };
 
 const clientProjection = `u.id,u.owner_id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,
-  u.active,u.inactive_timeout_seconds,u.created_at,u.updated_at,
+  u.max_login_devices,u.active,u.inactive_timeout_seconds,u.created_at,u.updated_at,
   owner.name AS owner_name,owner.email AS owner_email,owner.username AS owner_username,
   count(DISTINCT v.id)::int AS vehicle_count`;
 
 export interface ClientCreateInput {
+  maxLoginDevices?: number;
   ownerId: string;
   username: string;
   password: string;
@@ -30,6 +31,7 @@ export interface ClientCreateInput {
 }
 
 export interface ClientUpdateInput {
+  maxLoginDevices?: number;
   username?: string;
   name?: string | null;
   mobile?: string | null;
@@ -71,12 +73,12 @@ export async function createClient(actorId: string, input: ClientCreateInput) {
     const result = await query(`${userScopeCte}, allowed_owner AS (
       SELECT u.id FROM users u JOIN user_scope scope ON scope.id=u.id
       WHERE u.id=$2 AND u.active=true AND u.role='ADMIN'
-    ) INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,inactive_timeout_seconds,active,password_recovery_ciphertext)
-      SELECT id,$3,lower($4),$5,'CLIENT',$6,$7,$8,$9,$10,$11,$12,$13 FROM allowed_owner
-      RETURNING id,owner_id,username,email,role,name,mobile,company,website,address,inactive_timeout_seconds,active,created_at,updated_at`,
+    ) INSERT INTO users(owner_id,username,email,password_hash,role,name,mobile,company,website,address,inactive_timeout_seconds,active,password_recovery_ciphertext,max_login_devices)
+      SELECT id,$3,lower($4),$5,'CLIENT',$6,$7,$8,$9,$10,$11,$12,$13,$14 FROM allowed_owner
+      RETURNING max_login_devices,id,owner_id,username,email,role,name,mobile,company,website,address,inactive_timeout_seconds,active,created_at,updated_at`,
     [actorId, input.ownerId, input.username.trim(), input.email.trim(), passwordHash, input.name?.trim() || null,
       input.mobile?.trim() || null, input.company?.trim() || null, input.website?.trim() || null,
-      input.address?.trim() || null, input.inactiveTimeoutSeconds, input.active,sealPassword(input.password)]);
+      input.address?.trim() || null, input.inactiveTimeoutSeconds, input.active,sealPassword(input.password),input.maxLoginDevices??2]);
     if (!result.rows[0]) throw new AppError(403, 'INVALID_OWNER', 'Owner is outside your authorized admin hierarchy');
     return result.rows[0];
   } catch (error) {
@@ -100,9 +102,10 @@ export async function updateClient(actorId: string, id: string, input: ClientUpd
         website=CASE WHEN $13::boolean THEN $14 ELSE u.website END,
         address=CASE WHEN $15::boolean THEN $16 ELSE u.address END,
         inactive_timeout_seconds=CASE WHEN $17::boolean THEN $18 ELSE u.inactive_timeout_seconds END,
+        max_login_devices=CASE WHEN $21::boolean THEN $22 ELSE u.max_login_devices END,
         active=CASE WHEN $19::boolean THEN $20 ELSE u.active END,updated_at=now()
       FROM user_scope scope WHERE u.id=$2 AND u.id=scope.id AND u.role='CLIENT'
-      RETURNING u.id,u.owner_id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.active,u.inactive_timeout_seconds,u.created_at,u.updated_at`,
+      RETURNING u.id,u.owner_id,u.username,u.name,u.mobile,u.email,u.company,u.website,u.address,u.max_login_devices,u.active,u.inactive_timeout_seconds,u.created_at,u.updated_at`,
     [actorId, id,
       input.username !== undefined, input.username ?? null,
       input.name !== undefined, input.name ?? null,
@@ -112,7 +115,7 @@ export async function updateClient(actorId: string, id: string, input: ClientUpd
       input.website !== undefined, input.website ?? null,
       input.address !== undefined, input.address ?? null,
       input.inactiveTimeoutSeconds !== undefined, input.inactiveTimeoutSeconds ?? null,
-      input.active !== undefined, input.active ?? null]);
+      input.active !== undefined, input.active ?? null,input.maxLoginDevices!==undefined,input.maxLoginDevices??null]);
     if (!result.rows[0]) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found');
     return result.rows[0];
   } catch (error) {
@@ -161,3 +164,9 @@ export async function deleteClient(actorId: string, id: string) {
   if (!result.rows[0]) throw new AppError(409, 'CLIENT_DELETE_CONFLICT', 'Client changed and could not be deleted');
 }
 
+
+export async function resetLoginDevices(actorId:string,id:string){
+ const result=await query(`${userScopeCte}, target AS (SELECT u.id FROM users u JOIN user_scope s ON s.id=u.id WHERE u.id=$2 AND u.role='CLIENT'), revoked AS (UPDATE refresh_tokens SET revoked_at=now() WHERE user_id IN(SELECT id FROM target) AND revoked_at IS NULL) SELECT id FROM target`,[actorId,id]);
+ if(!result.rows.length)throw new AppError(404,'CLIENT_NOT_FOUND','Client not found');
+ return {reset:true};
+}

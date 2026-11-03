@@ -1,8 +1,10 @@
+import {activeSession} from '../modules/auth/service.js';
 import { query } from '../db/pool.js';import type { VehicleAuthorizer } from './authorization.js';import {userScopeCte} from '../modules/authorization/scope.js';
 import {hasPermissionForUser} from '../modules/authorization/permissions.js';
 import {PERMISSIONS} from '@fleet/shared-types';
 const canReadFleet=async(id:string)=>await hasPermissionForUser(id,PERMISSIONS.dashboardView)||await hasPermissionForUser(id,PERMISSIONS.vehicleView);
 export const vehicleAuthorizer:VehicleAuthorizer={
+ isActiveSession:activeSession,
  async vehicleRecipientIds(vehicleId){return (await query<{id:string}>(`WITH RECURSIVE owners AS (
   SELECT owner_id AS id FROM vehicles WHERE id=$1
   UNION ALL SELECT u.owner_id FROM users u JOIN owners o ON o.id=u.id WHERE u.owner_id IS NOT NULL

@@ -33,13 +33,13 @@ beforeEach(async()=>{
  await state.db!.query('INSERT INTO users(id,email,name,username,mobile,coins,active) VALUES($1,$2,$3,$4,$5,0,true),($6,$7,$8,$9,$10,0,true)',[first,'first@example.com','First User','first','1111111111',second,'second@example.com','Second User','second','2222222222']);
 });
 
-it('returns only the signed-in user’s profile details',async()=>{
+it('returns only the signed-in userâ€™s profile details',async()=>{
  const response=await request(app).get('/api/v1/account-summary').set('Authorization',`Bearer ${token(first)}`).expect(200);
  expect(response.body.data).toMatchObject({id:first,name:'First User',mobile:'1111111111',email:'first@example.com',avatarUrl:null});
  expect(JSON.stringify(response.body)).not.toContain('second@example.com');
 });
 
-it('updates only the signed-in user’s avatar',async()=>{
+it('updates only the signed-in userâ€™s avatar',async()=>{
  state.upload.mockResolvedValue({url:'https://res.cloudinary.com/test/image/upload/first.png',publicId:`fleet/avatars/${first}/photo`});
  await request(app).post('/api/v1/account-avatar').send({dataUri:'data:image/png;base64,AAAA'}).expect(401);
  expect(state.upload).not.toHaveBeenCalled();

@@ -2,10 +2,10 @@ import type { AxiosInstance } from 'axios';
 import type { createAuthStore } from '../../features/auth/session';
 import { z } from 'zod';
 const tokens = z.object({ accessToken: z.string().min(1), refreshToken: z.string().min(1) });
-export function createAuthActions(client: AxiosInstance, auth: ReturnType<typeof createAuthStore>) {
+export function createAuthActions(client: AxiosInstance, auth: ReturnType<typeof createAuthStore>, getDeviceId?:()=>Promise<string>) {
   return {
     async login(identifier: string, password: string) {
-      const { data } = await client.post('/auth/login', { identifier: identifier.trim(), password });
+      const { data } = await client.post('/auth/login', { identifier: identifier.trim(), password, ...(getDeviceId?{deviceId:await getDeviceId()}: {}) });
       await auth.getState().setTokens(tokens.parse(data.data));
     },
     async logout() {

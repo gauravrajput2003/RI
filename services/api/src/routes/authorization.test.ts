@@ -42,7 +42,7 @@ beforeAll(async () => {
   process.env.NO_SIGNAL_TIMEOUT_MINUTES = '30';
   state.db = new PGlite();
   passwordHash = await bcrypt.hash(password, 4);
-  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','028_vehicle_relay_commands.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql','031_gt06_relay_dispatch.sql','032_relay_wire_evidence.sql','033_relay_probe_heartbeat.sql']) {
+  for (const name of ['001_initial.sql', '002_current_device_state.sql', '003_web_admin_foundation.sql', '004_client_management.sql', '005_vehicle_management.sql', '009_coin_distribution.sql', '012_vehicle_installation_info.sql', '014_packet_health_permission.sql','015_account_password_recovery.sql','016_coin_management.sql','017_device_sim_info.sql','018_admin_permissions.sql','022_cell_location_cache.sql','023_device_state_since.sql','025_mobile_voice_push.sql','026_mobile_cached_voice.sql','028_vehicle_relay_commands.sql','029_parking_mode.sql','030_parking_reference_accuracy.sql','031_gt06_relay_dispatch.sql','032_relay_wire_evidence.sql','033_relay_probe_heartbeat.sql','034_login_device_limits.sql']) {
     let sql = await readFile(new URL(`../../../../database/migrations/${name}`, import.meta.url), 'utf8');
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS \w+;/g, '')
       .replace(/geography\(Point, 4326\)/g, 'point')
@@ -525,4 +525,45 @@ describe('resource authorization with both customers persisted', () => {
       await new Promise<void>(resolve=>server.close(()=>resolve()));
     }
   });
+});
+
+describe('client login device limits',()=>{
+ it('blocks a third installation, reuses a slot, rotates refresh tokens, and frees logout slots',async()=>{
+  await state.db!.query("UPDATE users SET role='CLIENT',max_login_devices=2 WHERE id=$1",[a]);
+  const sign=(deviceId:string)=>request(app).post('/api/v1/auth/login').send({identifier:'a@test.local',password,deviceId});
+  const first=(await sign('phone-one').expect(200)).body.data;
+  await sign('phone-two').expect(200);
+  expect((await sign('phone-three').expect(409)).body.error.code).toBe('DEVICE_LIMIT_REACHED');
+  await sign('phone-one').expect(200);
+  const rotated=(await request(app).post('/api/v1/auth/refresh').send({refreshToken:first.refreshToken}).expect(401));
+  expect(rotated.body.success).toBe(false);
+  const second=(await sign('phone-two').expect(200)).body.data;
+  const next=(await request(app).post('/api/v1/auth/refresh').send({refreshToken:second.refreshToken}).expect(200)).body.data;
+  await sign('phone-three').expect(409);
+  await request(app).post('/api/v1/auth/logout').send({refreshToken:next.refreshToken}).expect(204);
+  await request(app).get('/api/v1/vehicles').set('Authorization',`Bearer ${next.accessToken}`).expect(401);
+  await sign('phone-three').expect(200);
+ });
+ it('allows five devices after an upgrade and revokes excess devices on downgrade',async()=>{
+  await state.db!.query("UPDATE users SET role='CLIENT',max_login_devices=5 WHERE id=$1",[a]);
+  for(let i=0;i<5;i++)await request(app).post('/api/v1/auth/login').send({identifier:'a@test.local',password,deviceId:`phone-00${i}`}).expect(200);
+  await state.db!.query('UPDATE users SET max_login_devices=2 WHERE id=$1',[a]);
+  const rows=await state.db!.query<{count:number}>("SELECT count(DISTINCT session_id)::int AS count FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL AND expires_at>now()",[a]);
+  expect(rows.rows[0].count).toBe(2);
+ });
+});
+
+it('allows only the owning admin hierarchy to change limits and reset device slots',async()=>{
+ await state.db!.query("UPDATE users SET role='ADMIN' WHERE id=$1",[a]);
+ await state.db!.query("UPDATE users SET role='CLIENT',owner_id=$1 WHERE id=$2",[a,b]);
+ await request(app).patch(`/api/v1/clients/${b}`).set('Authorization',`Bearer ${token(a,'ADMIN')}`).send({maxLoginDevices:5}).expect(200);
+ expect((await state.db!.query<{max_login_devices:number}>('SELECT max_login_devices FROM users WHERE id=$1',[b])).rows[0].max_login_devices).toBe(5);
+ await request(app).patch(`/api/v1/clients/${b}`).set('Authorization',`Bearer ${token(a,'ADMIN')}`).send({maxLoginDevices:0}).expect(400);
+ const login=(await request(app).post('/api/v1/auth/login').send({identifier:'b@test.local',password,deviceId:'school-phone'}).expect(200)).body.data;
+ await request(app).post(`/api/v1/clients/${b}/reset-login-devices`).set('Authorization',`Bearer ${token(b,'CLIENT')}`).expect(403);
+ const sibling=randomUUID();
+ await state.db!.query("INSERT INTO users(id,email,password_hash,role,owner_id) VALUES($1,'sibling.admin@test.local',$2,'ADMIN',$3)",[sibling,passwordHash,a]);
+ await request(app).post(`/api/v1/clients/${b}/reset-login-devices`).set('Authorization',`Bearer ${token(sibling,'ADMIN')}`).expect(404);
+ await request(app).post(`/api/v1/clients/${b}/reset-login-devices`).set('Authorization',`Bearer ${token(a,'ADMIN')}`).expect(200);
+ await request(app).post('/api/v1/auth/refresh').send({refreshToken:login.refreshToken}).expect(401);
 });

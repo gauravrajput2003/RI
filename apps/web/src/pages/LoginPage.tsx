@@ -1,3 +1,4 @@
+function getLoginDeviceId(){const key='fleet.login.device';let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID();localStorage.setItem(key,id)}return id}
 import {useState,type FormEvent} from 'react';
 import {Navigate,useNavigate} from 'react-router-dom';
 import {ArrowRight,Eye,EyeOff,LockKeyhole,UserRound} from 'lucide-react';
@@ -12,7 +13,7 @@ export function LoginPage(){
   const navigate=useNavigate();
   const [identifier,setIdentifier]=useState(''),[password,setPassword]=useState(''),[showPassword,setShowPassword]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   if(getTokens())return <Navigate to="/dashboard" replace/>;
-  async function submit(event:FormEvent){event.preventDefault();setBusy(true);setError('');try{const {data}=await api.post<Envelope<Tokens>>('/auth/login',{identifier:identifier.trim(),password});setTokens(data.data);navigate('/dashboard',{replace:true})}catch(cause){setError(errorMessage(cause))}finally{setBusy(false)}}
+  async function submit(event:FormEvent){event.preventDefault();setBusy(true);setError('');try{const {data}=await api.post<Envelope<Tokens>>('/auth/login',{identifier:identifier.trim(),password,deviceId:getLoginDeviceId()});setTokens(data.data);navigate('/dashboard',{replace:true})}catch(cause){setError(errorMessage(cause))}finally{setBusy(false)}}
   return <main className="target-login-page">
     <div className="target-login-shade"/>
     <form className="target-login-card" onSubmit={submit}>

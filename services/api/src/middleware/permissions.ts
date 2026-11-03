@@ -34,6 +34,7 @@ export const permissionApiRules:Rule[]=[
   rule('GET|HEAD',/^\/client-owners$/,P.clientView),
   rule('GET|HEAD',/^\/client-options$/,P.dashboardView,P.vehicleView,P.clientView),
   rule('POST',/^\/clients\/[^/]+\/reset-password$/,P.clientEdit),
+  rule('POST',/^\/clients\/[^/]+\/reset-login-devices$/,P.clientEdit),
   ...crud(/^\/admins(?:\/[^/]+)?$/,{view:P.adminView,add:P.adminAdd,edit:P.adminEdit,delete:P.adminDelete}),
   ...crud(/^\/clients(?:\/[^/]+)?$/,{view:P.clientView,add:P.clientAdd,edit:P.clientEdit,delete:P.clientDelete}),
   ...crud(/^\/geofences(?:\/[^/]+)?$/,{view:P.geofenceView,add:P.geofenceAdd,edit:P.geofenceEdit,delete:P.geofenceDelete}),

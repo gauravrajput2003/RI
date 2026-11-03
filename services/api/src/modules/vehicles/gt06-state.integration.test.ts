@@ -32,7 +32,7 @@ describe('GT06 heartbeat and GPS state transitions',()=>{
     await mergeLocation(client,'d',fix(3),5);
     expect(await status()).toMatchObject({state:'IDLE'});
   });
-  it('moves running → idle → stopped, retaining the last explicit ACC',async()=>{
+  it('moves running â†’ idle â†’ stopped, retaining the last explicit ACC',async()=>{
     await mergeHeartbeat(client,'test',now,{ignition:true},5);
     await mergeLocation(client,'d',fix(24),5);
     expect(await status()).toMatchObject({state:'MOVING'});

@@ -66,3 +66,22 @@ describe('realtime alert isolation',()=>{
   await expect.poll(()=>parking).toEqual([{vehicleId:'vehicle-a',enabled:true}]);
  });
 });
+
+it('stops telemetry and notifications on an already connected revoked login session',async()=>{
+ let active=true;
+ http=createServer();server=new Server(http);
+ configureSockets(server,{isActiveUser:async()=>true,isActiveSession:async()=>active,canAccessVehicle:async()=>true,authorizedVehicleIds:async()=>['bus'],vehicleRecipientIds:async()=>['client']},()=>({id:'client',role:'CLIENT',sid:'login-session'}));
+ await new Promise<void>(resolve=>http!.listen(0,resolve));
+ const port=(http.address() as {port:number}).port;
+ const client=io(`http://127.0.0.1:${port}`);sockets.push(client);
+ await new Promise<void>(resolve=>client.on('connect',resolve));
+ await new Promise<void>(resolve=>client.emit('vehicle:subscribe','bus',()=>resolve()));
+ const connected=[...server.sockets.sockets.values()][0];const emit=vi.spyOn(connected,'emit');
+ active=false;
+ await publishVehicleLocation(server,'bus',{speed:20});
+ await publishVehicleNotification(server,'bus',{eventType:'PARKING_MOVEMENT'});
+ await publishUserNotification(server,'client',{message:'private'});
+ await publishVehicleParking(server,'bus',{enabled:true});
+ expect(emit).not.toHaveBeenCalled();
+ await new Promise<void>(resolve=>client.emit('vehicle:subscribe','bus',(result:{ok:boolean})=>{expect(result.ok).toBe(false);resolve()}));
+});

@@ -23,7 +23,7 @@ beforeAll(async()=>{
 beforeEach(async()=>{await db.exec('TRUNCATE locations')});
 afterAll(async()=>db?.close());
 describe('today distance from trustworthy GPS fixes',()=>{
-  it('excludes the 0,0 → Rohtak jump without losing real movement',async()=>{
+  it('excludes the 0,0 â†’ Rohtak jump without losing real movement',async()=>{
     await add(at(0),0,0);await add(at(1),28.8678,76.5943);await add(at(2),28.8688,76.5943);
     expect(await km()).toBeCloseTo(0.1112,3);
   });
