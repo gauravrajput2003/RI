@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -15,9 +15,33 @@ export function Access({ capability, children }: { capability: MobileCapability;
   return <>{children}</>;
 }
 export function Screen({title,children,accent=false,onBack,backTo}:{title:string;children:ReactNode;accent?:boolean;onBack?():void;backTo?:'profile'|'vehicles'}) {
-  return <KeyboardAvoidingView style={{flex:1,backgroundColor:'#f6f8fa'}} behavior={Platform.OS==='ios'?'padding':undefined}>
+  const scrollRef = useRef<ScrollView>(null);
+  const previousHeight = useRef(0);
+
+  function keepFocusedInputVisible(height: number) {
+    const shrank = height < previousHeight.current;
+    previousHeight.current = height;
+    if (!shrank) return;
+
+    const scrollView = scrollRef.current;
+    const input = TextInput.State.currentlyFocusedInput();
+    // Android can focus the input before the keyboard reduces the viewport.
+    scrollView?.getNativeScrollRef()?.measureInWindow((_x, top) => {
+      if (input && TextInput.State.currentlyFocusedInput() === input) {
+        scrollView.scrollResponderScrollNativeHandleToKeyboard(input, top + 12, true);
+      }
+    });
+  }
+
+  return <KeyboardAvoidingView style={{flex:1,backgroundColor:'#f6f8fa'}} behavior={Platform.OS==='ios'?'padding':Platform.OS==='android'?'height':undefined}>
     <View style={[form.header,accent&&{backgroundColor:'#ee0509'}]}>{!accent?<Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>onBack?onBack():backTo?router.replace(backTo==='profile'?'/(app)/profile':'/(app)/vehicles'):router.back()} style={form.back}><Feather name="arrow-left" size={24}/></Pressable>:null}<Text style={[form.heading,accent&&{color:'#fff',flex:1,paddingLeft:8}]}>{title}</Text>{accent?<Pressable accessibilityRole="button" accessibilityLabel="Close announcement" onPress={onBack} style={form.back}><Feather name="x-circle" size={22} color="#fff"/></Pressable>:null}</View>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={form.page}>{children}</ScrollView>
+    <ScrollView
+      ref={scrollRef}
+      style={{flex:1}}
+      keyboardShouldPersistTaps="handled"
+      onLayout={Platform.OS === 'android' ? event => keepFocusedInputVisible(event.nativeEvent.layout.height) : undefined}
+      contentContainerStyle={form.page}
+    >{children}</ScrollView>
   </KeyboardAvoidingView>;
 }
 export function Field({label,password,...props}:TextInputProps & {label:string;password?:boolean}) {
