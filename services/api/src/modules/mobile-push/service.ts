@@ -66,7 +66,7 @@ export function pushMessages(device:{expo_token:string|null;platform:string;soun
  const data={...payload,userId:device.user_id};
  if(String(payload.eventType).startsWith('PARKING_'))return [{to:device.expo_token,title:'Parking Movement Alert',body:payload.message,data,sound:device.sound||device.voice?'default':undefined,channelId:`vehicle-alerts-${device.sound||device.voice?'sound':'silent'}-${device.vibration?'vibrate':'quiet'}`,priority:'high',ttl:120}];
  const kind=String(payload.eventType??'VEHICLE_RUNNING').replace('VEHICLE_','').toLowerCase();
- const genericSound=`vehicle-${kind}.wav`;
+ const genericSound=`vehicle_${kind}.wav`;
  const plate=String(payload.vehicleNumber??'').replace(/[^A-Za-z0-9]/g,'').slice(0,16).toLowerCase();
  const iosSound=`vehicle-${payload.vehicleId}-${plate}-${String(payload.eventType).toLowerCase()}.caf`;
  const prepared=device.platform==='ios'&&device.voice_vehicles?.includes(String(payload.vehicleId));

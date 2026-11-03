@@ -27,7 +27,7 @@ export function startNotificationRuntime(queryClient?:QueryClient){
   if(Platform.OS!=='android'||!Notifications)return;
   for(const kind of ['running','idle','stopped'])for(const vibrate of [true,false])await Notifications.setNotificationChannelAsync(`vehicle-voice-${kind}-${vibrate?'vibrate':'quiet'}`,{
    name:`Spoken vehicle ${kind} (${vibrate?'vibration':'no vibration'})`,importance:Notifications.AndroidImportance.HIGH,
-   sound:`vehicle-${kind}.wav`,enableVibrate:vibrate,vibrationPattern:vibrate?[0,250,100,250]:[0],
+   sound:`vehicle_${kind}.wav`,enableVibrate:vibrate,vibrationPattern:vibrate?[0,250,100,250]:[0],
   });
   for(const sound of [true,false])for(const vibrate of [true,false])await Notifications.setNotificationChannelAsync(
    `vehicle-alerts-${sound?'sound':'silent'}-${vibrate?'vibrate':'quiet'}`,{
