@@ -8,7 +8,7 @@ export function capabilities(account?: MobileAccount) {
   const allowed = (key: PermissionKey) => Boolean(account && (account.role !== 'ADMIN' || hasEffectivePermission(account.permissions, key)));
   const manager = account?.role === 'ADMIN' || account?.role === 'SUPER_ADMIN';
   return {
-    vehicles: allowed(P.vehicleView), addVehicle: manager && allowed(P.vehicleAdd), editVehicle: allowed(P.vehicleEdit),
+    vehicles: allowed(P.vehicleView), addVehicle: allowed(P.vehicleAdd), editVehicle: allowed(P.vehicleEdit),
     announcements: manager && allowed(P.announcementView), addAnnouncement: manager && allowed(P.announcementAdd),
     editAnnouncement: manager && allowed(P.announcementEdit), deleteAnnouncement: manager && allowed(P.announcementDelete),
     notifications: allowed(P.notificationsView), share: allowed(P.vehicleView),

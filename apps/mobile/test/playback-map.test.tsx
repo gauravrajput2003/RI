@@ -12,7 +12,7 @@ vi.mock('@react-native-community/datetimepicker',()=>({default:'DateTimePicker'}
 vi.mock('react-native-safe-area-context',()=>({SafeAreaView:'SafeAreaView'}));
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(),replace:vi.fn() }), useLocalSearchParams: () => boundary.params,useFocusEffect:(callback:typeof boundary.focus)=>{boundary.focus=callback;} }));
 vi.mock('@expo/vector-icons', () => ({ Feather: 'Icon', MaterialCommunityIcons: 'Icon', Ionicons: 'Icon' }));
-vi.mock('../features/vehicles/queries', () => ({ useHistory: (...args:unknown[]) => {boundary.history(...args);return { data: boundary.points, isLoading: false,refetch:boundary.refetch };} }));
+vi.mock('../features/vehicles/queries', () => ({ useLatestLocation: () => ({ data: undefined }), useHistory: (...args:unknown[]) => {boundary.history(...args);return { data: boundary.points, isLoading: false,refetch:boundary.refetch };} }));
 vi.mock('../features/map/LeafletMap', async () => {
   const { forwardRef, useImperativeHandle, createElement } = await import('react');
   return { default: forwardRef((props: Record<string, unknown>, ref) => {

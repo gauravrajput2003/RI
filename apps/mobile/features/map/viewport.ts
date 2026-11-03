@@ -1,5 +1,6 @@
 import type { Location } from '../../types/models';
 export interface Viewport { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number }
+export const CENTRAL_DELHI: Viewport = { latitude: 28.6328, longitude: 77.2197, latitudeDelta: .08, longitudeDelta: .08 };
 export function hasPosition(point?: Location): point is Location & { latitude: number; longitude: number } {
   return point?.latitude != null && point.longitude != null && Number.isFinite(point.latitude) && Number.isFinite(point.longitude);
 }
