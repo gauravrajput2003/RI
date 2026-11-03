@@ -126,6 +126,21 @@ webApi.get('/vehicle-device-options',authorize('SUPER_ADMIN','ADMIN'),asyncRoute
 webApi.get('/fleet-vehicles',authorize('SUPER_ADMIN','ADMIN','CLIENT'),asyncRoute(async(req,res)=>{const q=paging.extend({status:z.enum(['ALL','OVERSPEED','RUNNING','IDLE','STOPPED','UNREACHABLE','NEW','INACTIVE']).default('ALL'),adminId:z.string().uuid().optional(),clientId:z.string().uuid().optional(),deviceType:z.string().trim().max(80).optional(),addedFrom:z.coerce.date().optional(),addedTo:z.coerce.date().optional(),modifiedFrom:z.coerce.date().optional(),modifiedTo:z.coerce.date().optional(),subscriptionStartFrom:z.coerce.date().optional(),subscriptionStartTo:z.coerce.date().optional(),subscriptionDueFrom:z.coerce.date().optional(),subscriptionDueTo:z.coerce.date().optional(),inactiveFrom:z.coerce.date().optional(),inactiveTo:z.coerce.date().optional()}).parse(req.query);const result=await vehicleManagement.listManagedVehicles(req.user!.id,{...q,status:q.status as FleetStatus});const data=req.user!.role==='CLIENT'?result.rows.map(clientVisible):result.rows;res.json({success:true,data,counts:result.counts,pagination:{page:q.page,pageSize:q.pageSize,total:result.total}})}));
 webApi.get('/fleet-vehicles/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{const result=await vehicleManagement.managedVehicle(req.user!.id,z.string().uuid().parse(req.params.id));if(!result.rows[0])throw new AppError(404,'VEHICLE_NOT_FOUND','Vehicle not found');res.json({success:true,data:result.rows[0]})}));
 webApi.post('/fleet-vehicles',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{res.status(201).json({success:true,data:await vehicleManagement.createManagedVehicle(req.user!.id,vehicleBody.parse(req.body))})}));
+const clientVehicleBody = vehicleBody.innerType().pick({
+  deviceImei: true, deviceProtocol: true, simNumber: true, simOperator: true,
+  vehicleNumber: true, vehicleType: true, mileage: true, overspeedLimit: true, alias: true,
+}).strict();
+webApi.post('/mobile/fleet-vehicles', authorize('CLIENT'), asyncRoute(async (req, res) => {
+  const fields = clientVehicleBody.parse(req.body);
+  const clientId = req.user!.id;
+  const { rows } = await query<{owner_id: string}>(
+    "SELECT owner_id FROM users WHERE id=$1 AND role='CLIENT' AND active=true", [clientId],
+  );
+  if (!rows[0]?.owner_id) throw new AppError(403, 'INVALID_VEHICLE_OWNER', 'An active managing admin is required');
+  const input = vehicleBody.parse({ ...fields, clientId, adminId: rows[0].owner_id });
+  const vehicle = await vehicleManagement.createManagedVehicle(clientId, input);
+  res.status(201).json({ success: true, data: { id: vehicle.id } });
+}));
 const vehicleUpdateBody=vehicleBody.innerType().extend({deviceImei:z.string().trim().max(32).regex(/^[a-zA-Z0-9-]*$/),deviceProtocol:z.enum(['GT06','W15','']),simOperator:z.enum(['Jio','Airtel','VI','']),mileage:z.coerce.number().min(0).nullable(),overspeedLimit:z.coerce.number().positive().nullable()}).refine(value=>!value.billingStart||!value.billingDue||value.billingDue>=value.billingStart,{message:'Invalid billing dates'});
 webApi.put('/fleet-vehicles/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{res.json({success:true,data:await vehicleManagement.updateManagedVehicle(req.user!.id,z.string().uuid().parse(req.params.id),vehicleUpdateBody.parse(req.body))})}));
 webApi.delete('/fleet-vehicles/:id',authorize('SUPER_ADMIN','ADMIN'),asyncRoute(async(req,res)=>{res.json({success:true,data:await vehicleManagement.deactivateManagedVehicle(req.user!.id,z.string().uuid().parse(req.params.id))})}));
