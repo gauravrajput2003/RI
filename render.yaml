@@ -14,10 +14,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: ri-fleet-admin
-          envVarKey: RENDER_EXTERNAL_URL
+        value: 'https://ri-fleet-admin.onrender.com,http://localhost:8081'
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
