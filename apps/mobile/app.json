@@ -16,7 +16,7 @@
       "bundleIdentifier": "com.example.fleettracker"
     },
     "android": {
-      "package": "com.example.fleettracker",
+      "package": "com.jslab.ri",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"

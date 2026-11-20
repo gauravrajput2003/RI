@@ -1,4 +1,4 @@
-package com.example.fleettracker
+package com.jslab.ri
 
 import android.os.Build
 import android.os.Bundle

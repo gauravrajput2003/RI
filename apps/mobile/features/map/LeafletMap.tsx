@@ -39,7 +39,7 @@ const LeafletMap=forwardRef<MapHandle,{children?:React.ReactNode;style?:StylePro
  const source=useMemo(()=>({html:mapHtml(initial.current)}),[]);
  return <View style={[{flex:1},props.style]}><Context.Provider value={registry}>{props.children}</Context.Provider>
   <WebView key={reload} ref={web} style={{flex:1}} source={source} originWhitelist={['*']} javaScriptEnabled domStorageEnabled cacheEnabled
-   applicationNameForUserAgent="RI-GPS-Tracker/0.1 (com.example.fleettracker)" mixedContentMode="never"
+   applicationNameForUserAgent="RI-GPS-Tracker/0.1 (com.jslab.ri)" mixedContentMode="never"
    onShouldStartLoadWithRequest={request=>{if(request.url==='about:blank'||request.url.startsWith('data:text/html'))return true;if(request.url.startsWith('https://www.openstreetmap.org/'))void Linking.openURL(request.url);return false;}}
    onError={()=>setError('Unable to open the map. Check your internet connection.')} onMessage={event=>{
     try{const message=JSON.parse(event.nativeEvent.data);if(message.type==='ready'){ready.current=true;setError(null);send({type:'map-type',mapType:callbacks.current.mapType??'street'});send({type:'layers',layers:[...layers.current.entries()]});sent.current=new Map(layers.current);for(const item of pending.current)send(item);pending.current=[];callbacks.current.onMapReady?.();}
